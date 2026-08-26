@@ -1,0 +1,111 @@
+import { Args, Command, Flags } from '@oclif/core'
+
+import { getConfig } from '../../../lib/config/environment.js'
+import { input, isPromptCancel } from '../../../lib/shared/prompts.js'
+import {
+  canRevealGeneratedSecretInteractively,
+  prepareGeneratedSecretOutput,
+  tryRecordSecret
+} from '../../../lib/secrets/ledger.js'
+import { loadAppContext } from '../../../lib/app/section-context.js'
+import { withSpinner } from '../../../lib/shared/spinner.js'
+
+export default class AppKeysCreate extends Command {
+  static description = 'Create a client key + secret pair for the selected app'
+
+  static examples = ['<%= config.bin %> app keys create production']
+
+  static enableJsonFlag = true
+
+  static args = {
+    name: Args.string({ description: 'Name for the client key (prompted when omitted)' })
+  }
+
+  static flags = {
+    app: Flags.string({ description: 'App id (defaults to the selected app)' }),
+    reveal: Flags.boolean({
+      description: 'Print the full secret instead of saving only to the local ledger',
+      default: false
+    })
+  }
+
+  async run(): Promise<unknown> {
+    const { args, flags } = await this.parse(AppKeysCreate)
+
+    if (args.name === undefined && !process.stdin.isTTY) {
+      this.error('Pass the key name when running non-interactively, e.g. `ghl app keys create production`.')
+    }
+    let name: string
+    try {
+      name = (
+        args.name ??
+        (await input({
+          message: 'Name for the client key:',
+          validate: value => (value.trim().length > 0 ? true : 'Client key name is required.')
+        }))
+      ).trim()
+    } catch (error) {
+      if (isPromptCancel(error)) {
+        this.log(error.message)
+        return
+      }
+      throw error
+    }
+    if (!name) this.error('Client key name is required and cannot be blank.')
+
+    try {
+      const context = await loadAppContext(flags.app, this.jsonEnabled())
+      const created = await withSpinner(
+        'Creating client key...',
+        () => context.client.addClientKey(context.selected.appId, name),
+        { quiet: this.jsonEnabled() }
+      )
+
+      const config = getConfig()
+      const stored = await tryRecordSecret(
+        config.configDir,
+        context.client.activeProfileName,
+        {
+          kind: 'client-secret',
+          label: name,
+          reference: created.id,
+          appId: context.selected.appId,
+          value: created.secret
+        }
+      )
+      const output = prepareGeneratedSecretOutput(
+        created.secret,
+        stored,
+        flags.reveal,
+        canRevealGeneratedSecretInteractively(this.jsonEnabled())
+      )
+      if (output.unavailable) {
+        this.error(
+          `Client key ${created.id} was created, but its secret could not be saved locally. ` +
+            'It was not printed in this non-interactive session. Delete the key, then retry with --reveal.'
+        )
+      }
+      const secret = output.value
+
+      if (this.jsonEnabled()) {
+        return { ...created, secret, secretStored: stored }
+      }
+
+      this.log(`Client key created:`)
+      this.log(`  Client ID:     ${created.id}`)
+      this.log(`  Client secret: ${secret}`)
+      if (stored) {
+        this.log('\nThe secret is saved locally — view it anytime with `ghl secrets reveal`.')
+      } else {
+        this.log('\nSave the secret now — local storage failed and this interactive display is the only copy.')
+      }
+      return
+    } catch (error) {
+      if (isPromptCancel(error)) {
+        this.log(error.message)
+        return
+      }
+      this.error(error instanceof Error ? error.message : 'Failed to create client key')
+    }
+  }
+}
