@@ -87,7 +87,7 @@ export default class SandboxCreate extends Command {
       this.log(`  Password:    ${displayedPassword}`)
       this.log('\nLog in to the agency with your developer email and this password.')
       if (stored) {
-        this.log('The password is saved locally — view it anytime with `ghl secrets reveal`.')
+        this.log('The password is saved locally — reveal it once with `ghl secrets reveal`.')
       } else {
         this.log('The password was not saved locally; keep the password you supplied to this command.')
       }

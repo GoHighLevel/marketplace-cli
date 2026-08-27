@@ -55,7 +55,7 @@ export default class Secrets extends Command {
       if (visible.length === 0) return
 
       for (const line of renderSecretEntries(visible, false)) this.log(line)
-      this.log('\nShow the actual values with `ghl secrets reveal` (interactive terminal only).')
+      this.log('\nReveal and remove the actual values with `ghl secrets reveal` (interactive terminal only).')
       return
     } catch (error) {
       this.error(error instanceof Error ? error.message : 'Failed to list secrets')

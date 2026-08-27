@@ -667,6 +667,21 @@ function workflowTriggerConfigs(response: unknown, label: string): WorkflowTrigg
   return response.triggers
 }
 
+async function recoverCreatedWorkflowVersion<T>(
+  loadConfigs: () => Promise<Array<WorkflowActionConfig | WorkflowTriggerConfig>>,
+  templateId: string,
+  toSummary: (draft: WorkflowActionConfig | WorkflowTriggerConfig) => T
+): Promise<T | undefined> {
+  try {
+    const draft = (await loadConfigs()).find(
+      config => config.templateId === templateId && config.status.toLowerCase() === 'draft'
+    )
+    return draft ? toSummary(draft) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function workflowActionTestResponse(response: unknown): WorkflowActionTestResponse {
   if (
     !isRecord(response) ||
@@ -1067,12 +1082,25 @@ export class ApiClient {
       body: {},
       baseUrl: this.config.oauthUrl
     })
-    if (!isRecord(response) || response.success !== true || !isWorkflowActionSummary(response.action)) {
-      throw new Error(
-        'Create workflow action version API returned an unexpected response. Run `ghl app actions pull` before retrying.'
-      )
+    if (isRecord(response) && response.success === true && isWorkflowActionSummary(response.action)) {
+      return response.action
     }
-    return response.action
+    const recovered = await recoverCreatedWorkflowVersion(
+      () => this.getWorkflowActionConfigs(appId, templateId),
+      templateId,
+      draft => ({
+        _id: templateId,
+        actionId: templateId,
+        name: draft.info.name,
+        version: draft.version,
+        status: 'draft',
+        isActive: false
+      })
+    )
+    if (recovered) return recovered
+    throw new Error(
+      'Create workflow action version API returned an unexpected response. Run `ghl app actions pull` before retrying.'
+    )
   }
 
   async updateWorkflowActionConfig(appId: string, templateId: string, body: unknown): Promise<void> {
@@ -1223,12 +1251,25 @@ export class ApiClient {
       body: {},
       baseUrl: this.config.oauthUrl
     })
-    if (!isRecord(response) || response.success !== true || !isRecord(response.trigger) || !isWorkflowTriggerSummary(response.trigger)) {
-      throw new Error(
-        'Create workflow trigger version API returned an unexpected response. Run `ghl app triggers pull` before retrying.'
-      )
+    if (isRecord(response) && response.success === true && isRecord(response.trigger) && isWorkflowTriggerSummary(response.trigger)) {
+      return response.trigger
     }
-    return response.trigger
+    const recovered = await recoverCreatedWorkflowVersion(
+      () => this.getWorkflowTriggerConfigs(appId, templateId),
+      templateId,
+      draft => ({
+        _id: templateId,
+        triggerId: templateId,
+        name: draft.info.name,
+        version: draft.version,
+        status: 'draft',
+        isActive: false
+      })
+    )
+    if (recovered) return recovered
+    throw new Error(
+      'Create workflow trigger version API returned an unexpected response. Run `ghl app triggers pull` before retrying.'
+    )
   }
 
   async updateWorkflowTriggerConfig(appId: string, templateId: string, body: unknown): Promise<void> {

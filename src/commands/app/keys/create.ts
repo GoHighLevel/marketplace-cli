@@ -5,7 +5,7 @@ import { input, isPromptCancel } from '../../../lib/shared/prompts.js'
 import {
   canRevealGeneratedSecretInteractively,
   prepareGeneratedSecretOutput,
-  tryRecordSecret
+  storeSecretForOneTimeReveal
 } from '../../../lib/secrets/ledger.js'
 import { loadAppContext } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
@@ -24,7 +24,7 @@ export default class AppKeysCreate extends Command {
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
     reveal: Flags.boolean({
-      description: 'Print the full secret instead of saving only to the local ledger',
+      description: 'Print the full secret now without retaining a local copy',
       default: false
     })
   }
@@ -62,7 +62,7 @@ export default class AppKeysCreate extends Command {
       )
 
       const config = getConfig()
-      const stored = await tryRecordSecret(
+      const stored = await storeSecretForOneTimeReveal(
         config.configDir,
         context.client.activeProfileName,
         {
@@ -71,7 +71,8 @@ export default class AppKeysCreate extends Command {
           reference: created.id,
           appId: context.selected.appId,
           value: created.secret
-        }
+        },
+        flags.reveal
       )
       const output = prepareGeneratedSecretOutput(
         created.secret,
@@ -94,8 +95,10 @@ export default class AppKeysCreate extends Command {
       this.log(`Client key created:`)
       this.log(`  Client ID:     ${created.id}`)
       this.log(`  Client secret: ${secret}`)
-      if (stored) {
-        this.log('\nThe secret is saved locally — view it anytime with `ghl secrets reveal`.')
+      if (flags.reveal) {
+        this.log('\nThis was the only display. The secret was not retained locally.')
+      } else if (stored) {
+        this.log('\nThe secret is saved locally — reveal it once with `ghl secrets reveal`.')
       } else {
         this.log('\nSave the secret now — local storage failed and this interactive display is the only copy.')
       }

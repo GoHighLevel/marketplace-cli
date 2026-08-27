@@ -1,5 +1,4 @@
 import { WorkflowTriggerConfig, WorkflowTriggerSummary } from '../../api/client.js'
-import { isRecord } from '../../api/response.js'
 import {
   buildWorkflowTriggersManifest,
   WorkflowTriggersManifest,
@@ -8,6 +7,7 @@ import {
 } from './manifest.js'
 import { validateWorkflowTriggersManifest } from './schema.js'
 import { isWorkflowSecretReference } from '../shared/secret-references.js'
+import { canonicalWorkflowConfig } from '../shared/verification.js'
 import {
   CreateWorkflowTriggerOperation,
   WorkflowTriggersSyncPlan,
@@ -87,10 +87,7 @@ export async function fetchWorkflowTriggersSnapshot(
   client: WorkflowTriggersApi,
   appId: string
 ): Promise<WorkflowTriggersSnapshot> {
-  const [summaries, bulkConfigs] = await Promise.all([
-    client.listWorkflowTriggerSummaries(appId),
-    client.listWorkflowTriggerConfigs(appId)
-  ])
+  const summaries = await client.listWorkflowTriggerSummaries(appId)
   const summaryIds = new Set<string>()
   for (const summary of summaries) {
     if (summaryIds.has(summary.triggerId)) {
@@ -98,6 +95,9 @@ export async function fetchWorkflowTriggersSnapshot(
     }
     summaryIds.add(summary.triggerId)
   }
+  const bulkConfigs = summaries.length > 0
+    ? await client.listWorkflowTriggerConfigs(appId)
+    : []
   const configs = bulkConfigs.filter(config => summaryIds.has(config.templateId))
   const orphanConfigs = bulkConfigs.filter(config => !summaryIds.has(config.templateId))
   if (orphanConfigs.length > 0) {
@@ -342,20 +342,9 @@ export function reconcileWorkflowTriggersAfterPush(
   return { schemaVersion: 1, appId: remote.appId, triggers }
 }
 
-function canonicalForVerification(value: unknown): unknown {
-  if (typeof value === 'string' && isWorkflowSecretReference(value)) return '${secret}'
-  if (Array.isArray(value)) return value.map(canonicalForVerification)
-  if (!isRecord(value)) return value
-  return Object.fromEntries(
-    Object.keys(value)
-      .filter(key => key !== 'sampleResponseJson')
-      .sort()
-      .map(key => [key, canonicalForVerification(value[key])])
-  )
-}
-
 function sameConfig(left: WorkflowTriggerVersion, right: WorkflowTriggerVersion): boolean {
-  return JSON.stringify(canonicalForVerification(left)) === JSON.stringify(canonicalForVerification(right))
+  const options = { ignoredKeys: ['sampleResponseJson'], isSecretReference: isWorkflowSecretReference }
+  return JSON.stringify(canonicalWorkflowConfig(left, options)) === JSON.stringify(canonicalWorkflowConfig(right, options))
 }
 
 export function verifyWorkflowTriggersApplied(

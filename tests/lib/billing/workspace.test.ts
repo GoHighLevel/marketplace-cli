@@ -15,7 +15,8 @@ import {
   BILLING_USAGE_RELATIVE_PATH,
   loadBillingWorkspace,
   synchronizeUsageBillingSummary,
-  writeBillingWorkspace
+  writeBillingWorkspace,
+  writeLocalBillingWorkspace
 } from '../../../src/lib/billing/workspace.js'
 
 const directories: string[] = []
@@ -97,6 +98,45 @@ describe('billing workspaces', () => {
     expect(loaded.usage).toEqual(usage())
     expect(loaded.state.subscriptionBaseline).toEqual(subscriptions())
     expect(loaded.state.usageBaseline).toEqual(usage())
+  })
+
+  it('imports a legacy dynamic meter without weakening later mutation validation', async () => {
+    const directory = await createWorkspace()
+    const legacyUsage = usage()
+    legacyUsage.meters[0].customPriceType = 'dynamic'
+    legacyUsage.meters[0].tiers[0].minPricePerUnit = 0.005
+    legacyUsage.meters[0].tiers[0].maxPricePerUnit = 0.02
+
+    await writeBillingWorkspace(directory, subscriptions(), legacyUsage)
+
+    const loaded = await loadBillingWorkspace(directory)
+    expect(loaded.usage).toEqual(legacyUsage)
+    expect(loaded.state.usageBaseline).toEqual(legacyUsage)
+  })
+
+  it('persists a validated resource change without reapplying contextual rules to legacy resources', async () => {
+    const directory = await createWorkspace()
+    const appFile = path.join(directory, 'ghl-app.json')
+    const app = JSON.parse(await fs.readFile(appFile, 'utf8'))
+    app.listing.userTypes = ['Location']
+    app.billing.billingType = 'free'
+    await fs.writeFile(appFile, JSON.stringify(app))
+    const legacySubscriptions = subscriptions()
+    legacySubscriptions.plans[0].locationAmount = 10
+    await writeBillingWorkspace(directory, legacySubscriptions, {
+      schemaVersion: 1,
+      appId: 'app-1',
+      meters: []
+    })
+
+    await expect(writeLocalBillingWorkspace(directory, legacySubscriptions, usage())).resolves.toMatchObject({
+      subscriptionFile: path.join(directory, BILLING_SUBSCRIPTION_RELATIVE_PATH),
+      usageFile: path.join(directory, BILLING_USAGE_RELATIVE_PATH)
+    })
+
+    const invalidUsage = usage()
+    invalidUsage.meters[0].productId = ''
+    await expect(writeLocalBillingWorkspace(directory, legacySubscriptions, invalidUsage)).rejects.toThrow(/productId must be a non-empty string/i)
   })
 
   it('omits empty source files and removes generated files after a later pull', async () => {

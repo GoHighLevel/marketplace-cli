@@ -15,6 +15,11 @@ const KIND_META: Record<SecretKind, KindMeta> = {
   'sandbox-password': { header: 'Sandbox passwords:', nameLabel: 'Account', referenceLabel: 'Company ID', valueLabel: 'Password' }
 }
 
+export function isSecretInScope(entry: SecretEntry, appId?: string, includeAccount = false): boolean {
+  if (!appId) return !isAppScoped(entry)
+  return isAppScoped(entry) ? secretAppId(entry) === appId : includeAccount
+}
+
 export function scopeSecretEntries(entries: SecretEntry[], appId?: string, includeAccount = false) {
   const appEntries = appId ? entries.filter(entry => isAppScoped(entry) && secretAppId(entry) === appId) : []
   const accountEntries = entries.filter(entry => !isAppScoped(entry))

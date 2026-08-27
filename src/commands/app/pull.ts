@@ -4,6 +4,7 @@ import { ApiClient } from '../../lib/api/client.js'
 import { findAppItemById, persistSelection, toSelectedApp } from '../../lib/app/context.js'
 import {
   loadAppVersionForExport,
+  buildPullFilesOutput,
   readPullWorkspaceBinding,
   resolvePullWorkspaceBinding,
   resolveVersionId
@@ -144,15 +145,14 @@ export default class AppPull extends Command {
             pulled.billing.usage
           )
           await synchronizeUsageBillingSummary(directory, pulled.billing.usage.meters.length > 0)
-          const { stateFile: workflowActionStateFile, ...actionOutput } = actionFiles
-          return {
-            ...appFiles,
-            ...(pulled.workflowActions.actions.length > 0 ? { ...actionOutput, workflowActionStateFile } : {}),
-            ...(pulled.workflowTriggers.triggers.length > 0 ? triggerFiles : {}),
+          return buildPullFilesOutput({
+            app: appFiles,
+            ...(pulled.workflowActions.actions.length > 0 ? { actions: actionFiles } : {}),
+            ...(pulled.workflowTriggers.triggers.length > 0 ? { triggers: triggerFiles } : {}),
             ...(pulled.billing.subscriptions.plans.length > 0 || pulled.billing.usage.meters.length > 0
-              ? billingFiles
+              ? { billing: billingFiles }
               : {})
-          }
+          })
         },
         { quiet: this.jsonEnabled() }
       )

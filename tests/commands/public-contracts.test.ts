@@ -284,6 +284,16 @@ describe('public command contracts', () => {
     expectNoRuntimeWarning(sso)
     expect(sso.stderr).toMatch(/non-interactive SSO key rotation requires --reveal/i)
 
+    const withdraw = await runCli(['app', 'withdraw'])
+    expectNoRuntimeWarning(withdraw)
+    expect(withdraw.stderr).toMatch(/withdrawing[\s\S]*pass --force[\s\S]*non-interactively/i)
+    expect(withdraw.stderr).not.toMatch(/not logged in/i)
+
+    const securityReview = await runCli(['app', 'security-review'])
+    expectNoRuntimeWarning(securityReview)
+    expect(securityReview.stderr).toMatch(/security review[\s\S]*pass --force[\s\S]*non-interactively/i)
+    expect(securityReview.stderr).not.toMatch(/not logged in/i)
+
     const deletion = await runCli(['sandbox', 'delete', 'company-id'])
     expectNoRuntimeWarning(deletion)
     expect(deletion.stderr).toMatch(/pass[\s\S]*--force[\s\S]*non-interactively/i)

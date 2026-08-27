@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   canRevealGeneratedSecretInteractively,
+  consumeSecrets,
   isAppScoped,
   listSecrets,
   maskSecret,
@@ -13,6 +14,7 @@ import {
   removeSecrets,
   secretAppId,
   secretForOutput,
+  storeSecretForOneTimeReveal,
   tryRecordSecret
 } from '../../../src/lib/secrets/ledger.js'
 
@@ -76,6 +78,55 @@ describe('secret ledger', () => {
     await expect(
       tryRecordSecret(dir, 'default', { kind: 'sso-key', label: 'App', value: 'ignored' })
     ).resolves.toBe(false)
+  })
+
+  it('consumes matching secrets exactly once without deleting other scopes', async () => {
+    await recordSecret(dir, 'default', {
+      kind: 'client-secret', label: 'app-one', appId: 'app1', reference: 'app1-key', value: 'secret-one'
+    })
+    await recordSecret(dir, 'default', {
+      kind: 'sso-key', label: 'app-one-sso', appId: 'app1', reference: 'app1', value: 'sso-one'
+    })
+    await recordSecret(dir, 'default', {
+      kind: 'client-secret', label: 'app-two', appId: 'app2', reference: 'app2-key', value: 'secret-two'
+    })
+
+    const first = await consumeSecrets(dir, 'default', entry => secretAppId(entry) === 'app1')
+    const second = await consumeSecrets(dir, 'default', entry => secretAppId(entry) === 'app1')
+
+    expect(first.map(entry => entry.value).sort()).toEqual(['secret-one', 'sso-one'])
+    expect(second).toEqual([])
+    expect((await listSecrets(dir, 'default')).map(entry => entry.value)).toEqual(['secret-two'])
+    expect(await fs.readFile(path.join(dir, 'secrets.json'), 'utf8')).not.toMatch(/secret-one|sso-one/)
+  })
+
+  it('allows only one concurrent consumer to receive a secret', async () => {
+    await recordSecret(dir, 'default', {
+      kind: 'client-secret', label: 'production', appId: 'app1', reference: 'app1-key', value: 'one-time'
+    })
+
+    const results = await Promise.all([
+      consumeSecrets(dir, 'default', entry => secretAppId(entry) === 'app1'),
+      consumeSecrets(dir, 'default', entry => secretAppId(entry) === 'app1')
+    ])
+
+    expect(results.filter(entries => entries.length === 1)).toHaveLength(1)
+    expect(results.filter(entries => entries.length === 0)).toHaveLength(1)
+  })
+
+  it('does not retain a generated secret that was revealed during creation', async () => {
+    const entry = {
+      kind: 'client-secret' as const,
+      label: 'production',
+      appId: 'app1',
+      reference: 'app1-key',
+      value: 'one-time'
+    }
+
+    await expect(storeSecretForOneTimeReveal(dir, 'default', entry, true)).resolves.toBe(false)
+    expect(await listSecrets(dir, 'default')).toEqual([])
+    await expect(storeSecretForOneTimeReveal(dir, 'default', entry, false)).resolves.toBe(true)
+    expect(await listSecrets(dir, 'default')).toHaveLength(1)
   })
 
   it('rejects a malformed secrets file instead of overwriting it', async () => {

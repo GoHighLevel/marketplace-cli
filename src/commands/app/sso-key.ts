@@ -5,7 +5,7 @@ import { confirm, isPromptCancel } from '../../lib/shared/prompts.js'
 import {
   canRevealGeneratedSecretInteractively,
   prepareGeneratedSecretOutput,
-  tryRecordSecret
+  storeSecretForOneTimeReveal
 } from '../../lib/secrets/ledger.js'
 import { loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
@@ -54,7 +54,7 @@ export default class AppSsoKey extends Command {
       )
 
       const config = getConfig()
-      const stored = await tryRecordSecret(
+      const stored = await storeSecretForOneTimeReveal(
         config.configDir,
         context.client.activeProfileName,
         {
@@ -64,6 +64,7 @@ export default class AppSsoKey extends Command {
           appId: context.selected.appId,
           value: result.ssoKey
         },
+        flags.reveal,
         { kind: 'sso-key', appId: context.selected.appId }
       )
       const output = prepareGeneratedSecretOutput(
@@ -83,8 +84,10 @@ export default class AppSsoKey extends Command {
       if (this.jsonEnabled()) return { ...result, ssoKey, secretStored: stored }
 
       this.log(`SSO key: ${ssoKey}`)
-      if (stored) {
-        this.log('The key is saved locally — view it anytime with `ghl secrets reveal`.')
+      if (flags.reveal) {
+        this.log('This was the only display. The key was not retained locally.')
+      } else if (stored) {
+        this.log('The key is saved locally — reveal it once with `ghl secrets reveal`.')
       } else {
         this.log('Save it now — local storage failed and this interactive display is the only copy.')
       }

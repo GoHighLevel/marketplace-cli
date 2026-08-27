@@ -173,7 +173,10 @@ function validateManifests(
       ...binding.subscriptionOptions,
       contextual
     }),
-    ...validateBillingUsageManifest(usage, binding.usageOptions)
+    ...validateBillingUsageManifest(usage, {
+      ...binding.usageOptions,
+      contextual
+    })
   ]
   if (errors.length > 0) throw new Error(`Billing configuration is invalid:\n- ${errors.join('\n- ')}`)
 }
@@ -256,7 +259,7 @@ export async function writeLocalBillingWorkspace(
   usage: BillingUsageManifest
 ): Promise<Omit<BillingWorkspaceResult, 'stateFile'>> {
   const binding = await loadBinding(directory)
-  return writeBillingSources(binding, subscriptions, usage, true)
+  return writeBillingSources(binding, subscriptions, usage, false)
 }
 
 export async function assertBillingWorkspaceWritable(
@@ -287,7 +290,10 @@ function validateState(binding: BillingBinding, value: unknown): asserts value i
       contextual: false
     })
       .map(error => error.replace('subscription.json', '.ghl/billing-state.json.subscriptionBaseline')),
-    ...validateBillingUsageManifest(value.usageBaseline, binding.usageOptions)
+    ...validateBillingUsageManifest(value.usageBaseline, {
+      ...binding.usageOptions,
+      contextual: false
+    })
       .map(error => error.replace('usage-based.json', '.ghl/billing-state.json.usageBaseline'))
   )
   if (errors.length > 0) throw new Error(`Billing state is invalid:\n- ${errors.join('\n- ')}`)

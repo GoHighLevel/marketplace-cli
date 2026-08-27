@@ -133,6 +133,21 @@ describe('usage billing validation', () => {
     expect(validateBillingUsageManifest(usage(), { appType: 'standard', externalBilling: false })).toEqual([])
   })
 
+  it('loads legacy dynamic portal meters structurally but rejects them for mutation', () => {
+    const manifest = usage()
+    delete manifest.meters[0].pricingPageUrl
+
+    expect(validateBillingUsageManifest(manifest, {
+      appType: 'standard',
+      externalBilling: false,
+      contextual: false
+    })).toEqual([])
+    expect(validateBillingUsageManifest(manifest, {
+      appType: 'standard',
+      externalBilling: false
+    })).toEqual(expect.arrayContaining([expect.stringMatching(/pricingPageUrl is required/i)]))
+  })
+
   it('validates product-specific fields, six-decimal prices, dynamic bounds, and tier overlap', () => {
     const manifest = usage()
     const meter = manifest.meters[0]

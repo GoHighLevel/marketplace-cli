@@ -1,10 +1,13 @@
 import path from 'node:path'
 
 import { AppVersion, VersionListItem } from '../api/client.js'
+import type { BillingWorkspaceResult } from '../billing/workspace.js'
 import { isRecord } from '../api/response.js'
 import { requireRegularFile } from './local-workspace.js'
-import { APP_MANIFEST_FILENAME } from './workspace.js'
+import { APP_MANIFEST_FILENAME, AppWorkspaceResult } from './workspace.js'
 import { readJsonFile } from '../shared/json-file.js'
+import type { WorkflowActionsWorkspaceResult } from '../workflows/actions/workspace.js'
+import type { WorkflowTriggersWorkspaceResult } from '../workflows/triggers/workspace.js'
 
 export interface PullWorkspaceBinding {
   directory: string
@@ -15,6 +18,22 @@ export interface PullWorkspaceBinding {
 
 export interface AppExportClient {
   getVersion(appId: string, versionId: string): Promise<AppVersion>
+}
+
+export function buildPullFilesOutput(options: {
+  app: AppWorkspaceResult
+  actions?: WorkflowActionsWorkspaceResult
+  triggers?: WorkflowTriggersWorkspaceResult
+  billing?: BillingWorkspaceResult
+}): Record<string, unknown> {
+  const { guideFile: actionGuideFile, stateFile: workflowActionStateFile, ...actionFiles } = options.actions ?? {}
+  const { guideFile: billingGuideFile, stateFile: billingStateFile, ...billingFiles } = options.billing ?? {}
+  return {
+    ...options.app,
+    ...(options.actions ? { ...actionFiles, actionGuideFile, workflowActionStateFile } : {}),
+    ...(options.triggers ?? {}),
+    ...(options.billing ? { ...billingFiles, billingGuideFile, billingStateFile } : {})
+  }
 }
 
 function requireManifestIdentifier(manifest: Record<string, unknown>, property: 'appId' | 'versionId'): string {

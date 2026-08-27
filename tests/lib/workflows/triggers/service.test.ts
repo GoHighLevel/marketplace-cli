@@ -62,10 +62,17 @@ describe('workflow trigger service orchestration', () => {
     expect(client.getWorkflowTriggerConfigs).toHaveBeenCalledWith('app-1', 'template-1', '1.1')
   })
 
-  it('fails closed for orphaned, duplicate, or cross-app workflow configuration', async () => {
-    await expect(fetchWorkflowTriggersSnapshot(api({
-      listWorkflowTriggerSummaries: vi.fn().mockResolvedValue([])
-    }), 'app-1')).rejects.toThrow(/missing from the OAuth registry/i)
+  it('does not query workflow configurations when the oauth registry is empty', async () => {
+    const client = api({ listWorkflowTriggerSummaries: vi.fn().mockResolvedValue([]) })
+
+    await expect(fetchWorkflowTriggersSnapshot(client, 'app-1')).resolves.toMatchObject({
+      manifest: { schemaVersion: 1, appId: 'app-1', triggers: [] },
+      summaries: []
+    })
+    expect(client.listWorkflowTriggerConfigs).not.toHaveBeenCalled()
+  })
+
+  it('fails closed for duplicate or cross-app workflow configuration', async () => {
 
     await expect(fetchWorkflowTriggersSnapshot(api({
       listWorkflowTriggerConfigs: vi.fn().mockResolvedValue([config(), config()])
@@ -228,5 +235,47 @@ describe('workflow trigger service orchestration', () => {
 
     draftManifest.triggers[0].versions[0].status = 'published'
     expect(workflowTriggerPublishCandidates(draftManifest, [{ ...summary(), status: 'approved', isActive: true }])).toEqual([])
+  })
+
+  it('treats omitted empty trigger defaults as a successful create', () => {
+    const plan: WorkflowTriggersSyncPlan = {
+      appId: 'app-1',
+      localChanges: ['triggers.contact_changed'],
+      remoteChanges: [],
+      conflicts: [],
+      errors: [],
+      operations: [{
+        type: 'create',
+        key: 'contact_changed',
+        desired: {
+          key: 'contact_changed',
+          versions: [{
+            version: '1.0',
+            status: 'draft',
+            info: { name: 'Contact changed' },
+            filters: [],
+            customVars: [],
+            customVarsJson: {}
+          }]
+        }
+      }]
+    }
+    const remote = {
+      schemaVersion: 1 as const,
+      appId: 'app-1',
+      triggers: [{
+        templateId: 'template-1',
+        key: 'contact_changed',
+        versions: [{
+          version: '1.0',
+          status: 'draft' as const,
+          info: { name: 'Contact changed' },
+          filters: [],
+          customVars: []
+        }]
+      }]
+    }
+
+    expect(verifyWorkflowTriggersApplied(plan, remote)).toEqual([])
   })
 })

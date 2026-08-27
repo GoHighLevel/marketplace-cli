@@ -169,7 +169,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app keys create [name]',
         description:
-          'Create a client ID and one-time client secret. Output is masked by default and the secret is saved to the local ledger; `--reveal` explicitly prints it.'
+          'Create a client ID and one-time client secret. By default it is masked and retained for one later reveal; `--reveal` prints it now without retaining a local copy.'
       },
       {
         command: 'ghl app keys delete [keyId]',
@@ -183,7 +183,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app sso-key',
         description:
-          'Generate or rotate the one-time SSO key. Rotation is destructive and confirmed; automation must use `--force --reveal` so the replacement value cannot be lost.'
+          'Generate or rotate the one-time SSO key. Rotation is destructive and confirmed; `--reveal` prints the replacement once without retaining a local copy.'
       }
     ]
   },
@@ -448,7 +448,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl secrets reveal',
         description:
-          'Print stored secret values. Interactive use is allowed explicitly; automation requires `--force`. Add `--include-account` for sandbox credentials.'
+          'Print stored secret values once after atomically removing their local copies. Automation requires `--force`; add `--include-account` for sandbox credentials.'
       },
       {
         command: 'ghl help [command]',

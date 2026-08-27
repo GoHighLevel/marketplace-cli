@@ -7,6 +7,16 @@ export function toSelectedApp(item: AppListItem): SelectedApp {
   return { appId: String(item.appId ?? item._id), versionId: String(item._id), name: item.name }
 }
 
+export async function toLatestSelectedApp(client: ApiClient, item: AppListItem): Promise<SelectedApp> {
+  const appId = String(item.appId ?? item._id)
+  const latest = await client.getLatestVersion(appId)
+  return {
+    appId: String(latest.appId ?? appId),
+    versionId: latest._id,
+    ...(latest.name ?? item.name ? { name: latest.name ?? item.name } : {})
+  }
+}
+
 export async function listAllApps(client: ApiClient): Promise<AppListItem[]> {
   const limit = 100
   const all: AppListItem[] = []
@@ -34,7 +44,10 @@ export async function findAppItemById(client: ApiClient, appId: string, nameHint
 }
 
 export async function findAppById(client: ApiClient, appId: string): Promise<SelectedApp> {
-  return toSelectedApp(await findAppItemById(client, appId))
+  const item = await findAppItemById(client, appId)
+  return appId === String(item.appId ?? item._id)
+    ? toLatestSelectedApp(client, item)
+    : toSelectedApp(item)
 }
 
 export interface ResolvedAppDetails {
@@ -50,7 +63,11 @@ export async function resolveAppDetails(
 ): Promise<ResolvedAppDetails> {
   if (flagAppId) {
     const summary = await findAppItemById(client, flagAppId)
-    return { selected: toSelectedApp(summary), summary }
+    const appId = String(summary.appId ?? summary._id)
+    const selected = flagAppId === appId
+      ? await toLatestSelectedApp(client, summary)
+      : toSelectedApp(summary)
+    return { selected, summary }
   }
   const workspace = await readPullWorkspaceBinding(workspaceDirectory)
   if (workspace) {

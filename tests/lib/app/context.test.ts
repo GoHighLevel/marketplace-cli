@@ -21,7 +21,8 @@ let config: CliConfig
 function fakeClient(apps: Array<Record<string, unknown>>, profileName = 'default'): ApiClient {
   return {
     activeProfileName: profileName,
-    listApps: async () => ({ apps, totalCount: apps.length })
+    listApps: async () => ({ apps, totalCount: apps.length }),
+    getLatestVersion: async (appId: string) => apps.find(app => (app.appId ?? app._id) === appId)
   } as unknown as ApiClient
 }
 
@@ -84,7 +85,8 @@ describe('findAppById', () => {
       listApps: async ({ skip = 0 }: { skip?: number }) => {
         calls.push(skip)
         return pages[skip === 0 ? 0 : 1]
-      }
+      },
+      getLatestVersion: async () => pages[1].apps[0]
     } as unknown as ApiClient
 
     await expect(findAppById(client, 'a2')).resolves.toMatchObject({ appId: 'a2', versionId: 'v2' })
@@ -120,6 +122,19 @@ describe('resolveApp', () => {
     await expect(resolveAppDetails(client, config, 'flag-app')).resolves.toMatchObject({
       selected: { appId: 'flag-app', versionId: 'v1' },
       summary: { appId: 'flag-app', _id: 'v1' }
+    })
+  })
+
+  it('resolves an explicit app id to its latest draft instead of the app-list version', async () => {
+    const summary = { _id: 'live-version', appId: 'flag-app', name: 'Live App' }
+    const client = {
+      listApps: async () => ({ apps: [summary], totalCount: 1 }),
+      getLatestVersion: async () => ({ _id: 'draft-version', appId: 'flag-app', name: 'Draft App', status: 'draft' })
+    } as unknown as ApiClient
+
+    await expect(resolveAppDetails(client, config, 'flag-app')).resolves.toMatchObject({
+      selected: { appId: 'flag-app', versionId: 'draft-version', name: 'Draft App' },
+      summary
     })
   })
 

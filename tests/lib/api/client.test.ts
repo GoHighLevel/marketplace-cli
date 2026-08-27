@@ -319,6 +319,48 @@ describe('ApiClient', () => {
     ])
   })
 
+  it('recovers action and trigger version creation when the registry response is stale', async () => {
+    await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team9' })
+    const actionDraft = {
+      templateId: 'action-template',
+      appId: 'app1',
+      key: 'send_message',
+      version: '1.1',
+      status: 'draft',
+      info: { name: 'Send message' }
+    }
+    const triggerDraft = {
+      templateId: 'trigger-template',
+      appId: 'app1',
+      key: 'contact_changed',
+      version: '1.1',
+      status: 'draft',
+      info: { name: 'Contact changed' }
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ success: false, action: [] }))
+      .mockResolvedValueOnce(jsonResponse({ actions: [actionDraft] }))
+      .mockResolvedValueOnce(jsonResponse({ success: false, trigger: [] }))
+      .mockResolvedValueOnce(jsonResponse({ triggers: [triggerDraft] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new ApiClient(config)
+    await client.init()
+
+    await expect(client.createWorkflowActionVersion('app1', 'action-template')).resolves.toMatchObject({
+      actionId: 'action-template',
+      name: 'Send message',
+      version: '1.1',
+      status: 'draft'
+    })
+    await expect(client.createWorkflowTriggerVersion('app1', 'trigger-template')).resolves.toMatchObject({
+      triggerId: 'trigger-template',
+      name: 'Contact changed',
+      version: '1.1',
+      status: 'draft'
+    })
+  })
+
   it('rejects malformed workflow action test responses at the API boundary', async () => {
     await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team9' })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ output: {} })))

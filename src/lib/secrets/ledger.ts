@@ -1,4 +1,6 @@
+import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 
 import { isRecord } from '../api/response.js'
 import { readJsonFile, writeJsonFileAtomic } from '../shared/json-file.js'
@@ -27,9 +29,39 @@ interface SecretsFile {
 }
 
 const SECRET_KINDS = new Set<SecretKind>(['client-secret', 'sandbox-password', 'sso-key'])
+const LOCK_RETRY_DELAYS_MS = [10, 25, 50, 100, 200, 400, 800]
 
 function secretsPath(configDir: string): string {
   return path.join(configDir, 'secrets.json')
+}
+
+function secretsLockPath(configDir: string): string {
+  return path.join(configDir, 'secrets.lock')
+}
+
+async function withSecretsLock<T>(configDir: string, operation: () => Promise<T>): Promise<T> {
+  await fs.mkdir(configDir, { recursive: true, mode: 0o700 })
+  const lockPath = secretsLockPath(configDir)
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+
+  for (let attempt = 0; handle === undefined; attempt += 1) {
+    try {
+      handle = await fs.open(lockPath, 'wx', 0o600)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      if (attempt >= LOCK_RETRY_DELAYS_MS.length) {
+        throw new Error('Secret store is busy. Retry the command.')
+      }
+      await delay(LOCK_RETRY_DELAYS_MS[attempt])
+    }
+  }
+
+  try {
+    return await operation()
+  } finally {
+    await handle.close()
+    await fs.rm(lockPath, { force: true })
+  }
 }
 
 function isSecretEntry(value: unknown): value is SecretEntry {
@@ -85,8 +117,8 @@ async function loadSecretsFile(configDir: string): Promise<SecretsFile> {
   return { version: 1, profiles }
 }
 
-/* One-time values (client secrets, sandbox passwords, SSO keys) are ledgered
-   locally so a human can retrieve them even when an agent ran the command. */
+/* One-time values are retained until their first explicit reveal.
+   Mutations share a lock so concurrent commands cannot duplicate a reveal. */
 export async function recordSecret(
   configDir: string,
   profile: string,
@@ -95,15 +127,19 @@ export async function recordSecret(
 ): Promise<void> {
   const profileValidation = validateProfileName(profile)
   if (profileValidation !== true) throw new Error(profileValidation)
-  const file = await loadSecretsFile(configDir)
-  const entries = (file.profiles[profile] ?? []).filter(existing => !replace || !matchesSecretFilter(existing, replace))
-  const nextEntry = { ...entry, createdAt: new Date().toISOString() }
-  if (!isSecretEntry(nextEntry)) throw new Error('Secret entry has an invalid structure.')
-  file.profiles = {
-    ...file.profiles,
-    [profile]: [...entries, nextEntry]
-  }
-  await writeJsonFileAtomic(secretsPath(configDir), file)
+  await withSecretsLock(configDir, async () => {
+    const file = await loadSecretsFile(configDir)
+    const entries = (file.profiles[profile] ?? []).filter(
+      existing => !replace || !matchesSecretFilter(existing, replace)
+    )
+    const nextEntry = { ...entry, createdAt: new Date().toISOString() }
+    if (!isSecretEntry(nextEntry)) throw new Error('Secret entry has an invalid structure.')
+    file.profiles = {
+      ...file.profiles,
+      [profile]: [...entries, nextEntry]
+    }
+    await writeJsonFileAtomic(secretsPath(configDir), file)
+  })
 }
 
 /* Secret capture is best-effort because the credential already exists remotely.
@@ -122,18 +158,58 @@ export async function tryRecordSecret(
   }
 }
 
+export async function storeSecretForOneTimeReveal(
+  configDir: string,
+  profile: string,
+  entry: Omit<SecretEntry, 'createdAt'>,
+  revealNow: boolean,
+  replace?: SecretFilter
+): Promise<boolean> {
+  const profileValidation = validateProfileName(profile)
+  if (profileValidation !== true) throw new Error(profileValidation)
+  if (revealNow) {
+    if (replace) await removeSecrets(configDir, profile, replace).catch(() => 0)
+    return false
+  }
+  return tryRecordSecret(configDir, profile, entry, replace)
+}
+
 /* Prunes entries for credentials that stopped working (deleted client keys,
    rotated SSO keys) so the ledger only reflects live values. */
 export async function removeSecrets(configDir: string, profile: string, filter: SecretFilter): Promise<number> {
   const profileValidation = validateProfileName(profile)
   if (profileValidation !== true) throw new Error(profileValidation)
-  const file = await loadSecretsFile(configDir)
-  const entries = file.profiles[profile] ?? []
-  const remaining = entries.filter(entry => !matchesSecretFilter(entry, filter))
-  if (remaining.length === entries.length) return 0
-  file.profiles = { ...file.profiles, [profile]: remaining }
-  await writeJsonFileAtomic(secretsPath(configDir), file)
-  return entries.length - remaining.length
+  return withSecretsLock(configDir, async () => {
+    const file = await loadSecretsFile(configDir)
+    const entries = file.profiles[profile] ?? []
+    const remaining = entries.filter(entry => !matchesSecretFilter(entry, filter))
+    if (remaining.length === entries.length) return 0
+    file.profiles = { ...file.profiles, [profile]: remaining }
+    await writeJsonFileAtomic(secretsPath(configDir), file)
+    return entries.length - remaining.length
+  })
+}
+
+/* Removal completes before plaintext is returned to the command.
+   A write failure therefore fails closed without displaying the value. */
+export async function consumeSecrets(
+  configDir: string,
+  profile: string,
+  predicate: (entry: Readonly<SecretEntry>) => boolean
+): Promise<SecretEntry[]> {
+  const profileValidation = validateProfileName(profile)
+  if (profileValidation !== true) throw new Error(profileValidation)
+  return withSecretsLock(configDir, async () => {
+    const file = await loadSecretsFile(configDir)
+    const entries = file.profiles[profile] ?? []
+    const consumed: SecretEntry[] = []
+    const remaining: SecretEntry[] = []
+    for (const entry of entries) (predicate(entry) ? consumed : remaining).push(entry)
+    if (consumed.length === 0) return []
+    file.profiles = { ...file.profiles, [profile]: remaining }
+    await writeJsonFileAtomic(secretsPath(configDir), file)
+    return consumed.reverse()
+  })
 }
 
 export async function listSecrets(configDir: string, profile: string): Promise<SecretEntry[]> {

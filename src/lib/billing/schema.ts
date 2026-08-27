@@ -29,6 +29,7 @@ export interface BillingUsageValidationOptions {
   registeredActionKeys?: Set<string>
   registeredTriggerKeys?: Set<string>
   mutationRequested?: boolean
+  contextual?: boolean
 }
 
 const SUBSCRIPTION_ROOT_KEYS = new Set(['schemaVersion', 'appId', 'plans'])
@@ -338,7 +339,7 @@ function validateMeter(value: unknown, index: number, options: BillingUsageValid
     errors.push(`${path}.productId must start with "custom_" and contain only letters, numbers, underscores, or hyphens.`)
   }
   if (value.customPriceType === 'dynamic') {
-    if (typeof value.pricingPageUrl !== 'string' || !value.pricingPageUrl.trim()) {
+    if (options.contextual !== false && (typeof value.pricingPageUrl !== 'string' || !value.pricingPageUrl.trim())) {
       errors.push(`${path}.pricingPageUrl is required for dynamic pricing.`)
     }
   } else if (value.pricingPageUrl !== undefined) {

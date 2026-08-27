@@ -129,14 +129,17 @@ export async function validateLocalBillingIntent(
     externalBilling: version?.externalBilling ?? workspace.app.billing.externalBilling,
     whiteLabel: version?.isWhiteLabelFriendly ?? workspace.app.listing.isWhiteLabelFriendly,
     mutationRequested: subscriptionPlan.operations.length > 0,
-    configurationMutationRequested: subscriptionPlan.operations.some(operation => operation.type !== 'delete-plan')
+    configurationMutationRequested: subscriptionPlan.operations.some(operation => operation.type !== 'delete-plan'),
+    contextual: subscriptionPlan.operations.some(operation => operation.type !== 'delete-plan')
   } as const
+  const usageMutationRequested = usagePlan.operations.some(operation =>
+    operation.type !== 'delete-meter' && operation.type !== 'delete-tier'
+  )
   const usageOptions = {
     appType: version?.appType ?? workspace.app.appType,
     externalBilling: version?.externalBilling ?? workspace.app.billing.externalBilling,
-    mutationRequested: usagePlan.operations.some(operation =>
-      operation.type !== 'delete-meter' && operation.type !== 'delete-tier'
-    ),
+    mutationRequested: usageMutationRequested,
+    contextual: usageMutationRequested,
     ...keys
   }
   const componentStateErrors: string[] = []

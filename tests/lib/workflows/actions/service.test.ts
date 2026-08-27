@@ -82,13 +82,18 @@ describe('workflow action service orchestration', () => {
     await expect(fetchWorkflowActionsManifest(client, 'app-1')).rejects.toThrow(/registry.*template-1.*configuration/i)
   })
 
-  it('fails when the workflow service contains an action missing from the oauth registry', async () => {
+  it('does not query workflow configurations when the oauth registry is empty', async () => {
     const client = api({
       listWorkflowActionSummaries: vi.fn().mockResolvedValue([]),
       listWorkflowActionConfigs: vi.fn().mockResolvedValue([config()])
     })
 
-    await expect(fetchWorkflowActionsManifest(client, 'app-1')).rejects.toThrow(/configuration.*template-1.*registry/i)
+    await expect(fetchWorkflowActionsManifest(client, 'app-1')).resolves.toEqual({
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: []
+    })
+    expect(client.listWorkflowActionConfigs).not.toHaveBeenCalled()
   })
 
   it('detects a published workflow version whose oauth registry update needs recovery', () => {
@@ -410,5 +415,51 @@ describe('workflow action service orchestration', () => {
     expect(verifyWorkflowActionsApplied(plan, remote)).toEqual([])
     remote.actions[0].versions[0].executionConfig.url = 'https://example.com/wrong'
     expect(verifyWorkflowActionsApplied(plan, remote)).toEqual(['update:send_message@1.0'])
+  })
+
+  it('treats omitted empty action defaults as a successful create', () => {
+    const plan: WorkflowActionsSyncPlan = {
+      appId: 'app-1',
+      localChanges: ['actions.send_message'],
+      remoteChanges: [],
+      conflicts: [],
+      errors: [],
+      operations: [{
+        type: 'create',
+        key: 'send_message',
+        desired: {
+          key: 'send_message',
+          versions: [{
+            version: '1.0',
+            status: 'draft',
+            info: { name: 'Send message' },
+            inputs: [],
+            customVars: [],
+            customVarsJson: {},
+            payloadCustomizationType: 'default',
+            customizedPayload: {},
+            branchesConfig: {}
+          }]
+        }
+      }]
+    }
+    const remote = {
+      schemaVersion: 1 as const,
+      appId: 'app-1',
+      actions: [{
+        templateId: 'template-1',
+        key: 'send_message',
+        versions: [{
+          version: '1.0',
+          status: 'draft' as const,
+          info: { name: 'Send message' },
+          inputs: [],
+          customVars: [],
+          payloadCustomizationType: 'default' as const
+        }]
+      }]
+    }
+
+    expect(verifyWorkflowActionsApplied(plan, remote)).toEqual([])
   })
 })

@@ -17,13 +17,13 @@ export default class AppWithdraw extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(AppWithdraw)
+    if (!flags.force && !process.stdin.isTTY) {
+      this.error('Withdrawing returns the review version to draft — pass --force when running non-interactively.')
+    }
     try {
       const context = await loadAppContext(flags.app)
       requireVersionStatus(context.version.status, ['review'], 'withdraw')
       if (!flags.force) {
-        if (!process.stdin.isTTY) {
-          this.error('Withdrawing returns the review version to draft — pass --force when running non-interactively.')
-        }
         const ok = await confirm({
           message: `Withdraw "${context.version.name ?? context.selected.appId}" from marketplace review?`,
           default: false

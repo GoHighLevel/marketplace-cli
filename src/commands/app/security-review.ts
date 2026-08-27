@@ -20,6 +20,9 @@ export default class AppSecurityReview extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(AppSecurityReview)
+    if (!flags.force && !process.stdin.isTTY) {
+      this.error('Requesting security review is a submission action — pass --force when running non-interactively.')
+    }
     try {
       const config = getConfig()
       const client = new ApiClient(config)
@@ -49,9 +52,6 @@ export default class AppSecurityReview extends Command {
         this.error(`${reviewDetailsValidation} Complete the fields with \`ghl app review-details\` first.`)
       }
       if (!flags.force) {
-        if (!process.stdin.isTTY) {
-          this.error('Requesting security review is a submission action — pass --force when running non-interactively.')
-        }
         const ok = await confirm({
           message: `Submit "${liveVersion.name ?? selected.appId}" for security review?`,
           default: false

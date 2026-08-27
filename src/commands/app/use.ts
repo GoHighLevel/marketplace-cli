@@ -2,7 +2,7 @@ import { Args, Command } from '@oclif/core'
 
 import { isPromptCancel, select } from '../../lib/shared/prompts.js'
 import { ApiClient } from '../../lib/api/client.js'
-import { findAppById, listAllApps, persistSelection, toSelectedApp } from '../../lib/app/context.js'
+import { findAppById, listAllApps, persistSelection, toLatestSelectedApp } from '../../lib/app/context.js'
 import { getConfig } from '../../lib/config/environment.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
@@ -51,7 +51,7 @@ export default class AppUse extends Command {
         }))
       })
 
-      const selected = toSelectedApp(choice)
+      const selected = await toLatestSelectedApp(client, choice)
       await persistSelection(client, config, selected)
       this.log(`Selected "${selected.name}" (appId: ${selected.appId}, versionId: ${selected.versionId}).`)
     } catch (error) {

@@ -8,7 +8,7 @@ The CLI is designed to be driven by humans **and** by LLM agents:
 - Read commands support `--json` for machine-readable output.
 - Destructive commands ask for confirmation on a terminal and require `--force` in scripts.
 - Supported workflows apply the same validation rules as the portal, so bad input fails fast with a fix hint **before** a mutating API call.
-- One-time secrets are captured to a local ledger; explicit `--reveal` controls when automation may print generated credentials.
+- One-time secrets are retained in a local ledger until their first reveal, which permanently consumes the local copy.
 
 ## Requirements
 
@@ -190,10 +190,10 @@ All section editors are interactive with current values prefilled, or fully flag
 | `ghl app redirect remove [urls...]` | Remove redirect URIs (picker when omitted). |
 | `ghl app redirect default [url]` | Mark a URI as default (picker when omitted). Only for live/deprecating/deprecated versions. |
 | `ghl app keys` | Show client keys. |
-| `ghl app keys create [name]` | Create a client id + secret pair. The secret is returned **once**: output is masked and the value is saved to the local ledger (`--reveal` to print it, including as JSON). |
+| `ghl app keys create [name]` | Create a client id + secret pair. By default the secret is masked and retained for one later `ghl secrets reveal`; `--reveal` prints it immediately and does not retain a local copy. |
 | `ghl app keys delete [keyId]` | Delete a key (picker when omitted; confirms; `--force` in scripts). Prunes the ledger entry. |
 | `ghl app keys default [keyId]` | Mark a key as default (picker when omitted). |
-| `ghl app sso-key` | Generate or rotate the SSO key (confirms rotation; masked and ledgered interactively). Scripts must pass `--force --reveal` so the replacement key cannot be lost. |
+| `ghl app sso-key` | Generate or rotate the SSO key (confirms rotation; masked and retained for one later reveal). Scripts must pass `--force --reveal`; that immediate display is the only display. |
 
 ### Webhooks
 
@@ -315,7 +315,7 @@ The older `ghl app pricing` commands remain available for compatibility, but new
 | Command | Description |
 |---|---|
 | `ghl secrets` | List one-time secrets captured for the selected app (values masked). Add `--include-account` to include sandbox passwords. |
-| `ghl secrets reveal` | Print the actual values. Interactive terminals only — pass `--force` to allow it in scripts; add `--include-account` for sandbox passwords. |
+| `ghl secrets reveal` | Print each actual value once, atomically removing its local copy before output. Interactive terminals only — pass `--force` to allow it in scripts; add `--include-account` for sandbox passwords. |
 
 ### Discovery
 
@@ -326,9 +326,9 @@ The older `ghl app pricing` commands remain available for compatibility, but new
 
 ## One-time secrets
 
-Client secrets, SSO keys, and sandbox passwords **cannot be retrieved from the API after creation**. Commands record them in `~/.config/ghl/secrets.json` (0600) under the active profile so a human can recover the value with `ghl secrets reveal`. If local storage fails, generated values are shown automatically only when both input and output are interactive terminals; automation must opt in with `--reveal`.
+Client secrets, SSO keys, and sandbox passwords **cannot be retrieved from the API after creation**. Commands retain them in `~/.config/ghl/secrets.json` (0600) under the active profile until the first `ghl secrets reveal`. Reveal atomically removes matching values before printing them, so neither the CLI nor a later command can display them again. If local storage fails, generated values are shown automatically only when both input and output are interactive terminals; automation must opt in with `--reveal`.
 
-- When the ledger write succeeds, creation output shows a masked value (`****last4`); pass `--reveal` when a script legitimately needs it inline. A failed write may reveal a generated value only on a fully interactive terminal, never automatically in redirected or non-interactive output.
+- When the ledger write succeeds, creation output shows a masked value (`****last4`). Pass `--reveal` when a script legitimately needs the value inline; this counts as the one display and no local copy is retained. A failed write may reveal a generated value only on a fully interactive terminal, never automatically in redirected or non-interactive output.
 - `ghl secrets` is scoped to the selected app — it never shows another app's client secrets. Account-level sandbox passwords appear only with `--include-account` (or when no app is selected).
 - Deleting a key or rotating an SSO key prunes the old ledger entry, so the ledger only lists credentials that still work.
 - Values created outside this CLI were never captured and can only be replaced by rotating.
@@ -341,7 +341,7 @@ The CLI is built to be agent-operable end to end:
 2. **Use `--json`** on read commands (`app list`, `app info`, `app versions`, `app diff`, `sandbox`, `app analyze`, `commands`) and parse stdout; progress spinners go to stderr.
 3. **Pass `--force`** on destructive or irreversible actions (delete, publish, deprecate, withdraw…) — without it, non-TTY runs refuse rather than guess.
 4. **Trust the errors** — validation runs before the API call and error messages contain the rule and the fix (e.g. which scopes are unknown, which checklist fields are missing, which versions are allowed).
-5. **Secrets stay recoverable** — one-time values are masked in output but saved locally, so the human can retrieve them later with `ghl secrets reveal`.
+5. **Secrets are reveal-once** — one-time values are masked and retained for a single `ghl secrets reveal`; agents should never consume them unless the user explicitly requests it.
 
 ## Local development
 
