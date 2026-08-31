@@ -1,8 +1,10 @@
 import { Command, Flags } from '@oclif/core'
 
 import { confirm, input, isPromptCancel, select } from '../../lib/shared/prompts.js'
+import { persistSelection } from '../../lib/app/context.js'
 import { formatReadinessError, requireVersionStatus, requiresPublicReviewDetails } from '../../lib/app/rules.js'
 import { validateStoredReviewDetails } from '../../lib/app/profile-sections.js'
+import { refreshAppWorkspaceLifecycle } from '../../lib/app/lifecycle.js'
 import { loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import {
@@ -164,6 +166,34 @@ export default class AppPublish extends Command {
           subAccountNotes: subAccountNotes ?? ''
         })
       )
+
+      try {
+        const refreshed = await withSpinner('Refreshing local status...', () =>
+          refreshAppWorkspaceLifecycle(
+            process.cwd(),
+            context.client,
+            context.selected.appId,
+            context.selected.versionId,
+            newVersion
+          )
+        )
+        if (refreshed && refreshed.version._id !== context.selected.versionId) {
+          await persistSelection(context.client, context.config, {
+            appId: context.selected.appId,
+            versionId: refreshed.version._id,
+            name: refreshed.version.name ?? context.selected.name
+          })
+        }
+      } catch (error) {
+        const outcome = isPrivate
+          ? `Version ${newVersion} was published`
+          : `Version ${newVersion} was submitted for review`
+        const reason = error instanceof Error ? error.message : 'local synchronization failed'
+        throw new Error(
+          `${outcome}, but the local workspace status could not be synchronized: ${reason} ` +
+            'Run `ghl app pull` before making more local changes.'
+        )
+      }
 
       this.log(
         isPrivate

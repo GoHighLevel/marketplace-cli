@@ -143,7 +143,7 @@ Subscription plans and usage meters are app-scoped rather than tied to one app v
 | `ghl login` | Browser-based login. Flags: `--no-browser` (print URL instead), `--profile <name>` (store under a named profile, default `default`). |
 | `ghl account` | List every developer account available to the active login and mark the active account. Supports `--json`. |
 | `ghl account switch [accountId]` | Switch the `teamid` used by subsequent API calls without logging in again. Omitting the ID shows the current account and opens a picker with its entry marked active; scripts must provide the ID. The previous account's stored app selection is cleared; existing app folders remain bound to their original apps. |
-| `ghl logout` | Delete the stored tokens (`credentials.json`) and app selection (`config.json`). Every API command fails with `Not logged in` until the next `ghl login`. The one-time secret ledger (`secrets.json`) is kept because its values cannot be recovered after deletion — the command prints its path if you want to remove it manually. |
+| `ghl logout` | Delete the stored tokens (`credentials.json`) and app selection (`config.json`). Every API command fails with `Not logged in` until the next `ghl login`. Unrevealed one-time secrets remain available in the local ledger. |
 
 ### App selection
 

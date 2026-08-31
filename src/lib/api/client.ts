@@ -310,8 +310,14 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string')
 }
 
-function hasOptionalStringArrayFields(value: Record<string, unknown>, fields: string[]): boolean {
-  return fields.every(field => value[field] === undefined || isStringArray(value[field]))
+function hasOptionalStringArrayFields(
+  value: Record<string, unknown>,
+  fields: string[],
+  allowNull = false
+): boolean {
+  return fields.every(
+    field => value[field] === undefined || (allowNull && value[field] === null) || isStringArray(value[field])
+  )
 }
 
 type ClientKey = NonNullable<AppVersion['clientKeys']>[number]
@@ -376,7 +382,7 @@ function isAppVersion(value: unknown): value is AppVersion {
       'testCredentials',
       'additionalDetails',
       'privateReason'
-    ]) ||
+    ], true) ||
     !hasOptionalBooleanFields(value, [
       'private',
       'externalBilling',
@@ -389,7 +395,7 @@ function isAppVersion(value: unknown): value is AppVersion {
       'isAgencyBulkInstallEnabled',
       'hasSubAccountProfile'
     ]) ||
-    !hasOptionalFiniteNumberFields(value, ['freeTrialDuration', 'oneTimePrice']) ||
+    !hasOptionalFiniteNumberFields(value, ['freeTrialDuration', 'oneTimePrice'], true) ||
     !hasOptionalStringArrayFields(value, [
       'subcategory',
       'businessNiche',
@@ -399,30 +405,34 @@ function isAppVersion(value: unknown): value is AppVersion {
       'subAccountPreviewImageUrls',
       'allowedScopes',
       'redirectUris'
-    ]) ||
-    (value.billingType !== undefined && !['free', 'paid', 'freemium'].includes(String(value.billingType)))
+    ], true) ||
+    (value.billingType !== undefined &&
+      value.billingType !== null &&
+      !['free', 'paid', 'freemium'].includes(String(value.billingType)))
   ) {
     return false
   }
 
   if (
     value.contact !== undefined &&
+    value.contact !== null &&
     (!isRecord(value.contact) || !hasOptionalStringFields(value.contact, ['email', 'name']))
   ) {
     return false
   }
 
   for (const field of ['externalConfig', 'externalAuthConfig', 'mcpConfig'] as const) {
-    if (value[field] !== undefined && !isRecord(value[field])) return false
+    if (value[field] !== undefined && value[field] !== null && !isRecord(value[field])) return false
   }
   if (
     value.customPages !== undefined &&
+    value.customPages !== null &&
     (!Array.isArray(value.customPages) || !value.customPages.every(page => isRecord(page)))
   ) {
     return false
   }
 
-  if (value.supportConfig !== undefined) {
+  if (value.supportConfig !== undefined && value.supportConfig !== null) {
     if (
       !isRecord(value.supportConfig) ||
       !hasOptionalStringFields(value.supportConfig, [
@@ -440,16 +450,21 @@ function isAppVersion(value: unknown): value is AppVersion {
     }
   }
 
-  if (value.clientKeys !== undefined && normalizeClientKeys(value.clientKeys) === undefined) {
+  if (
+    value.clientKeys !== undefined &&
+    value.clientKeys !== null &&
+    normalizeClientKeys(value.clientKeys) === undefined
+  ) {
     return false
   }
 
-  if (value.defaults !== undefined && normalizeDefaults(value.defaults) === undefined) {
+  if (value.defaults !== undefined && value.defaults !== null && normalizeDefaults(value.defaults) === undefined) {
     return false
   }
 
   if (
     value.securityReview !== undefined &&
+    value.securityReview !== null &&
     (!isRecord(value.securityReview) ||
       !hasOptionalStringFields(value.securityReview, ['status']) ||
       !hasOptionalBooleanFields(value.securityReview, ['reviewed']))
@@ -459,6 +474,7 @@ function isAppVersion(value: unknown): value is AppVersion {
 
   return (
     value.subscribedEvents === undefined ||
+    value.subscribedEvents === null ||
     (Array.isArray(value.subscribedEvents) &&
       value.subscribedEvents.every(
         event =>
@@ -475,14 +491,14 @@ function normalizeAppVersion(value: unknown): AppVersion | undefined {
   if (!isAppVersion(value)) return undefined
   const record = value as AppVersion & Record<string, unknown>
   const nestedValue = record.oAuthClient
-  const nested = nestedValue === undefined ? [] : Array.isArray(nestedValue) ? nestedValue : [nestedValue]
+  const nested = nestedValue == null ? [] : Array.isArray(nestedValue) ? nestedValue : [nestedValue]
   if (
     nested.some(
       source =>
         !isRecord(source) ||
-        (source.clientKeys !== undefined && normalizeClientKeys(source.clientKeys) === undefined) ||
-        (source.defaults !== undefined && normalizeDefaults(source.defaults) === undefined) ||
-        (source.redirectUris !== undefined && !isStringArray(source.redirectUris))
+        (source.clientKeys != null && normalizeClientKeys(source.clientKeys) === undefined) ||
+        (source.defaults != null && normalizeDefaults(source.defaults) === undefined) ||
+        (source.redirectUris != null && !isStringArray(source.redirectUris))
     )
   ) {
     return undefined
@@ -502,15 +518,15 @@ function normalizeAppVersion(value: unknown): AppVersion | undefined {
 
   const nestedDefaults = sources.map(source => normalizeDefaults(source.defaults)).find(Boolean)
   const defaults = nestedDefaults ?? normalizeDefaults(value.defaults)
-  const redirectsSource = sources.find(source => source.redirectUris !== undefined)
-  const { oAuthClient: _oAuthClient, ...base } = record
+  const redirectsSource = sources.find(source => source.redirectUris != null)
+  const { oAuthClient: _oAuthClient, ...rawBase } = record
+  const base = Object.fromEntries(Object.entries(rawBase).filter(([, field]) => field !== null))
   const legacyBillingType =
     value.isPaidApp === undefined ? undefined : value.isPaidApp ? (value.isFreemium ? 'freemium' : 'paid') : 'free'
+  const billingType = value.billingType ?? legacyBillingType
   return {
     ...base,
-    ...(value.billingType !== undefined || legacyBillingType !== undefined
-      ? { billingType: value.billingType ?? legacyBillingType }
-      : {}),
+    ...(billingType ? { billingType } : {}),
     ...(keys.length > 0 || value.clientKeys !== undefined ? { clientKeys: keys } : {}),
     ...(defaults ? { defaults } : {}),
     ...(redirectsSource ? { redirectUris: redirectsSource.redirectUris as string[] } : {})

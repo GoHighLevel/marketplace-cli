@@ -16,6 +16,7 @@ export interface LocalAppWorkspace {
   directory: string
   appFile: string
   webhookFile: string
+  webhookFileExists: boolean
   stateFile: string
   files: AppFiles
   state: WorkspaceState
@@ -93,6 +94,7 @@ export async function readLocalAppWorkspace(inputDirectory: string): Promise<Loc
     directory,
     appFile,
     webhookFile,
+    webhookFileExists,
     stateFile,
     files: { app, webhooks },
     state

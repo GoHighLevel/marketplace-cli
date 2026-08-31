@@ -768,6 +768,33 @@ describe('ApiClient', () => {
     })
   })
 
+  it('normalizes nullable optional fields returned by older live app versions', async () => {
+    await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse({
+          _id: 'legacy-live',
+          appId: 'app1',
+          status: 'live',
+          externalBillingUrl: null,
+          paymentType: null,
+          additionalInfoForBilling: null,
+          webhookUrl: null,
+          freeTrialDuration: null,
+          oneTimePrice: null,
+          externalAuthConfig: null
+        })
+      )
+    )
+
+    const client = new ApiClient(config)
+    await client.init()
+    const version = await client.getVersion('app1', 'legacy-live')
+
+    expect(version).toEqual({ _id: 'legacy-live', appId: 'app1', status: 'live' })
+  })
+
   it('normalizes the legacy paid-app fields used by marketplace versions', async () => {
     await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
     const fetchMock = vi
