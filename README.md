@@ -28,8 +28,6 @@ ghl --version
 ghl login
 ```
 
-`ghl login` opens the developer portal in your browser (PKCE + loopback callback — the CLI never sees your password). The account selected during browser authorization is bound to the one-time code and stored as the active CLI account. If authorization returns no account, the CLI resolves the developer's owner account on the first account-aware request. The session is stored in `~/.config/ghl/credentials.json` (file mode 0600). Before every API request, the CLI checks `expiresAt` and the JWT `exp` claim and refreshes the session when either is within 60 seconds of expiry. A `401` still triggers one refresh-and-retry for early revocation. Log in again only when the refresh token (7 days) expires.
-
 Use `ghl login --no-browser` to print the approval URL instead of opening a browser, and `--profile <name>` to keep separate login identities. A login can belong to multiple developer accounts; use `ghl account` to list them and `ghl account switch` to change the active account without logging in again.
 
 ## Quick start
