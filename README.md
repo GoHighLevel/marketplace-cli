@@ -64,14 +64,14 @@ Run any mutating command **without arguments on a terminal** and it prompts for 
 
 ## Configuration
 
-The CLI talks to the GoHighLevel staging environment by default. Override via environment variables:
+The CLI talks to the GoHighLevel production environment by default. The environment variables below are available for authorized development and test environments:
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `GHL_PORTAL_URL` | `https://staging.marketplace.gohighlevel.com` | Developer portal (browser login) |
-| `GHL_API_URL` | `https://staging.backend.leadconnectorhq.com/marketplace` | Marketplace API |
-| `GHL_OAUTH_URL` | `https://staging.backend.leadconnectorhq.com/oauth` | OAuth service (token refresh, scope/webhook catalogs) |
-| `GHL_WORKFLOWS_URL` | `https://staging.backend.leadconnectorhq.com/workflows-marketplace` | Workflow action and trigger configuration service |
+| `GHL_PORTAL_URL` | `https://marketplace.gohighlevel.com` | Developer portal (browser login) |
+| `GHL_API_URL` | `https://backend.leadconnectorhq.com/marketplace` | Marketplace API |
+| `GHL_OAUTH_URL` | `https://backend.leadconnectorhq.com/oauth` | OAuth service (token refresh, scope/webhook catalogs) |
+| `GHL_WORKFLOWS_URL` | `https://backend.leadconnectorhq.com/workflows-marketplace` | Workflow action and trigger configuration service |
 | `GHL_CONFIG_DIR` | `~/.config/ghl` | Where credentials/config/secrets are stored |
 
 Local state (all files created with mode 0600, written atomically):
@@ -282,12 +282,16 @@ The billing model, external-billing URL, and trial settings remain under `billin
 | `ghl app billing meter` | List local usage meters. |
 | `ghl app billing meter create [name]` | Stage fixed/dynamic pricing for conversation providers, workflow actions/triggers, or custom products. |
 | `ghl app billing meter delete [meter]` | Stage meter deletion by meter id or unambiguous product id. |
+| `ghl app pricing` | Show the portal billing model, external billing and trial settings, and pricing plans. Supports `--json`. |
+| `ghl app pricing setup` | Directly configure free, paid, or freemium portal pricing. Supports external billing and trials; switching to paid may require `--force` to delete existing free plans. |
+| `ghl app pricing add` | Directly add a portal plan with a name, price or free flag, interval, optional sub-account price, and up to five features. |
+| `ghl app pricing remove [planId]` | Directly remove a portal plan. Automation must provide the plan id and `--force`. |
 
 Plans allow up to five features and six total plans (one life-time plan for template apps). After creation, only plan name and features are editable; amounts, duration/type, and free flags are immutable. Meter prices range from 0.000001 through 200 with six-decimal precision. Dynamic pricing is custom-product-only and requires minimum/default/maximum prices plus a public HTTPS pricing page. See generated `src/billing/HIGHLEVEL_BILLING.md` for every JSON key.
 
 Workflow action and trigger meters must reference components already registered in the portal. Pull the matching component state first and push new actions/triggers before staging a meter; billing validation checks its local key and last synchronized remote baseline before creating the meter.
 
-The older `ghl app pricing` commands remain available for compatibility, but new plan workflows should use `ghl app billing` so local JSON and conflict baselines stay authoritative.
+The `ghl app pricing` commands remain available for compatibility and mutate the portal directly. New plan workflows should use `ghl app billing` so local JSON and conflict baselines stay authoritative.
 
 ### Versions & lifecycle
 
@@ -346,15 +350,15 @@ The CLI is built to be agent-operable end to end:
 ## Local development
 
 ```bash
-git clone https://github.com/GoHighLevel/ghl-cli.git
-cd ghl-cli
+git clone https://github.com/GoHighLevel/marketplace-cli.git
+cd marketplace-cli
 npm install
 npm run build
 npm link          # makes `ghl` available globally, pointing at your build
 npm test          # build, then run unit and public-command contract tests
 ```
 
-A local build talks to the GoHighLevel staging environment by default — no configuration needed. To target a different environment, override the URLs listed in [Configuration](#configuration).
+A local build talks to the GoHighLevel production environment by default. To target an authorized development or test environment, override the URLs listed in [Configuration](#configuration).
 
 ### Source layout
 

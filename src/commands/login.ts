@@ -9,6 +9,20 @@ import { withSpinner } from '../lib/shared/spinner.js'
 import { saveProfile } from '../lib/auth/token-store.js'
 import { validateProfileName } from '../lib/shared/validation.js'
 
+interface AuthorizeUrlOptions {
+  challenge: string
+  state: string
+  port: number
+}
+
+export function buildAuthorizeUrl(portalUrl: string, options: AuthorizeUrlOptions): URL {
+  const authorizeUrl = new URL('/cli-auth', portalUrl)
+  authorizeUrl.searchParams.set('challenge', options.challenge)
+  authorizeUrl.searchParams.set('state', options.state)
+  authorizeUrl.searchParams.set('port', String(options.port))
+  return authorizeUrl
+}
+
 export function loginSuccessMessage(developer?: string): string {
   return `Logged in successfully${developer ? ` as ${developer}` : ''}.`
 }
@@ -40,10 +54,11 @@ export default class Login extends Command {
     const state = generateState()
 
     const server = await startLoopbackServer(state)
-    const authorizeUrl = new URL('/cli-auth', config.portalUrl)
-    authorizeUrl.searchParams.set('challenge', challenge)
-    authorizeUrl.searchParams.set('state', state)
-    authorizeUrl.searchParams.set('port', String(server.port))
+    const authorizeUrl = buildAuthorizeUrl(config.portalUrl, {
+      challenge,
+      state,
+      port: server.port
+    })
 
     this.log('Opening your browser to log in to the GHL developer portal...')
     this.log(`If the browser did not open, visit:\n\n  ${authorizeUrl.href}\n`)

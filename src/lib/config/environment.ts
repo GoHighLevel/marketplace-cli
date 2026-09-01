@@ -11,12 +11,12 @@ export interface CliConfig {
   configDir: string
 }
 
-/* Staging defaults so an npm install works out of the box; the env vars
-   documented in the README override them to target another environment. */
-const DEFAULT_PORTAL_URL = 'https://staging.marketplace.gohighlevel.com'
-const DEFAULT_API_URL = 'https://staging.backend.leadconnectorhq.com/marketplace'
-const DEFAULT_OAUTH_URL = 'https://staging.backend.leadconnectorhq.com/oauth'
-const DEFAULT_WORKFLOWS_URL = 'https://staging.backend.leadconnectorhq.com/workflows-marketplace'
+/* Production is the public CLI default. Environment overrides remain available
+   for authorized development and test environments. */
+const DEFAULT_PORTAL_URL = 'https://marketplace.gohighlevel.com'
+const DEFAULT_API_URL = 'https://backend.leadconnectorhq.com/marketplace'
+const DEFAULT_OAUTH_URL = 'https://backend.leadconnectorhq.com/oauth'
+const DEFAULT_WORKFLOWS_URL = 'https://backend.leadconnectorhq.com/workflows-marketplace'
 
 export function getConfig(): CliConfig {
   const valueFor = (name: string, fallback: string): string => {

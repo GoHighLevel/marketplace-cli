@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 interface PackageMetadata {
+  bugs?: { url?: string }
+  homepage?: string
   name?: string
+  repository?: { type?: string; url?: string }
 }
 
 const ROOT_DIRECTORY = fileURLToPath(new URL('..', import.meta.url))
@@ -67,6 +70,18 @@ async function directDirectories(directory: string): Promise<string[]> {
     .sort()
 }
 
+async function allTypeScriptFiles(directory: string): Promise<string[]> {
+  const entries = await fs.readdir(directory, { withFileTypes: true })
+  const files = await Promise.all(
+    entries.map(entry => {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) return allTypeScriptFiles(entryPath)
+      return Promise.resolve(entry.isFile() && entry.name.endsWith('.ts') ? [entryPath] : [])
+    })
+  )
+  return files.flat().sort()
+}
+
 async function redundantDomainFilenames(rootDirectory: string): Promise<string[]> {
   const violations: string[] = []
   for (const rule of DOMAIN_FILENAME_RULES) {
@@ -102,6 +117,29 @@ describe('project structure', () => {
     const readme = await fs.readFile(path.join(ROOT_DIRECTORY, 'README.md'), 'utf8')
 
     expect(metadata.name).toBe('@gohighlevel/marketplace-cli')
+    expect(metadata.homepage).toBe('https://github.com/GoHighLevel/marketplace-cli#readme')
+    expect(metadata.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/GoHighLevel/marketplace-cli.git'
+    })
+    expect(metadata.bugs?.url).toBe('https://github.com/GoHighLevel/marketplace-cli/issues')
     expect(readme).toContain('npm install -g @gohighlevel/marketplace-cli')
+    expect(readme).toContain('git clone https://github.com/GoHighLevel/marketplace-cli.git')
+    expect(readme).not.toContain(['GoHighLevel', 'ghl-cli'].join('/'))
+  })
+
+  it('documents every public source command in the README', async () => {
+    const readme = await fs.readFile(path.join(ROOT_DIRECTORY, 'README.md'), 'utf8')
+    const commandDirectory = path.join(ROOT_DIRECTORY, 'src/commands')
+    const commandNames = (await allTypeScriptFiles(commandDirectory)).map(file => {
+      const segments = path.relative(commandDirectory, file).replace(/\.ts$/u, '').split(path.sep)
+      if (segments.at(-1) === 'index') segments.pop()
+      return segments.join(' ')
+    })
+    const undocumented = commandNames.filter(command => {
+      return !readme.includes(`\`ghl ${command}\``) && !readme.includes(`\`ghl ${command} `)
+    })
+
+    expect(undocumented).toEqual([])
   })
 })

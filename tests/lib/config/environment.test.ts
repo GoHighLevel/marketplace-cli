@@ -5,6 +5,20 @@ import { getConfig } from '../../../src/lib/config/environment.js'
 afterEach(() => vi.unstubAllEnvs())
 
 describe('getConfig', () => {
+  it('targets the production marketplace services by default', () => {
+    vi.stubEnv('GHL_PORTAL_URL', undefined)
+    vi.stubEnv('GHL_API_URL', undefined)
+    vi.stubEnv('GHL_OAUTH_URL', undefined)
+    vi.stubEnv('GHL_WORKFLOWS_URL', undefined)
+
+    expect(getConfig()).toMatchObject({
+      portalUrl: 'https://marketplace.gohighlevel.com',
+      apiUrl: 'https://backend.leadconnectorhq.com/marketplace',
+      oauthUrl: 'https://backend.leadconnectorhq.com/oauth',
+      workflowsUrl: 'https://backend.leadconnectorhq.com/workflows-marketplace'
+    })
+  })
+
   it('validates environment URLs and removes trailing slashes', () => {
     vi.stubEnv('GHL_API_URL', 'https://api.example.com/marketplace/')
     vi.stubEnv('GHL_WORKFLOWS_URL', 'https://api.example.com/workflows-marketplace/')
