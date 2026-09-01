@@ -124,7 +124,6 @@ describe('project structure', () => {
     })
     expect(metadata.bugs?.url).toBe('https://github.com/GoHighLevel/marketplace-cli/issues')
     expect(readme).toContain('npm install -g @gohighlevel/marketplace-cli')
-    expect(readme).toContain('git clone https://github.com/GoHighLevel/marketplace-cli.git')
     expect(readme).not.toContain(['GoHighLevel', 'ghl-cli'].join('/'))
   })
 

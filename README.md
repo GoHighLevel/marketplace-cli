@@ -345,32 +345,6 @@ The CLI is built to be agent-operable end to end:
 4. **Trust the errors** — validation runs before the API call and error messages contain the rule and the fix (e.g. which scopes are unknown, which checklist fields are missing, which versions are allowed).
 5. **Secrets are reveal-once** — one-time values are masked and retained for a single `ghl secrets reveal`; agents should never consume them unless the user explicitly requests it.
 
-## Local development
-
-```bash
-git clone https://github.com/GoHighLevel/marketplace-cli.git
-cd marketplace-cli
-npm install
-npm run build
-npm link          # makes `ghl` available globally, pointing at your build
-npm test          # build, then run unit and public-command contract tests
-```
-
-A local build talks to the GoHighLevel production environment by default. To target an authorized development or test environment, override the URLs listed in [Configuration](#configuration).
-
-### Source layout
-
-Command entry points follow the public CLI hierarchy under `src/commands`. Reusable modules are grouped by responsibility under `src/lib`: `api`, `app`, `auth`, `billing`, `config`, `secrets`, `shared`, `webhooks`, and `workflows` (with separate `actions`, `triggers`, and shared workflow code). Unit tests mirror the same domains under `tests/lib`, so an implementation and its tests are easy to locate together.
-
-### Releasing
-
-`npm publish` runs `prepack` automatically: it compiles TypeScript and generates `oclif.manifest.json` (which makes `ghl help` fast by avoiding command discovery at runtime).
-
-```bash
-npm version patch   # or minor / major
-npm publish
-```
-
 ## License
 
 [MIT](LICENSE)
