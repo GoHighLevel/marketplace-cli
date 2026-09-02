@@ -20,6 +20,10 @@ describe('safe text validation', () => {
     expect(validateXssSafe('<img src=x onerror=alert(1)>', 'Description')).toMatch(/dangerous/i)
     expect(validateXssSafe('&#x3c;script&#x3e;alert(1)', 'Description')).toMatch(/dangerous/i)
   })
+
+  it('bounds text before applying security regex checks', () => {
+    expect(validateXssSafe('x'.repeat(10_001), 'Description')).toMatch(/at most 10,000 characters/i)
+  })
 })
 
 describe('white-label validation', () => {
@@ -30,6 +34,10 @@ describe('white-label validation', () => {
     expect(validateTextForWhiteLabel('high-level overview', 'Plan feature')).toMatch(/white-label/i)
     expect(validateTextForWhiteLabel('https://acme.com/oauth/callback', 'Redirect URI')).toBe(true)
     expect(validateTextForWhiteLabel('Nightly sync', 'Plan feature')).toBe(true)
+  })
+
+  it('bounds text before applying white-label regex checks', () => {
+    expect(validateTextForWhiteLabel('x'.repeat(10_001), 'Plan feature')).toMatch(/at most 10,000 characters/i)
   })
 })
 
@@ -59,6 +67,12 @@ describe('URL validation', () => {
     expect(validateYouTubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Preview video URL')).toBe(true)
     expect(validateYouTubeUrl('https://vimeo.com/123', 'Preview video URL')).toMatch(/YouTube/i)
     expect(validateYouTubeUrl('http://youtu.be/dQw4w9WgXcQ', 'Preview video URL')).toMatch(/https/i)
+    expect(validateYouTubeUrl('https://youtube.example.com/watch?v=dQw4w9WgXcQ', 'Preview video URL')).toMatch(
+      /YouTube/i
+    )
+    expect(validateYouTubeUrl(`https://youtu.be/dQw4w9WgXcQ?${'x'.repeat(2_048)}`, 'Preview video URL')).toMatch(
+      /at most 2,048 characters/i
+    )
   })
 })
 

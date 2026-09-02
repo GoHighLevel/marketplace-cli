@@ -11,11 +11,11 @@ interface IntegerRange {
   max: number
 }
 
-const YOUTUBE_VIDEO_ID = '[a-zA-Z0-9_-]{11}'
 const DEVELOPER_TEAM_ID = /^[A-Za-z0-9_-]{1,128}$/
-const YOUTUBE_URL = new RegExp(
-  `^https:\\/\\/(?:www\\.)?youtu(?:\\.be\\/${YOUTUBE_VIDEO_ID}|be\\.com\\/(?:watch\\?v=|embed\\/)${YOUTUBE_VIDEO_ID})(?:\\S*)?$`
-)
+const MAX_URL_LENGTH = 2_048
+const MAX_SECURITY_TEXT_LENGTH = 10_000
+const YOUTUBE_VIDEO_ID_LENGTH = 11
+const YOUTUBE_VIDEO_ID_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'
 
 function parsedUrl(value: string): URL | undefined {
   try {
@@ -99,6 +99,9 @@ function validateUrl(
   protocols: Array<'http:' | 'https:'>,
   options: UrlOptions = {}
 ): ValidationResult {
+  if (value.length > MAX_URL_LENGTH) {
+    return `${label} must be at most ${MAX_URL_LENGTH.toLocaleString('en-US')} characters.`
+  }
   const url = parsedUrl(value)
   const protocolText = protocols.length === 1 ? 'https://' : 'http(s)'
   if (!url || !protocols.includes(url.protocol as 'http:' | 'https:')) {
@@ -120,15 +123,30 @@ export function validateHttpsUrl(value: string, label: string, options?: UrlOpti
 export function validateYouTubeUrl(value: string, label: string): ValidationResult {
   const httpsCheck = validateHttpsUrl(value, label)
   if (httpsCheck !== true) return httpsCheck
-  return YOUTUBE_URL.test(value) ? true : `${label} must be a valid HTTPS YouTube URL.`
+  const url = new URL(value)
+  const host = url.hostname.toLowerCase()
+  let videoId: string | null = null
+  if (host === 'youtu.be') {
+    videoId = url.pathname.slice(1)
+  } else if (host === 'youtube.com' || host === 'www.youtube.com') {
+    if (url.pathname === '/watch') videoId = url.searchParams.get('v')
+    else if (url.pathname.startsWith('/embed/')) videoId = url.pathname.slice('/embed/'.length)
+  }
+  const validId =
+    videoId?.length === YOUTUBE_VIDEO_ID_LENGTH &&
+    [...videoId].every(character => YOUTUBE_VIDEO_ID_CHARACTERS.includes(character))
+  return validId ? true : `${label} must be a valid HTTPS YouTube URL.`
 }
 
 /* Mirrors the backend's high-risk XSS checks while allowing ordinary text
    and benign HTML used in marketplace descriptions. */
 export function validateXssSafe(value: string, label: string): ValidationResult {
+  if (value.length > MAX_SECURITY_TEXT_LENGTH) {
+    return `${label} must be at most ${MAX_SECURITY_TEXT_LENGTH.toLocaleString('en-US')} characters.`
+  }
   const decoded = value
-    .replace(/&#x([0-9a-f]+);?/gi, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
-    .replace(/&#([0-9]+);?/g, (_match, decimal: string) => String.fromCharCode(Number.parseInt(decimal, 10)))
+    .replace(/&#x([0-9a-f]{1,8})(?![0-9a-f]);?/gi, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .replace(/&#([0-9]{1,10})(?![0-9]);?/g, (_match, decimal: string) => String.fromCharCode(Number.parseInt(decimal, 10)))
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
@@ -137,7 +155,7 @@ export function validateXssSafe(value: string, label: string): ValidationResult 
   const unsafe = [
     /<\/?script\b/i,
     /<(?:iframe|object|embed|form|meta|link|style|base|html|body)\b/i,
-    /<[^>]*\bon\w+\s*=/i,
+    /<[^<>]*\bon\w+\s*=/i,
     /\b(?:javascript|data|vbscript|mhtml|about):/i,
     /expression\s*\(/i,
     /behavior\s*:/i,
@@ -219,6 +237,9 @@ export function validateSandboxPassword(value: string): ValidationResult {
 /* Mirrors the portal's white-label check: white-label friendly apps must not
    reference the GHL brand in user-visible values (URLs, plan names, features). */
 export function validateTextForWhiteLabel(value: string, label: string): ValidationResult {
+  if (value.length > MAX_SECURITY_TEXT_LENGTH) {
+    return `${label} must be at most ${MAX_SECURITY_TEXT_LENGTH.toLocaleString('en-US')} characters.`
+  }
   const brand = /(Go-)?HighLevel|GoHighLevel|\bGHL\b|High.?Level|Go\s+High\s+Level/i
   return brand.test(value)
     ? `${label} must not reference GHL or HighLevel — this app is marked white-label friendly.`

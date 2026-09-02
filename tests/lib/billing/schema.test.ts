@@ -203,4 +203,16 @@ describe('usage billing validation', () => {
     ]))
   })
 
+  it('bounds custom product identifiers before pattern validation', () => {
+    const manifest = usage()
+    manifest.meters[0].productId = `custom_${'a'.repeat(244)}`
+
+    expect(validateBillingUsageManifest(manifest, {
+      appType: 'standard',
+      externalBilling: false
+    })).toEqual(expect.arrayContaining([
+      expect.stringMatching(/productId must be at most 250 characters/i)
+    ]))
+  })
+
 })

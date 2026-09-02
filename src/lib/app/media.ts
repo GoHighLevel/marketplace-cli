@@ -4,6 +4,7 @@ import path from 'node:path'
 import { inflateSync } from 'node:zlib'
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg'])
+const GIF_SIGNATURES = new Set(['GIF87a', 'GIF89a'])
 const LOGO_MAX_SIZE_BYTES = 512_000
 const PREVIEW_MAX_SIZE_BYTES = 5_000_000
 const MAX_DECOMPRESSED_IMAGE_BYTES = 16_000_000
@@ -164,9 +165,10 @@ function svgDimensions(data: Buffer): ImageDimensions | undefined {
 function imageDimensions(data: Buffer, extension: string): ImageDimensions | undefined {
   if (extension === '.png') return pngDimensions(data)
   if (extension === '.gif') {
+    const signature = data.toString('ascii', 0, 6)
     if (
       data.length < 14 ||
-      !/^GIF8[79]a$/.test(data.toString('ascii', 0, 6)) ||
+      !GIF_SIGNATURES.has(signature) ||
       data[data.length - 1] !== 0x3b ||
       !data.subarray(13).includes(0x2c)
     ) {

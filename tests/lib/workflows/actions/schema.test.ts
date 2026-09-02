@@ -157,6 +157,24 @@ describe('workflow action manifest validation', () => {
     ]))
   })
 
+  it('bounds workflow values before applying validation regexes', () => {
+    const invalid = structuredClone(validManifest) as any
+    const version = invalid.actions[0].versions[0]
+    version.version = `${'1'.repeat(22)}.0`
+    version.inputs[0].field = 'a'.repeat(251)
+    version.customVars[0].reference = 'a'.repeat(1_001)
+    version.branchesConfig = {
+      fields: [{ field: 'a'.repeat(1_001), title: 'Oversized', fieldType: 'string' }]
+    }
+
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/version must be at most 21 characters/i),
+      expect.stringMatching(/inputs\[0\]\.field must be at most 250 characters/i),
+      expect.stringMatching(/customVars\[0\]\.reference must be at most 1,000 characters/i),
+      expect.stringMatching(/branchesConfig\.fields\[0\]\.field must be at most 1,000 characters/i)
+    ]))
+  })
+
   it('validates API/code exclusivity, URLs, custom payloads, and secret references', () => {
     const invalid = structuredClone(validManifest) as any
     const version = invalid.actions[0].versions[0]
@@ -573,6 +591,17 @@ describe('workflow action manifest validation', () => {
     ]))
   })
 
+  it('does not coerce untrusted rich-text editor modes before allowlist validation', () => {
+    const invalid = structuredClone(validManifest) as any
+    invalid.actions[0].versions[0].inputs[0].config = {
+      richTextEditorType: { toString: () => 'html' }
+    }
+
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/config\.richTextEditorType must be "html" or "plain-text"/)
+    ]))
+  })
+
   it('enforces field-type-specific presentation and pagination rules', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].inputs = [
@@ -666,6 +695,83 @@ describe('workflow action manifest validation', () => {
     expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
       expect.stringMatching(/validations\[0\]\.rule contains invalid arrow-function syntax/),
       expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
+    ]))
+  })
+
+  it.each([
+    ['a primitive expression', '42'],
+    ['an assignment expression', 'globalThis.compromised = true'],
+    ['an immediately invoked function', '(() => true)()'],
+    ['a sequence expression', '((globalThis.compromised = true), (value) => value)']
+  ])('rejects %s where a function expression is required', (_case, expression) => {
+    const invalid = structuredClone(validManifest) as any
+    invalid.actions[0].versions[0].inputs[0].disableDatesFunction = expression
+
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/disableDatesFunction contains invalid function syntax/)
+    ]))
+  })
+
+  it('accepts named function expressions without executing them', () => {
+    const valid = structuredClone(validManifest) as any
+    valid.actions[0].versions[0].inputs[0].disableDatesFunction =
+      'function isDisabled(params) { throw new Error(String(params)) }'
+
+    expect(validateWorkflowActionsManifest(valid)).toEqual([])
+  })
+
+  it('bounds regular-expression validation rules', () => {
+    const invalid = structuredClone(validManifest) as any
+    invalid.actions[0].versions[0].inputs[0].validations = [{
+      rule: 'a'.repeat(1_001),
+      errorMessage: 'Invalid'
+    }]
+
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/validations\[0\]\.rule must be at most 1,000 characters/)
+    ]))
+  })
+
+  it('accepts valid regex rules and rejects malformed patterns', () => {
+    const valid = structuredClone(validManifest) as any
+    valid.actions[0].versions[0].inputs[0].validations = [{
+      rule: '^[a-z0-9_-]+$',
+      errorMessage: 'Invalid'
+    }]
+    const invalid = structuredClone(valid) as any
+    invalid.actions[0].versions[0].inputs[0].validations[0].rule = '[unterminated'
+
+    expect(validateWorkflowActionsManifest(valid)).toEqual([])
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/validations\[0\]\.rule must be a predefined validation, a valid regular expression, or an arrow function/)
+    ]))
+  })
+
+  it.each([
+    ['nested repetition', '^(a+)+$'],
+    ['repeated character group', '^([a-zA-Z]+)*$'],
+    ['overlapping alternatives', '^(a|aa)+$'],
+    ['overlapping optional alternatives', '^(a|a?)+$'],
+    ['backreferences', '^(a.*)\\1$']
+  ])('rejects ReDoS-prone regex rules with %s', (_case, rule) => {
+    const invalid = structuredClone(validManifest) as any
+    invalid.actions[0].versions[0].inputs[0].validations = [{ rule, errorMessage: 'Invalid' }]
+
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/validations\[0\]\.rule must not allow ambiguous backtracking/)
+    ]))
+  })
+
+  it.each([
+    ['line breaks', 'prefix\nsuffix'],
+    ['control characters', 'prefix\u0000suffix'],
+    ['non-ASCII characters', '^café$']
+  ])('rejects regex rules containing %s', (_case, rule) => {
+    const invalid = structuredClone(validManifest) as any
+    invalid.actions[0].versions[0].inputs[0].validations = [{ rule, errorMessage: 'Invalid' }]
+
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/validations\[0\]\.rule may contain only printable ASCII characters/)
     ]))
   })
 

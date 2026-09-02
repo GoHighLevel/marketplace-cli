@@ -15,6 +15,26 @@ import { validateHttpsUrl } from '../../../../lib/shared/validation.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../../../../lib/workflows/actions/workspace.js'
 import { loadWorkflowTriggersWorkspaceIfPresent } from '../../../../lib/workflows/triggers/workspace.js'
 
+const UNIT_PRICE_INPUT_MAX_LENGTH = 32
+
+function containsOnlyDigits(value: string): boolean {
+  if (!value) return false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 48 || code > 57) return false
+  }
+  return true
+}
+
+function hasValidUnitPriceFormat(value: string): boolean {
+  const separator = value.indexOf('.')
+  if (separator === -1) return containsOnlyDigits(value)
+  if (separator !== value.lastIndexOf('.')) return false
+  const integer = value.slice(0, separator)
+  const fraction = value.slice(separator + 1)
+  return fraction.length <= 6 && containsOnlyDigits(integer) && containsOnlyDigits(fraction)
+}
+
 function unitPrice(value: string | undefined, label: string): number {
   if (value === undefined) throw new Error(`${label} is required.`)
   const parsed = Number(value)
@@ -23,8 +43,12 @@ function unitPrice(value: string | undefined, label: string): number {
 }
 
 function validateUnitPriceInput(value: string, label: string): true | string {
-  if (!/^\d+(?:\.\d{1,6})?$/.test(value.trim())) return `${label} must have at most six decimal places.`
-  const parsed = Number(value)
+  if (value.length > UNIT_PRICE_INPUT_MAX_LENGTH) {
+    return `${label} must be at most ${UNIT_PRICE_INPUT_MAX_LENGTH} characters.`
+  }
+  const trimmed = value.trim()
+  if (!hasValidUnitPriceFormat(trimmed)) return `${label} must have at most six decimal places.`
+  const parsed = Number(trimmed)
   return parsed >= 0.000001 && parsed <= 200 ? true : `${label} must be between 0.000001 and 200.`
 }
 

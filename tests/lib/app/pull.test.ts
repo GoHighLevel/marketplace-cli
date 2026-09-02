@@ -62,7 +62,9 @@ describe('pull workspace binding', () => {
     [{ versionId: 'version-1' }, /appId/i],
     [{ appId: 'app-1' }, /versionId/i],
     [{ appId: ' ', versionId: 'version-1' }, /appId/i],
-    [{ appId: 'app-1', versionId: '' }, /versionId/i]
+    [{ appId: 'app-1', versionId: '' }, /versionId/i],
+    [{ appId: 'app/../../other', versionId: 'version-1' }, /appId/i],
+    [{ appId: 'app-1', versionId: 'version-1\nother' }, /versionId/i]
   ])('rejects an invalid local manifest binding %#', async (manifest, expectedMessage) => {
     await fs.writeFile(path.join(root, 'ghl-app.json'), JSON.stringify(manifest))
 

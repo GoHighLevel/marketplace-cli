@@ -10,7 +10,23 @@ export interface BumpOption {
 }
 
 const BUMP_ORDER: BumpType[] = ['patch', 'minor', 'major']
-const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/
+const SEMVER_MAX_LENGTH = 32
+
+function semverParts(value: string): [number, number, number] | undefined {
+  if (value.length > SEMVER_MAX_LENGTH) return undefined
+  const components = value.split('.')
+  if (components.length !== 3) return undefined
+  const parts: number[] = []
+  for (const component of components) {
+    if (!component || component.length > 10) return undefined
+    for (let index = 0; index < component.length; index += 1) {
+      const code = component.charCodeAt(index)
+      if (code < 48 || code > 57) return undefined
+    }
+    parts.push(Number(component))
+  }
+  return parts as [number, number, number]
+}
 
 /* Portal limits (marketplace-frontend src/constants/versionLimits.ts). */
 export const MAX_ACTIVE_VERSIONS = 7
@@ -18,18 +34,18 @@ export const MAX_PENDING_VERSIONS = 1
 export const MAX_TOTAL_VERSIONS = MAX_ACTIVE_VERSIONS + MAX_PENDING_VERSIONS
 
 export function bumpVersion(base: string, type: BumpType): string {
-  const match = SEMVER.exec(base)
-  if (!match) throw new Error(`"${base}" is not a valid semver version (expected x.y.z).`)
-  const [major, minor, patch] = [Number(match[1]), Number(match[2]), Number(match[3])]
+  const parts = semverParts(base)
+  if (!parts) throw new Error(`"${base}" is not a valid semver version (expected x.y.z).`)
+  const [major, minor, patch] = parts
   if (type === 'major') return `${major + 1}.0.0`
   if (type === 'minor') return `${major}.${minor + 1}.0`
   return `${major}.${minor}.${patch + 1}`
 }
 
 function compareVersions(a: string, b: string): number {
-  const [pa, pb] = [SEMVER.exec(a), SEMVER.exec(b)]
+  const [pa, pb] = [semverParts(a), semverParts(b)]
   if (!pa || !pb) return 0
-  for (let index = 1; index <= 3; index += 1) {
+  for (let index = 0; index < 3; index += 1) {
     const diff = Number(pa[index]) - Number(pb[index])
     if (diff !== 0) return diff
   }
@@ -41,7 +57,7 @@ function compareVersions(a: string, b: string): number {
 export function baseVersionFromList(versions: VersionListItem[]): string | undefined {
   const candidates = versions.filter(item => {
     const status = normalizeStatus(item.status)
-    return status !== 'draft' && status !== 'disapproved' && typeof item.version === 'string' && SEMVER.test(item.version)
+    return status !== 'draft' && status !== 'disapproved' && typeof item.version === 'string' && semverParts(item.version) !== undefined
   })
   if (candidates.length === 0) return undefined
   return candidates.map(item => item.version as string).sort(compareVersions).at(-1)
@@ -70,7 +86,7 @@ export function requireDraftable(versions: VersionListItem[], selectedId: string
     )
   }
   const liveVersions = versions.filter(
-    item => normalizeStatus(item.status) === 'live' && typeof item.version === 'string' && SEMVER.test(item.version)
+    item => normalizeStatus(item.status) === 'live' && typeof item.version === 'string' && semverParts(item.version) !== undefined
   )
   const latest = [...liveVersions].sort((left, right) =>
     compareVersions(right.version ?? '', left.version ?? '')
@@ -128,7 +144,7 @@ export function requireDeprecatable(versions: VersionListItem[], selectedId: str
     throw new Error('The only live version cannot be deprecated — publish a newer version first.')
   }
   const latestLive = liveVersions
-    .filter(item => typeof item.version === 'string' && SEMVER.test(item.version))
+    .filter(item => typeof item.version === 'string' && semverParts(item.version) !== undefined)
     .map(item => item.version as string)
     .sort(compareVersions)
     .at(-1)
@@ -139,7 +155,8 @@ export function requireDeprecatable(versions: VersionListItem[], selectedId: str
 }
 
 export function validateNewVersion(value: string, options: BumpOption[]): true | string {
-  if (!SEMVER.test(value)) return `"${value}" is not a valid semver version (expected x.y.z).`
+  if (value.length > SEMVER_MAX_LENGTH) return `Version must be at most ${SEMVER_MAX_LENGTH} characters.`
+  if (!semverParts(value)) return `"${value}" is not a valid semver version (expected x.y.z).`
   const match = options.find(option => option.version === value)
   if (!match) {
     const allowed = options.filter(option => !option.disabledReason).map(option => `${option.version} (${option.type})`)

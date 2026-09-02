@@ -5,6 +5,8 @@ import { WorkspaceState } from './workspace.js'
 type Check = (value: unknown, path: string, errors: string[]) => void
 type FieldRule = { check: Check; optional?: boolean }
 
+const APP_RESOURCE_IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/
+
 const stringValue: Check = (value, path, errors) => {
   if (typeof value !== 'string') errors.push(`${path} must be a string.`)
 }
@@ -13,6 +15,20 @@ const booleanValue: Check = (value, path, errors) => {
 }
 const finiteNumber: Check = (value, path, errors) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) errors.push(`${path} must be a finite number.`)
+}
+
+export function isAppResourceIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && APP_RESOURCE_IDENTIFIER.test(value)
+}
+
+const appResourceIdentifier: Check = (value, path, errors) => {
+  if (typeof value !== 'string') {
+    errors.push(`${path} must be a string.`)
+    return
+  }
+  if (!isAppResourceIdentifier(value)) {
+    errors.push(`${path} must contain only letters, numbers, underscores, or hyphens and be 1 to 128 characters.`)
+  }
 }
 
 function literalValue(...allowed: Array<boolean | number | string>): Check {
@@ -60,8 +76,8 @@ function exactObject(fields: Record<string, FieldRule>): Check {
 
 const appManifestShape = exactObject({
   schemaVersion: { check: literalValue(1) },
-  appId: { check: stringValue },
-  versionId: { check: stringValue },
+  appId: { check: appResourceIdentifier },
+  versionId: { check: appResourceIdentifier },
   createdAt: { check: stringValue, optional: true },
   version: { check: stringValue },
   status: { check: stringValue },
@@ -159,8 +175,8 @@ const appManifestShape = exactObject({
 
 const webhookManifestShape = exactObject({
   schemaVersion: { check: literalValue(1) },
-  appId: { check: stringValue },
-  versionId: { check: stringValue },
+  appId: { check: appResourceIdentifier },
+  versionId: { check: appResourceIdentifier },
   webhookUrl: { check: stringValue },
   subscribedEvents: {
     check: arrayOf(exactObject({ name: { check: stringValue }, url: { check: stringValue, optional: true } }))
@@ -174,8 +190,8 @@ const appFilesShape = exactObject({
 
 const workspaceStateShape = exactObject({
   schemaVersion: { check: literalValue(1) },
-  appId: { check: stringValue },
-  versionId: { check: stringValue },
+  appId: { check: appResourceIdentifier },
+  versionId: { check: appResourceIdentifier },
   baseline: { check: appFilesShape }
 })
 

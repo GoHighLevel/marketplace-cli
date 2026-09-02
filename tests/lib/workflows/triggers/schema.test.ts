@@ -125,6 +125,20 @@ describe('workflow trigger schema validation', () => {
     ]))
   })
 
+  it('bounds workflow values before applying validation regexes', () => {
+    const manifest = validManifest()
+    const version = manifest.triggers[0].versions[0]
+    version.version = `${'1'.repeat(22)}.0`
+    version.filters[0].field = 'a'.repeat(1_001)
+    version.customVars[0].reference = 'a'.repeat(1_001)
+
+    expect(validateWorkflowTriggersManifest(manifest)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/version must be at most 21 characters/i),
+      expect.stringMatching(/filters\[0\]\.field must be at most 1,000 characters/i),
+      expect.stringMatching(/customVars\[0\]\.reference must be at most 1,000 characters/i)
+    ]))
+  })
+
   it('rejects unsupported properties, unsafe headers, and incomplete publish configuration', () => {
     const manifest = validManifest() as unknown as Record<string, unknown>
     const trigger = (manifest.triggers as Array<Record<string, unknown>>)[0]

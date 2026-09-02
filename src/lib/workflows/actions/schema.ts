@@ -1,3 +1,7 @@
+import { RegExpValidator } from '@eslint-community/regexpp'
+import { parse } from 'acorn'
+import { isSafePattern } from 'redos-detector'
+
 import { isRecord } from '../../api/response.js'
 import { validateHttpUrl, validateHttpsUrl, validateTextForWhiteLabel } from '../../shared/validation.js'
 import {
@@ -21,6 +25,14 @@ import {
   WORKFLOW_ACTION_FIELD_TYPES,
   WORKFLOW_ACTION_INTERNAL_REFERENCES
 } from './contract.js'
+import {
+  containsWhitespace,
+  isWorkflowFieldKey,
+  isWorkflowVersion,
+  WORKFLOW_FIELD_KEY_MAX_LENGTH,
+  WORKFLOW_REFERENCE_MAX_LENGTH,
+  WORKFLOW_VERSION_MAX_LENGTH
+} from '../shared/value-validation.js'
 
 export interface WorkflowActionValidationOptions {
   publishable?: boolean
@@ -29,15 +41,17 @@ export interface WorkflowActionValidationOptions {
   whiteLabel?: boolean
 }
 
-const FIELD_KEY = /^[a-z][_a-z0-9]*$/i
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
-const VERSION = /^\d+\.\d+$/
 const STATUSES = new Set(['draft', 'in_review', 'published'])
 const METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT'])
 const FIELD_TYPES = new Set<string>(WORKFLOW_ACTION_FIELD_TYPES)
 const INTERNAL_REFERENCES = new Set<string>(WORKFLOW_ACTION_INTERNAL_REFERENCES)
 const BRANCH_FIELD_TYPES = new Set(['dynamic', 'multiselect', 'numerical', 'phone', 'select', 'string', 'textarea', 'toggle'])
 const CUSTOM_VARIABLE_TYPES = new Set(['array', 'boolean', 'date', 'numerical', 'string'])
+const RICH_TEXT_EDITOR_TYPES = new Set(['html', 'plain-text'])
+const VALIDATION_REGEX_MAX_CHARACTERS = 1_000
+const VALIDATION_REGEX_SOURCE = /^[\x20-\x7E]+$/
+const REGEXP_VALIDATOR = new RegExpValidator({ ecmaVersion: 2022 })
 const INPUT_PROPERTIES = new Set([
   'field',
   'title',
@@ -140,10 +154,13 @@ function optionalNonNegativeInteger(value: unknown, path: string, errors: string
   }
 }
 
-function isValidFunctionExpression(value: string): boolean {
+function isValidFunctionExpression(value: string, arrowOnly = false): boolean {
+  if (Buffer.byteLength(value, 'utf8') > WORKFLOW_ACTION_CODE_MAX_BYTES) return false
   try {
-    new Function(`"use strict"; return (${value});`)
-    return true
+    const program = parse(`(${value})`, { ecmaVersion: 2022 })
+    if (program.body.length !== 1 || program.body[0].type !== 'ExpressionStatement') return false
+    const expression = program.body[0].expression
+    return expression.type === 'ArrowFunctionExpression' || (!arrowOnly && expression.type === 'FunctionExpression')
   } catch {
     return false
   }
@@ -156,6 +173,39 @@ function validateFunctionExpression(value: string, path: string, errors: string[
 function validateJavaScriptBlock(value: string, path: string, errors: string[]): void {
   const syntaxError = workflowActionCodeSyntaxError(value, path)
   if (syntaxError) errors.push(`${path} contains invalid JavaScript: ${syntaxError}.`)
+}
+
+function isSafeRegexPattern(value: string): boolean {
+  try {
+    return isSafePattern(value, {
+      downgradePattern: false,
+      maxScore: 1,
+      maxSteps: 20_000,
+      timeout: 100
+    }).safe
+  } catch {
+    return false
+  }
+}
+
+function validateRegexRule(value: string, path: string, errors: string[]): void {
+  if (value.length > VALIDATION_REGEX_MAX_CHARACTERS) {
+    errors.push(`${path} must be at most ${VALIDATION_REGEX_MAX_CHARACTERS.toLocaleString('en-US')} characters.`)
+    return
+  }
+  if (!VALIDATION_REGEX_SOURCE.test(value)) {
+    errors.push(`${path} may contain only printable ASCII characters.`)
+    return
+  }
+  try {
+    REGEXP_VALIDATOR.validatePattern(value)
+  } catch {
+    errors.push(`${path} must be a predefined validation, a valid regular expression, or an arrow function.`)
+    return
+  }
+  if (!isSafeRegexPattern(value)) {
+    errors.push(`${path} must not allow ambiguous backtracking.`)
+  }
 }
 
 function stringArray(value: unknown, path: string, errors: string[]): void {
@@ -406,10 +456,10 @@ function validateInputPresentation(input: Record<string, unknown>, path: string,
       }
     } else {
       unknownProperties(input.config, new Set(['richTextEditorType']), configPath, errors)
-      if (
-        input.config.richTextEditorType !== undefined &&
-        !['html', 'plain-text'].includes(String(input.config.richTextEditorType))
-      ) {
+      const richTextEditorType = input.config.richTextEditorType
+      if (richTextEditorType !== undefined && (
+        typeof richTextEditorType !== 'string' || !RICH_TEXT_EDITOR_TYPES.has(richTextEditorType)
+      )) {
         errors.push(`${configPath}.richTextEditorType must be "html" or "plain-text".`)
       }
     }
@@ -443,15 +493,11 @@ function validateRules(value: unknown, path: string, errors: string[]): void {
     unknownProperties(rule, new Set(['rule', 'errorMessage']), rulePath, errors)
     if (requiredString(rule.rule, `${rulePath}.rule`, errors) && !predefined.has(rule.rule)) {
       if (rule.rule.includes('=>')) {
-        if (!isValidFunctionExpression(rule.rule)) {
+        if (!isValidFunctionExpression(rule.rule, true)) {
           errors.push(`${rulePath}.rule contains invalid arrow-function syntax.`)
         }
       } else {
-        try {
-          new RegExp(rule.rule)
-        } catch {
-          errors.push(`${rulePath}.rule must be a predefined validation, a valid regular expression, or an arrow function.`)
-        }
+        validateRegexRule(rule.rule, `${rulePath}.rule`, errors)
       }
     }
     requiredString(rule.errorMessage, `${rulePath}.errorMessage`, errors)
@@ -462,11 +508,15 @@ function validateInput(input: unknown, path: string, seen: Set<string>, errors: 
   if (!requireRecord(input, path, errors)) return
   unknownProperties(input, INPUT_PROPERTIES, path, errors)
   if (requiredString(input.field, `${path}.field`, errors)) {
-    if (!FIELD_KEY.test(input.field) && input.field !== 'DYNAMIC') {
-      errors.push(`${path}.field must start with a letter and contain only letters, numbers, and underscores.`)
+    if (input.field.length > WORKFLOW_FIELD_KEY_MAX_LENGTH) {
+      errors.push(`${path}.field must be at most ${WORKFLOW_FIELD_KEY_MAX_LENGTH} characters.`)
+    } else {
+      if (!isWorkflowFieldKey(input.field) && input.field !== 'DYNAMIC') {
+        errors.push(`${path}.field must start with a letter and contain only letters, numbers, and underscores.`)
+      }
+      if (seen.has(input.field)) errors.push(`${path}.field duplicates input field \"${input.field}\".`)
+      seen.add(input.field)
     }
-    if (seen.has(input.field)) errors.push(`${path}.field duplicates input field \"${input.field}\".`)
-    seen.add(input.field)
   }
   requiredString(input.title, `${path}.title`, errors)
   if (!requiredString(input.fieldType, `${path}.fieldType`, errors) || !FIELD_TYPES.has(input.fieldType)) {
@@ -624,18 +674,27 @@ function validateCustomVariables(
     unknownProperties(variable, new Set(['name', 'reference', 'fieldType', 'options', 'fetchOptions']), variablePath, errors)
     requiredString(variable.name, `${variablePath}.name`, errors)
     if (requiredString(variable.reference, `${variablePath}.reference`, errors)) {
-      if (/\s/.test(variable.reference)) {
-        errors.push(`${variablePath}.reference must not contain whitespace.`)
+      if (variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH) {
+        errors.push(`${variablePath}.reference must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`)
+      } else {
+        if (containsWhitespace(variable.reference)) {
+          errors.push(`${variablePath}.reference must not contain whitespace.`)
+        }
+        if (references.has(variable.reference)) errors.push(`${variablePath}.reference duplicates \"${variable.reference}\".`)
+        references.add(variable.reference)
       }
-      if (references.has(variable.reference)) errors.push(`${variablePath}.reference duplicates \"${variable.reference}\".`)
-      references.add(variable.reference)
     }
     if (requiredString(variable.fieldType, `${variablePath}.fieldType`, errors) && !CUSTOM_VARIABLE_TYPES.has(variable.fieldType)) {
       errors.push(`${variablePath}.fieldType is not supported.`)
     }
     if (variable.options !== undefined) validateOptions(variable.options, `${variablePath}.options`, errors)
     if (variable.fetchOptions !== undefined) validateFetchOptions(variable.fetchOptions, `${variablePath}.fetchOptions`, errors)
-    if (!hasResponseData || typeof variable.reference !== 'string' || !variable.reference.trim()) return
+    if (
+      !hasResponseData ||
+      typeof variable.reference !== 'string' ||
+      !variable.reference.trim() ||
+      variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH
+    ) return
     const resolved = resolveResponseReference(responseData, variable.reference)
     if (!resolved.found) {
       errors.push(`${variablePath}.reference "${variable.reference}" does not resolve in customVarsJson.`)
@@ -704,9 +763,13 @@ function validateBranchField(
   if (!requireRecord(value, path, errors)) return undefined
   unknownProperties(value, new Set(['field', 'title', 'required', 'fieldType', 'options', 'mappedTo', 'altersDynamicField', 'disabled', 'placeholder', 'helpText', 'value', 'sortOptions']), path, errors)
   if (requiredString(value.field, `${path}.field`, errors)) {
-    if (/\s/.test(value.field)) errors.push(`${path}.field must not contain whitespace.`)
-    if (seen.has(value.field)) errors.push(`${path}.field duplicates branch field \"${value.field}\".`)
-    seen.add(value.field)
+    if (value.field.length > WORKFLOW_REFERENCE_MAX_LENGTH) {
+      errors.push(`${path}.field must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`)
+    } else {
+      if (containsWhitespace(value.field)) errors.push(`${path}.field must not contain whitespace.`)
+      if (seen.has(value.field)) errors.push(`${path}.field duplicates branch field \"${value.field}\".`)
+      seen.add(value.field)
+    }
   }
   requiredString(value.title, `${path}.title`, errors)
   if (requiredString(value.fieldType, `${path}.fieldType`, errors) && !BRANCH_FIELD_TYPES.has(value.fieldType)) {
@@ -969,8 +1032,12 @@ function validateVersion(
 ): void {
   if (!requireRecord(value, path, errors)) return
   unknownProperties(value, new Set(['version', 'status', 'info', 'inputs', 'customVars', 'customVarsJson', 'executionConfig', 'payloadCustomizationType', 'customizedPayload', 'branchesConfig', 'sectionOrder', 'groupConfigs']), path, errors)
-  if (requiredString(value.version, `${path}.version`, errors) && !VERSION.test(value.version)) {
-    errors.push(`${path}.version must use action version format x.y, for example \"1.0\".`)
+  if (requiredString(value.version, `${path}.version`, errors)) {
+    if (value.version.length > WORKFLOW_VERSION_MAX_LENGTH) {
+      errors.push(`${path}.version must be at most ${WORKFLOW_VERSION_MAX_LENGTH} characters.`)
+    } else if (!isWorkflowVersion(value.version)) {
+      errors.push(`${path}.version must use action version format x.y, for example \"1.0\".`)
+    }
   }
   if (requiredString(value.status, `${path}.status`, errors) && !STATUSES.has(value.status)) {
     errors.push(`${path}.status must be draft, in_review, or published.`)
