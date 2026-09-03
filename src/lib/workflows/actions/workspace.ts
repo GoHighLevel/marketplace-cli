@@ -29,6 +29,7 @@ import {
 import { WorkflowActionDefinition, WorkflowActionsManifest } from './manifest.js'
 import { validateWorkflowActionsManifest } from './schema.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
+import { isWorkflowVersion } from '../shared/value-validation.js'
 
 export { WORKFLOW_ACTIONS_GUIDE_FILENAME }
 export { WORKFLOW_ACTION_CODE_MAX_BYTES }
@@ -353,7 +354,7 @@ async function hydrateCodeSources(
       if (config.code !== undefined) {
         errors.push(`${propertyPath}.code cannot contain inline code; use the version's codeFile instead.`)
       }
-      if (typeof version.version !== 'string' || !/^\d+\.\d+$/.test(version.version)) return
+      if (typeof version.version !== 'string' || !isWorkflowVersion(version.version)) return
       const expectedReference = workflowActionCodeReference(source.key, version.version)
       if (config.codeFile !== expectedReference) {
         errors.push(`${propertyPath}.codeFile must be "${expectedReference}".`)

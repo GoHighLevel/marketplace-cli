@@ -194,6 +194,14 @@ describe('buildProfilesBody', () => {
         )
       )
     ).toMatch(/\.png/i)
+    expect(
+      validateProfilesBody(
+        buildProfilesBody(
+          { ...version, description: 'x'.repeat(300) },
+          { previewImageUrls: [`https://cdn.example.com/${'x'.repeat(2_100)}.png`] }
+        )
+      )
+    ).toMatch(/at most 2,048 characters/i)
   })
 
   it('clears sub-account-only fields when the profile is disabled', () => {
@@ -245,6 +253,9 @@ describe('buildSupportBody', () => {
     expect(
       validateSupportBody(buildSupportBody(version, { supportedServices: ['unknown'] }), true)
     ).toMatch(/unknown supported service/i)
+    expect(
+      validateSupportBody(buildSupportBody(version, { documentationUrl: `https://docs.example.com/${'x'.repeat(2_100)}` }))
+    ).toMatch(/at most 2,048 characters/i)
   })
 })
 

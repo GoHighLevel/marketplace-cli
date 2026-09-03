@@ -5,6 +5,7 @@ import type { BillingWorkspaceResult } from '../billing/workspace.js'
 import { isRecord } from '../api/response.js'
 import { requireRegularFile } from './local-workspace.js'
 import { APP_MANIFEST_FILENAME, AppWorkspaceResult } from './workspace.js'
+import { isAppResourceIdentifier } from './schema.js'
 import { readJsonFile } from '../shared/json-file.js'
 import type { WorkflowActionsWorkspaceResult } from '../workflows/actions/workspace.js'
 import type { WorkflowTriggersWorkspaceResult } from '../workflows/triggers/workspace.js'
@@ -38,8 +39,10 @@ export function buildPullFilesOutput(options: {
 
 function requireManifestIdentifier(manifest: Record<string, unknown>, property: 'appId' | 'versionId'): string {
   const value = manifest[property]
-  if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
-    throw new Error(`App manifest "${APP_MANIFEST_FILENAME}" must contain a non-empty ${property}.`)
+  if (!isAppResourceIdentifier(value)) {
+    throw new Error(
+      `App manifest "${APP_MANIFEST_FILENAME}" must contain a 1 to 128 character ${property} using only letters, numbers, underscores, or hyphens.`
+    )
   }
   return value
 }

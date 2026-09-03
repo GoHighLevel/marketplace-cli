@@ -1,7 +1,7 @@
 import { AppVersion } from '../api/client.js'
 import { isRecord } from '../api/response.js'
 import { AppFiles } from './manifest.js'
-import { validateAppWorkspaceSchema } from './schema.js'
+import { isAppResourceIdentifier, validateAppWorkspaceSchema } from './schema.js'
 import { WorkspaceState } from './workspace.js'
 import { requireVersionStatus } from './rules.js'
 import { requireAuthPrereqs } from '../auth/settings.js'
@@ -326,26 +326,34 @@ function duplicateValues(values: string[]): string[] {
   return [...duplicates]
 }
 
+function validatedIdentity(value: { appId: unknown; versionId: unknown }): { appId: string; versionId: string } | undefined {
+  if (!isAppResourceIdentifier(value.appId) || !isAppResourceIdentifier(value.versionId)) return undefined
+  return { appId: value.appId, versionId: value.versionId }
+}
+
 function validateIdentity(files: AppFiles, state: WorkspaceState, errors: string[]): void {
-  if (!files.app.appId.trim() || !files.app.versionId.trim()) {
-    errors.push('App manifest appId and versionId are required.')
+  const app = validatedIdentity(files.app)
+  const webhooks = validatedIdentity(files.webhooks)
+  const workspace = validatedIdentity(state)
+  const baselineApp = validatedIdentity(state.baseline.app)
+  const baselineWebhooks = validatedIdentity(state.baseline.webhooks)
+  if (!app || !webhooks || !workspace || !baselineApp || !baselineWebhooks) {
+    errors.push('Workspace identifiers must be validated before identity checks.')
+    return
   }
-  if (!files.webhooks.appId.trim() || !files.webhooks.versionId.trim()) {
-    errors.push('Webhook manifest appId and versionId are required.')
-  }
-  if (files.webhooks.appId !== files.app.appId) {
+  if (webhooks.appId !== app.appId) {
     errors.push('Webhook manifest appId must match the app manifest appId.')
   }
-  if (files.webhooks.versionId !== files.app.versionId) {
+  if (webhooks.versionId !== app.versionId) {
     errors.push('Webhook manifest versionId must match the app manifest versionId.')
   }
-  if (state.appId !== files.app.appId || state.versionId !== files.app.versionId) {
+  if (workspace.appId !== app.appId || workspace.versionId !== app.versionId) {
     errors.push('Workspace state does not match the appId/versionId in ghl-app.json; run `ghl app pull` again.')
   }
-  if (state.baseline.app.appId !== state.appId || state.baseline.webhooks.appId !== state.appId) {
+  if (baselineApp.appId !== workspace.appId || baselineWebhooks.appId !== workspace.appId) {
     errors.push('Workspace state contains an inconsistent baseline appId; run `ghl app pull` again.')
   }
-  if (state.baseline.app.versionId !== state.versionId || state.baseline.webhooks.versionId !== state.versionId) {
+  if (baselineApp.versionId !== workspace.versionId || baselineWebhooks.versionId !== workspace.versionId) {
     errors.push('Workspace state contains an inconsistent baseline versionId; run `ghl app pull` again.')
   }
 }

@@ -310,7 +310,7 @@ Each \`validations\` item contains exactly:
 | \`rule\` | Predefined rule, regular-expression source, or arrow-function expression. |
 | \`errorMessage\` | Required message displayed when the value fails. |
 
-Predefined values are \`isValidEmail\`, \`isValidPhone\`, \`isValidURL\`, \`isValidNumeric\`, and \`isValidHandleBar\`. Regex syntax and arrow-function syntax are compiled locally but never executed during validation. Arrow functions receive the field value and return true or false.
+Predefined values are \`isValidEmail\`, \`isValidPhone\`, \`isValidURL\`, \`isValidNumeric\`, and \`isValidHandleBar\`. Regex rules are limited to 1,000 printable ASCII characters and must be deterministic, without ambiguous backtracking. Regex and function rules are parsed and analyzed locally without compilation or execution. Arrow functions receive the field value and return true or false.
 
 ## Response data and custom variables
 

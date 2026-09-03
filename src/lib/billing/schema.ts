@@ -33,6 +33,7 @@ export interface BillingUsageValidationOptions {
 }
 
 const SUBSCRIPTION_ROOT_KEYS = new Set(['schemaVersion', 'appId', 'plans'])
+const CUSTOM_PRODUCT_ID_MAX_LENGTH = 250
 const PLAN_KEYS = new Set([
   'id',
   'name',
@@ -67,6 +68,21 @@ const TIER_KEYS = new Set([
   'maxPricePerUnit',
   'executionLimitPerCycle'
 ])
+
+function isCustomProductId(value: string): boolean {
+  if (!value.startsWith('custom_') || value.length === 7 || value.length > CUSTOM_PRODUCT_ID_MAX_LENGTH) return false
+  for (let index = 7; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    const valid =
+      (code >= 48 && code <= 57) ||
+      (code >= 65 && code <= 90) ||
+      code === 95 ||
+      code === 45 ||
+      (code >= 97 && code <= 122)
+    if (!valid) return false
+  }
+  return true
+}
 
 function unknownKeyErrors(value: Record<string, unknown>, allowed: Set<string>, path: string): string[] {
   return Object.keys(value)
@@ -335,8 +351,12 @@ function validateMeter(value: unknown, index: number, options: BillingUsageValid
       errors.push(`${path}.productId must reference a remotely registered workflow trigger; push the trigger first.`)
     }
   }
-  if (value.productType === 'custom' && typeof value.productId === 'string' && !/^custom_[A-Za-z0-9_-]+$/.test(value.productId)) {
-    errors.push(`${path}.productId must start with "custom_" and contain only letters, numbers, underscores, or hyphens.`)
+  if (value.productType === 'custom' && typeof value.productId === 'string') {
+    if (value.productId.length > CUSTOM_PRODUCT_ID_MAX_LENGTH) {
+      errors.push(`${path}.productId must be at most ${CUSTOM_PRODUCT_ID_MAX_LENGTH} characters.`)
+    } else if (!isCustomProductId(value.productId)) {
+      errors.push(`${path}.productId must start with "custom_" and contain only letters, numbers, underscores, or hyphens.`)
+    }
   }
   if (value.customPriceType === 'dynamic') {
     if (options.contextual !== false && (typeof value.pricingPageUrl !== 'string' || !value.pricingPageUrl.trim())) {

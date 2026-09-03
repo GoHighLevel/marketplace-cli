@@ -19,12 +19,19 @@ export const SUPPORTED_SERVICES = [
   'customization_services',
   'installation_services'
 ] as const
-const IMAGE_EXTENSION = /\.(?:gif|jpe?g|png|svg)$/i
+const IMAGE_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.svg'])
+
+function normalizedSupportUrl(value: string): string {
+  const trimmed = value.trim()
+  return !trimmed || trimmed.includes('://') ? trimmed : `https://${trimmed}`
+}
 
 function validateImageUrl(value: string, label: string): string | true {
   const urlResult = validateHttpsUrl(value, label)
   if (urlResult !== true) return urlResult
-  return IMAGE_EXTENSION.test(new URL(value).pathname)
+  const pathname = new URL(value).pathname.toLowerCase()
+  const dotIndex = pathname.lastIndexOf('.')
+  return dotIndex >= 0 && IMAGE_EXTENSIONS.has(pathname.slice(dotIndex))
     ? true
     : `${label} must end with .png, .jpg, .jpeg, .svg, or .gif.`
 }
@@ -269,19 +276,15 @@ export function validateProfilesBody(body: ReturnType<typeof buildProfilesBody>)
 
 export function buildSupportBody(version: AppVersion, changes: SupportChanges) {
   const current = version.supportConfig ?? {}
-  const url = (value: string) => {
-    const trimmed = value.trim()
-    return !trimmed || /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-  }
   return {
     private: version.private ?? false,
     supportConfig: {
       supportEmail: (changes.supportEmail ?? current.supportEmail ?? '').trim(),
       supportPhone: (changes.supportPhone ?? current.supportPhone ?? '').trim(),
-      websiteUrl: url(changes.websiteUrl ?? current.websiteUrl ?? ''),
-      documentationUrl: url(changes.documentationUrl ?? current.documentationUrl ?? ''),
-      termsAndConditionsUrl: url(changes.termsAndConditionsUrl ?? current.termsAndConditionsUrl ?? ''),
-      privacyPolicyUrl: url(changes.privacyPolicyUrl ?? current.privacyPolicyUrl ?? ''),
+      websiteUrl: normalizedSupportUrl(changes.websiteUrl ?? current.websiteUrl ?? ''),
+      documentationUrl: normalizedSupportUrl(changes.documentationUrl ?? current.documentationUrl ?? ''),
+      termsAndConditionsUrl: normalizedSupportUrl(changes.termsAndConditionsUrl ?? current.termsAndConditionsUrl ?? ''),
+      privacyPolicyUrl: normalizedSupportUrl(changes.privacyPolicyUrl ?? current.privacyPolicyUrl ?? ''),
       supportedServices: changes.supportedServices ?? current.supportedServices ?? []
     }
   }
@@ -327,11 +330,7 @@ export function validateSupportBody(body: ReturnType<typeof buildSupportBody>, i
 }
 
 export function validateSupportUrl(value: string, label: string): string | true {
-  const trimmed = value.trim()
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) && !/^https:\/\//i.test(trimmed)) {
-    return `${label} must be a valid https:// URL.`
-  }
-  return validateHttpsUrl(/^https:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`, label)
+  return validateHttpsUrl(normalizedSupportUrl(value), label)
 }
 
 export function validateReviewDetailsBody(

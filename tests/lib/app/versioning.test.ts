@@ -84,6 +84,7 @@ describe('bumpOptions and validateNewVersion', () => {
     expect(validateNewVersion('1.2.4', options)).toMatch(/at least a minor/i)
     expect(validateNewVersion('3.0.0', options)).toMatch(/must be one of/i)
     expect(validateNewVersion('abc', options)).toMatch(/semver/i)
+    expect(validateNewVersion('1'.repeat(33), options)).toMatch(/at most 32 characters/i)
   })
 
   it('applies the portal deprecate gating', () => {

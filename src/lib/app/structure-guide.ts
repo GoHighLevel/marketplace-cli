@@ -67,8 +67,8 @@ Developer-owned source files may be added elsewhere in this directory. Pull and 
 ### Identity and version binding
 
 - \`schemaVersion\` identifies the local manifest format.
-- \`appId\` identifies the marketplace app.
-- \`versionId\`, \`version\`, and \`status\` identify the represented portal version; optional \`createdAt\` is read-only metadata used for portal-parity eligibility checks.
+- \`appId\` identifies the marketplace app and uses 1 to 128 letters, numbers, underscores, or hyphens.
+- \`versionId\` uses the same identifier format; \`version\` and \`status\` identify the represented portal version, while optional \`createdAt\` is read-only metadata used for portal-parity eligibility checks.
 - \`appType\` records the app type returned by the portal.
 
 These values are CLI-managed. Do not edit them to point a workspace at another app or version.

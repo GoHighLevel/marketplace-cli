@@ -106,12 +106,15 @@
     }
   },
   "dependencies": {
+    "@eslint-community/regexpp": "^4.12.2",
     "@inquirer/core": "^11.2.1",
     "@inquirer/prompts": "^8.5.2",
     "@oclif/core": "^4.2.0",
     "@oclif/plugin-commands": "^4.1.62",
     "@oclif/plugin-help": "^6.2.56",
-    "open": "^10.1.0"
+    "acorn": "^8.18.0",
+    "open": "^10.1.0",
+    "redos-detector": "^6.1.4"
   },
   "devDependencies": {
     "@inquirer/testing": "^3.3.9",

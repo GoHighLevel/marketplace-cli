@@ -219,6 +219,22 @@ describe('local app validation', () => {
     )
   })
 
+  it('rejects unsafe workspace identifiers before identity decisions', () => {
+    const files = completeAppFiles()
+    files.app.appId = 'app-1\nother'
+    files.webhooks.appId = files.app.appId
+    files.app.versionId = '../version-1'
+    files.webhooks.versionId = files.app.versionId
+
+    const validation = validateLocalAppWorkspace(files, stateFor(files))
+
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.stringMatching(/workspace\.app\.appId must contain only letters, numbers, underscores, or hyphens/i),
+      expect.stringMatching(/workspace\.app\.versionId must contain only letters, numbers, underscores, or hyphens/i)
+    ]))
+    expect(validation.sections).toEqual([])
+  })
+
   it('rejects derived billing edits and missing conditional billing values', () => {
     const baseline = completeAppFiles()
     const local = cloneAppFiles(baseline)

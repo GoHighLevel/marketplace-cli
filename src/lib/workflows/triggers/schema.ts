@@ -16,6 +16,12 @@ import {
   WORKFLOW_REMOTE_REFERENCE,
   workflowHeaderRequiresReference
 } from '../shared/secret-references.js'
+import {
+  containsWhitespace,
+  isWorkflowVersion,
+  WORKFLOW_REFERENCE_MAX_LENGTH,
+  WORKFLOW_VERSION_MAX_LENGTH
+} from '../shared/value-validation.js'
 
 export interface WorkflowTriggerValidationOptions {
   publishable?: boolean
@@ -25,7 +31,6 @@ export interface WorkflowTriggerValidationOptions {
 }
 
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
-const VERSION = /^\d+\.\d+$/
 const STATUSES = new Set(['draft', 'in_review', 'published'])
 const FIELD_TYPES = new Set<string>(WORKFLOW_TRIGGER_FIELD_TYPES)
 const INTERNAL_REFERENCES = new Set<string>(WORKFLOW_TRIGGER_INTERNAL_REFERENCES)
@@ -187,9 +192,13 @@ function validateFilter(
   unknownProperties(value, FILTER_PROPERTIES, path, errors)
   const isDynamic = value.fieldType === 'DYNAMIC'
   if (requiredString(value.field, `${path}.field`, errors)) {
-    if (/\s/.test(value.field)) errors.push(`${path}.field must not contain whitespace.`)
-    if (fields.has(value.field)) errors.push(`${path}.field duplicates filter field "${value.field}".`)
-    fields.add(value.field)
+    if (value.field.length > WORKFLOW_REFERENCE_MAX_LENGTH) {
+      errors.push(`${path}.field must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`)
+    } else {
+      if (containsWhitespace(value.field)) errors.push(`${path}.field must not contain whitespace.`)
+      if (fields.has(value.field)) errors.push(`${path}.field duplicates filter field "${value.field}".`)
+      fields.add(value.field)
+    }
   }
   requiredString(value.title, `${path}.title`, errors)
   if (requiredString(value.fieldType, `${path}.fieldType`, errors) && !FIELD_TYPES.has(value.fieldType)) {
@@ -231,7 +240,12 @@ function validateFilter(
   if (value.dynamicFieldsConfig !== undefined) {
     errors.push(`${path}.dynamicFieldsConfig is supported only for a dynamic filter.`)
   }
-  if (!isRecord(triggerData) || typeof value.field !== 'string' || !value.field) return
+  if (
+    !isRecord(triggerData) ||
+    typeof value.field !== 'string' ||
+    !value.field ||
+    value.field.length > WORKFLOW_REFERENCE_MAX_LENGTH
+  ) return
   const reference = triggerDataReference(triggerData, value.field)
   if (!reference.found) errors.push(`${path}.field "${value.field}" does not resolve in customVarsJson.`)
 }
@@ -249,16 +263,25 @@ function validateCustomVariables(value: unknown, triggerData: unknown, path: str
     unknownProperties(variable, new Set(['name', 'reference', 'fieldType']), variablePath, errors)
     requiredString(variable.name, `${variablePath}.name`, errors)
     if (requiredString(variable.reference, `${variablePath}.reference`, errors)) {
-      if (/\s/.test(variable.reference)) errors.push(`${variablePath}.reference must not contain whitespace.`)
-      if (references.has(variable.reference)) {
-        errors.push(`${variablePath}.reference duplicates "${variable.reference}".`)
+      if (variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH) {
+        errors.push(`${variablePath}.reference must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`)
+      } else {
+        if (containsWhitespace(variable.reference)) errors.push(`${variablePath}.reference must not contain whitespace.`)
+        if (references.has(variable.reference)) {
+          errors.push(`${variablePath}.reference duplicates "${variable.reference}".`)
+        }
+        references.add(variable.reference)
       }
-      references.add(variable.reference)
     }
     if (requiredString(variable.fieldType, `${variablePath}.fieldType`, errors) && !CUSTOM_VARIABLE_TYPES.has(variable.fieldType)) {
       errors.push(`${variablePath}.fieldType is not supported.`)
     }
-    if (!hasTriggerData || typeof variable.reference !== 'string' || !variable.reference) return
+    if (
+      !hasTriggerData ||
+      typeof variable.reference !== 'string' ||
+      !variable.reference ||
+      variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH
+    ) return
     const resolved = triggerDataReference(triggerData, variable.reference)
     if (!resolved.found) {
       errors.push(`${variablePath}.reference "${variable.reference}" does not resolve in customVarsJson.`)
@@ -373,8 +396,12 @@ function validateVersion(
     path,
     errors
   )
-  if (requiredString(value.version, `${path}.version`, errors) && !VERSION.test(value.version)) {
-    errors.push(`${path}.version must use trigger version format x.y, for example "1.0".`)
+  if (requiredString(value.version, `${path}.version`, errors)) {
+    if (value.version.length > WORKFLOW_VERSION_MAX_LENGTH) {
+      errors.push(`${path}.version must be at most ${WORKFLOW_VERSION_MAX_LENGTH} characters.`)
+    } else if (!isWorkflowVersion(value.version)) {
+      errors.push(`${path}.version must use trigger version format x.y, for example "1.0".`)
+    }
   }
   if (requiredString(value.status, `${path}.status`, errors) && !STATUSES.has(value.status)) {
     errors.push(`${path}.status must be draft, in_review, or published.`)
