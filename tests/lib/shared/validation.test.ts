@@ -19,24 +19,41 @@ describe('safe text validation', () => {
     expect(validateXssSafe('<p>Safe product description</p>', 'Description')).toBe(true)
     expect(validateXssSafe('<img src=x onerror=alert(1)>', 'Description')).toMatch(/dangerous/i)
     expect(validateXssSafe('&#x3c;script&#x3e;alert(1)', 'Description')).toMatch(/dangerous/i)
+    expect(validateXssSafe('&amp;#x3c;script&amp;#x3e;document.cookie', 'Description')).toMatch(/dangerous/i)
+    expect(validateXssSafe('&amp;#60;img src=x onerror=confirm(1)&amp;#62;', 'Description')).toMatch(/dangerous/i)
+    expect(validateXssSafe('<scripture>Safe product name</scripture>', 'Description')).toBe(true)
   })
 
-  it('bounds text before applying security regex checks', () => {
+  it.each([
+    ['blocked HTML tags', '<iframe src="https://example.com"></iframe>'],
+    ['event handlers', '<svg onload = confirm(1)>'],
+    ['script protocols', 'javascript:confirm(1)'],
+    ['CSS expressions', 'width: expression (document.body.clientWidth)'],
+    ['CSS behaviors', 'behavior : url(component.htc)'],
+    ['scriptable CSS URLs', 'background: url ( "data:text/html,payload")'],
+    ['dangerous calls', 'setTimeout (handler)']
+  ])('rejects %s using deterministic scanning', (_case, value) => {
+    expect(validateXssSafe(value, 'Description')).toMatch(/dangerous/i)
+  })
+
+  it('bounds text before applying security checks', () => {
     expect(validateXssSafe('x'.repeat(10_001), 'Description')).toMatch(/at most 10,000 characters/i)
   })
 })
 
 describe('white-label validation', () => {
-  it('blocks GHL brand references using the portal regex', () => {
+  it('blocks the portal GHL brand variants without partial-token false positives', () => {
     expect(validateTextForWhiteLabel('https://ghl.example.com/callback', 'Redirect URI')).toMatch(/white-label/i)
     expect(validateTextForWhiteLabel('HighLevel Pro Plan', 'Plan name')).toMatch(/white-label/i)
     expect(validateTextForWhiteLabel('Go High Level integration', 'Plan feature')).toMatch(/white-label/i)
+    expect(validateTextForWhiteLabel('Go\tHigh\nLevel integration', 'Plan feature')).toMatch(/white-label/i)
     expect(validateTextForWhiteLabel('high-level overview', 'Plan feature')).toMatch(/white-label/i)
     expect(validateTextForWhiteLabel('https://acme.com/oauth/callback', 'Redirect URI')).toBe(true)
+    expect(validateTextForWhiteLabel('GHLish reporting', 'Plan feature')).toBe(true)
     expect(validateTextForWhiteLabel('Nightly sync', 'Plan feature')).toBe(true)
   })
 
-  it('bounds text before applying white-label regex checks', () => {
+  it('bounds text before applying white-label checks', () => {
     expect(validateTextForWhiteLabel('x'.repeat(10_001), 'Plan feature')).toMatch(/at most 10,000 characters/i)
   })
 })

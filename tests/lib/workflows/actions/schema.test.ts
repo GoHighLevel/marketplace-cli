@@ -676,6 +676,33 @@ describe('workflow action manifest validation', () => {
     expect(validateWorkflowActionsManifest(manifest)).toEqual([])
   })
 
+  it('compares field-set limits only after both values pass integer validation', () => {
+    const invalid = structuredClone(validManifest) as any
+    invalid.actions[0].versions[0].inputs[0] = {
+      field: 'line_items',
+      title: 'Line items',
+      fieldType: 'fieldSet',
+      config: {
+        innerFields: ['name'],
+        minSets: Number.POSITIVE_INFINITY,
+        maxSets: 1
+      }
+    }
+
+    const invalidErrors = validateWorkflowActionsManifest(invalid)
+    expect(invalidErrors).toEqual(expect.arrayContaining([
+      expect.stringMatching(/config\.minSets must be a non-negative integer/)
+    ]))
+    expect(invalidErrors).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/config\.minSets must not exceed maxSets/)
+    ]))
+
+    invalid.actions[0].versions[0].inputs[0].config.minSets = 2
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/config\.minSets must not exceed maxSets/)
+    ]))
+  })
+
   it('does not allow a new local action to preserve a remote secret that cannot exist yet', () => {
     const invalid = structuredClone(validManifest) as any
     delete invalid.actions[0].templateId

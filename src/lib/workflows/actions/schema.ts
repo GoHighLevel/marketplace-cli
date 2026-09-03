@@ -50,7 +50,6 @@ const BRANCH_FIELD_TYPES = new Set(['dynamic', 'multiselect', 'numerical', 'phon
 const CUSTOM_VARIABLE_TYPES = new Set(['array', 'boolean', 'date', 'numerical', 'string'])
 const RICH_TEXT_EDITOR_TYPES = new Set(['html', 'plain-text'])
 const VALIDATION_REGEX_MAX_CHARACTERS = 1_000
-const VALIDATION_REGEX_SOURCE = /^[\x20-\x7E]+$/
 const REGEXP_VALIDATOR = new RegExpValidator({ ecmaVersion: 2022 })
 const INPUT_PROPERTIES = new Set([
   'field',
@@ -148,10 +147,13 @@ function optionalInteger(
   }
 }
 
-function optionalNonNegativeInteger(value: unknown, path: string, errors: string[]): void {
-  if (value !== undefined && (!Number.isInteger(value) || (value as number) < 0)) {
+function optionalNonNegativeInteger(value: unknown, path: string, errors: string[]): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     errors.push(`${path} must be a non-negative integer.`)
+    return undefined
   }
+  return value
 }
 
 function isValidFunctionExpression(value: string, arrowOnly = false): boolean {
@@ -188,12 +190,20 @@ function isSafeRegexPattern(value: string): boolean {
   }
 }
 
+function isPrintableAscii(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x20 || code > 0x7e) return false
+  }
+  return value.length > 0
+}
+
 function validateRegexRule(value: string, path: string, errors: string[]): void {
   if (value.length > VALIDATION_REGEX_MAX_CHARACTERS) {
     errors.push(`${path} must be at most ${VALIDATION_REGEX_MAX_CHARACTERS.toLocaleString('en-US')} characters.`)
     return
   }
-  if (!VALIDATION_REGEX_SOURCE.test(value)) {
+  if (!isPrintableAscii(value)) {
     errors.push(`${path} may contain only printable ASCII characters.`)
     return
   }
@@ -445,13 +455,9 @@ function validateInputPresentation(input: Record<string, unknown>, path: string,
       else stringArray(input.config.innerFields, `${configPath}.innerFields`, errors)
       optionalString(input.config.addItemLabel, `${configPath}.addItemLabel`, errors)
       optionalString(input.config.itemLabel, `${configPath}.itemLabel`, errors)
-      optionalNonNegativeInteger(input.config.minSets, `${configPath}.minSets`, errors)
-      optionalNonNegativeInteger(input.config.maxSets, `${configPath}.maxSets`, errors)
-      if (
-        typeof input.config.minSets === 'number' &&
-        typeof input.config.maxSets === 'number' &&
-        input.config.minSets > input.config.maxSets
-      ) {
+      const minSets = optionalNonNegativeInteger(input.config.minSets, `${configPath}.minSets`, errors)
+      const maxSets = optionalNonNegativeInteger(input.config.maxSets, `${configPath}.maxSets`, errors)
+      if (minSets !== undefined && maxSets !== undefined && minSets > maxSets) {
         errors.push(`${configPath}.minSets must not exceed maxSets.`)
       }
     } else {
