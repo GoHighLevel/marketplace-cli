@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { WORKFLOW_ACTION_CODE_MAX_BYTES } from '../../../../src/lib/workflows/actions/code.js'
 import { validateWorkflowActionsManifest } from '../../../../src/lib/workflows/actions/schema.js'
@@ -772,6 +772,21 @@ describe('workflow action manifest validation', () => {
     expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
       expect.stringMatching(/validations\[0\]\.rule must be a predefined validation, a valid regular expression, or an arrow function/)
     ]))
+  })
+
+  it('does not let wall-clock scheduling change regex safety results', () => {
+    const valid = structuredClone(validManifest) as any
+    valid.actions[0].versions[0].inputs[0].validations = [{
+      rule: '^[a-z0-9_-]+$',
+      errorMessage: 'Invalid'
+    }]
+    const now = vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(1_000)
+
+    try {
+      expect(validateWorkflowActionsManifest(valid)).toEqual([])
+    } finally {
+      now.mockRestore()
+    }
   })
 
   it.each([
