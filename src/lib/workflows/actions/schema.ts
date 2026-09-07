@@ -182,8 +182,7 @@ function isSafeRegexPattern(value: string): boolean {
     return isSafePattern(value, {
       downgradePattern: false,
       maxScore: 1,
-      maxSteps: 20_000,
-      timeout: 100
+      maxSteps: 20_000
     }).safe
   } catch {
     return false

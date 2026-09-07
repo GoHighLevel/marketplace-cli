@@ -2,7 +2,11 @@ name: CI
 
 on:
   pull_request:
+    branches:
+      - main
   push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,15 +16,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Node ${{ matrix.node-version }}
+  build:
+    name: build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version:
-          - 20.12.2
-          - 24.x
 
     steps:
       - name: Check out source
@@ -30,7 +28,47 @@ jobs:
         uses: actions/setup-node@v4
         with:
           cache: npm
-          node-version: ${{ matrix.node-version }}
+          node-version: 20.12.2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and verify package
+        run: npm pack --dry-run
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: 20.12.2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type checks
+        run: npm run lint
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: 20.12.2
 
       - name: Install dependencies
         run: npm ci
@@ -38,8 +76,22 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Run type checks
-        run: npm run lint
+  node-24:
+    name: Node 24 compatibility
+    runs-on: ubuntu-latest
 
-      - name: Verify package contents
-        run: npm pack --dry-run
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: npm
+          node-version: 24.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
