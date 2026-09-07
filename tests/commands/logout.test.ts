@@ -1,20 +1,20 @@
-import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { promisify } from 'node:util'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { Config } from '@oclif/core'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import Logout from '../../src/commands/logout.js'
 import { saveProfile } from '../../src/lib/auth/token-store.js'
 import { listSecrets, recordSecret } from '../../src/lib/secrets/ledger.js'
 
-const execFileAsync = promisify(execFile)
-const cli = path.resolve('bin/run.js')
 let configDir: string
 
 beforeEach(async () => {
   configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-cli-logout-'))
+  vi.stubEnv('GHL_CONFIG_DIR', configDir)
+  vi.stubEnv('NO_COLOR', '1')
   await saveProfile(configDir, 'default', {
     accessToken: 'test-token',
     email: 'karankumar.kaneria@gohighlevel.com'
@@ -28,17 +28,22 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   await fs.rm(configDir, { recursive: true, force: true })
 })
 
 describe('logout', () => {
   it('prints only the account and reauthentication guidance after a successful logout', async () => {
-    const result = await execFileAsync(process.execPath, [cli, 'logout'], {
-      env: { ...process.env, GHL_CONFIG_DIR: configDir, NO_COLOR: '1' }
+    const output: string[] = []
+    const log = vi.spyOn(Logout.prototype, 'log').mockImplementation((message = '') => {
+      output.push(message)
     })
+    const config = await Config.load({ root: path.resolve('.') })
+    await new Logout([], config).run()
 
-    expect(result.stdout).toBe(
-      'Logged out karankumar.kaneria@gohighlevel.com\n\nRun `ghl login` to authenticate again.\n'
+    expect(output.join('\n')).toBe(
+      'Logged out karankumar.kaneria@gohighlevel.com\n\nRun `ghl login` to authenticate again.'
     )
     expect(await listSecrets(configDir, 'default')).toHaveLength(1)
   })
