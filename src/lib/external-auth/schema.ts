@@ -3,7 +3,6 @@ import { isAppResourceIdentifier } from '../app/schema.js'
 import { validateHttpUrl, validateXssSafe } from '../shared/validation.js'
 import { workflowActionCodeSyntaxError } from '../workflows/actions/code.js'
 import {
-  EXTERNAL_AUTH_ENV_REFERENCE,
   EXTERNAL_AUTH_REMOTE_REFERENCE,
   ExternalAuthCapabilityLocks,
   ExternalAuthCodeModeStep,
@@ -67,15 +66,102 @@ const CODE_MODE_STEPS = new Set<ExternalAuthCodeModeStep>([
 const CODE_STEP_KEYS = new Set(['enabled', 'code'])
 const HTTP_METHODS = new Set<ExternalAuthHttpMethod>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'])
 const BASIC_METHODS = new Set<ExternalAuthHttpMethod>(['GET', 'POST', 'PUT', 'PATCH'])
-const SAFE_FIELD_KEY = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/
-const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
-const TEMPLATE = /\{\{\s*([^{}]+?)\s*\}\}/g
-const SECRET_REFERENCE = /^\$\{(?:remote|env:[A-Z_][A-Z0-9_]*)\}$/
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/
+const HEADER_NAME_CHARACTERS = new Set("!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
 const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype'])
 const SENSITIVE_KEY_PARTS = ['authorization', 'cookie', 'credential', 'password', 'passwd', 'secret', 'token', 'api-key', 'api_key', 'apikey']
 const MAX_KEY_VALUES = 100
 const MAX_CODE_BYTES = 64 * 1024
+
+interface ParsedTemplate {
+  end: number
+  reference: string
+  start: number
+}
+
+function isAsciiLetter(character: string): boolean {
+  const code = character.charCodeAt(0)
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
+function isEnvironmentSecretReference(value: string): boolean {
+  if (!value.startsWith('${env:') || !value.endsWith('}')) return false
+  const name = value.slice(6, -1)
+  if (!name) return false
+  const firstCode = name.charCodeAt(0)
+  if ((firstCode < 65 || firstCode > 90) && name[0] !== '_') return false
+  for (let index = 1; index < name.length; index++) {
+    const character = name[index]
+    const code = character.charCodeAt(0)
+    if ((code < 65 || code > 90) && (code < 48 || code > 57) && character !== '_') return false
+  }
+  return true
+}
+
+function isSecretReference(value: string): boolean {
+  return value === EXTERNAL_AUTH_REMOTE_REFERENCE || isEnvironmentSecretReference(value)
+}
+
+function containsControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index)
+    if (code <= 31 || (code >= 127 && code <= 159)) return true
+  }
+  return false
+}
+
+function isSafeFieldKey(value: string): boolean {
+  if (value.length < 1 || value.length > 64 || !isAsciiLetter(value[0])) return false
+  for (let index = 1; index < value.length; index++) {
+    const character = value[index]
+    const code = character.charCodeAt(0)
+    if (!isAsciiLetter(character) && (code < 48 || code > 57) && !'_.-'.includes(character)) return false
+  }
+  return true
+}
+
+function isHeaderName(value: string): boolean {
+  if (!value) return false
+  for (const character of value) {
+    if (!HEADER_NAME_CHARACTERS.has(character)) return false
+  }
+  return true
+}
+
+function parseTemplates(value: string): ParsedTemplate[] {
+  const templates: ParsedTemplate[] = []
+  let cursor = 0
+  while (cursor < value.length) {
+    const start = value.indexOf('{{', cursor)
+    if (start < 0) break
+    const contentStart = start + 2
+    const endStart = value.indexOf('}}', contentStart)
+    if (endStart < 0) break
+    const nestedStart = value.indexOf('{{', contentStart)
+    if (nestedStart >= 0 && nestedStart < endStart) {
+      cursor = nestedStart
+      continue
+    }
+    const content = value.slice(contentStart, endStart)
+    if (content && !content.includes('{') && !content.includes('}')) {
+      templates.push({ start, end: endStart + 2, reference: content.trim() })
+    }
+    cursor = endStart + 2
+  }
+  return templates
+}
+
+function replaceTemplates(value: string, replacement: string): string {
+  const templates = parseTemplates(value)
+  if (templates.length === 0) return value
+  const parts: string[] = []
+  let cursor = 0
+  for (const template of templates) {
+    parts.push(value.slice(cursor, template.start), replacement)
+    cursor = template.end
+  }
+  parts.push(value.slice(cursor))
+  return parts.join('')
+}
 
 function validateExactKeys(value: unknown, allowed: ReadonlySet<string>, path: string, errors: string[]): value is Record<string, unknown> {
   if (!isRecord(value)) {
@@ -275,22 +361,18 @@ function hasUnsafePathSegment(value: string): boolean {
 }
 
 function validateHumanText(value: string, path: string, errors: string[]): void {
-  if (CONTROL_CHARACTERS.test(value)) errors.push(`${path} must not contain control characters.`)
+  if (containsControlCharacter(value)) errors.push(`${path} must not contain control characters.`)
   const result = validateXssSafe(value, path)
   if (result !== true) errors.push(result)
 }
 
 function validateSecretValue(value: string, path: string, errors: string[]): void {
-  if (value.length === 0 || SECRET_REFERENCE.test(value) || TEMPLATE.test(value)) {
-    TEMPLATE.lastIndex = 0
-    return
-  }
-  TEMPLATE.lastIndex = 0
+  if (value.length === 0 || isSecretReference(value) || parseTemplates(value).length > 0) return
   errors.push(`${path} must use \${env:NAME} or \${remote}; secret literals must not be committed.`)
 }
 
 function validateCredentialReference(value: string, path: string, errors: string[]): void {
-  if (value.length === 0 || SECRET_REFERENCE.test(value)) return
+  if (value.length === 0 || isSecretReference(value)) return
   errors.push(`${path} must use \${env:NAME} or \${remote}; credential literals must not be committed.`)
 }
 
@@ -300,8 +382,8 @@ function isSensitiveKey(value: string): boolean {
 }
 
 function validateTemplates(value: string, fieldKeys: ReadonlySet<string>, errors: string[]): void {
-  for (const match of value.matchAll(TEMPLATE)) {
-    const reference = match[1].trim()
+  for (const template of parseTemplates(value)) {
+    const reference = template.reference
     if (reference.startsWith('userData.')) {
       const key = reference.slice('userData.'.length)
       if (!fieldKeys.has(key)) errors.push(`config.json references undefined auth field "${sanitizeTerminalText(key)}".`)
@@ -341,7 +423,7 @@ function validateRequest(
   } else if (request.url !== EXTERNAL_AUTH_REMOTE_REFERENCE) {
     validateTemplates(request.url, fieldKeys, errors)
     validateHumanText(request.url, `${path}.url`, errors)
-    const candidate = request.url.replace(TEMPLATE, 'placeholder')
+    const candidate = replaceTemplates(request.url, 'placeholder')
     const urlResult = validateHttpUrl(candidate, `${path}.url`, { publicOnly: true })
     if (urlResult !== true) errors.push(urlResult)
     if (sensitiveQueryParameters(request.url).length > 0) {
@@ -363,7 +445,7 @@ function validateRequest(
       validateTemplates(entry.value, fieldKeys, errors)
 
       if (section === 'headers') {
-        if (!HEADER_NAME.test(entry.key)) errors.push(`${entryPath}.key must be a valid HTTP header name.`)
+        if (!isHeaderName(entry.key)) errors.push(`${entryPath}.key must be a valid HTTP header name.`)
         const lowerKey = entry.key.toLowerCase()
         const lowerValue = entry.value.toLowerCase()
         if (lowerKey === 'metadata-flavor' && lowerValue.trim() === 'google') {
@@ -451,7 +533,7 @@ export function validateExternalAuthManifest(
   const fieldKeys = new Set<string>()
   manifest.fields.forEach((field, index) => {
     const path = `config.json.fields[${index}]`
-    if (!SAFE_FIELD_KEY.test(field.key) || hasUnsafePathSegment(field.key)) {
+    if (!isSafeFieldKey(field.key) || hasUnsafePathSegment(field.key)) {
       errors.push(`${path}.key must be a safe field key beginning with a letter and containing only letters, numbers, dots, underscores, or hyphens.`)
     }
     if (fieldKeys.has(field.key)) errors.push(`${path}.key must be unique.`)
@@ -485,7 +567,7 @@ export function validateExternalAuthManifest(
   if (manifest.accountDataUri && manifest.accountDataUri !== EXTERNAL_AUTH_REMOTE_REFERENCE) {
     validateHumanText(manifest.accountDataUri, 'config.json.accountDataUri', errors)
     validateTemplates(manifest.accountDataUri, fieldKeys, errors)
-    const uriResult = validateHttpUrl(manifest.accountDataUri.replace(TEMPLATE, 'placeholder'), 'config.json.accountDataUri', {
+    const uriResult = validateHttpUrl(replaceTemplates(manifest.accountDataUri, 'placeholder'), 'config.json.accountDataUri', {
       publicOnly: true
     })
     if (uriResult !== true) errors.push(uriResult)
@@ -572,5 +654,5 @@ export function validateExternalAuthManifest(
 }
 
 export function isExternalAuthSecretReference(value: string): boolean {
-  return value === EXTERNAL_AUTH_REMOTE_REFERENCE || EXTERNAL_AUTH_ENV_REFERENCE.test(value)
+  return isSecretReference(value)
 }
