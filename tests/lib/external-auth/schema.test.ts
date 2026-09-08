@@ -261,8 +261,19 @@ describe('external auth schema', () => {
     ]))
 
     const basicAfterOAuth = basicManifest()
-    expect(validateExternalAuthManifest(basicAfterOAuth, { oauth2TypeLocked: true })).toContain(
-      'Authentication type cannot be changed from OAuth 2 because an app version already uses OAuth 2.'
+    expect(validateExternalAuthManifest(basicAfterOAuth, {
+      authTypeLocked: true,
+      lockedAuthType: 'oauth2'
+    })).toContain(
+      'Authentication type cannot be changed from OAuth 2 because a published version already uses it.'
+    )
+
+    const oauthAfterBasic = oauthManifest()
+    expect(validateExternalAuthManifest(oauthAfterBasic, {
+      authTypeLocked: true,
+      lockedAuthType: 'basic'
+    })).toContain(
+      'Authentication type cannot be changed from Basic because a published version already uses it.'
     )
   })
 })

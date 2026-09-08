@@ -53,10 +53,17 @@ interface ExternalAuthBinding {
 }
 
 const STATE_KEYS = new Set(['schemaVersion', 'appId', 'versionId', 'baseline', 'capabilityLocks'])
-const LOCK_KEYS = new Set(['hasWhoAmIApiDisableLocked', 'multiAuthEnabledDisableLocked', 'oauth2TypeLocked'])
+const LOCK_KEYS = new Set([
+  'hasWhoAmIApiDisableLocked',
+  'multiAuthEnabledDisableLocked',
+  'authTypeLocked',
+  'lockedAuthType',
+  'oauth2TypeLocked'
+])
 const UNLOCKED_CAPABILITIES: ExternalAuthCapabilityLocks = {
   hasWhoAmIApiDisableLocked: false,
   multiAuthEnabledDisableLocked: false,
+  authTypeLocked: false,
   oauth2TypeLocked: false
 }
 
@@ -139,6 +146,19 @@ function validateState(binding: ExternalAuthBinding, value: unknown): asserts va
       if (typeof value.capabilityLocks[key] !== 'boolean') {
         errors.push(`.ghl/external-auth-state.json.capabilityLocks.${key} must be a boolean.`)
       }
+    }
+    if (value.capabilityLocks.authTypeLocked !== undefined && typeof value.capabilityLocks.authTypeLocked !== 'boolean') {
+      errors.push('.ghl/external-auth-state.json.capabilityLocks.authTypeLocked must be a boolean.')
+    }
+    if (
+      value.capabilityLocks.lockedAuthType !== undefined &&
+      value.capabilityLocks.lockedAuthType !== 'basic' &&
+      value.capabilityLocks.lockedAuthType !== 'oauth2'
+    ) {
+      errors.push('.ghl/external-auth-state.json.capabilityLocks.lockedAuthType must be "basic" or "oauth2".')
+    }
+    if (value.capabilityLocks.authTypeLocked === true && value.capabilityLocks.lockedAuthType === undefined) {
+      errors.push('.ghl/external-auth-state.json.capabilityLocks.lockedAuthType is required when authTypeLocked is true.')
     }
     if (value.capabilityLocks.oauth2TypeLocked !== undefined && typeof value.capabilityLocks.oauth2TypeLocked !== 'boolean') {
       errors.push('.ghl/external-auth-state.json.capabilityLocks.oauth2TypeLocked must be a boolean.')

@@ -89,6 +89,8 @@ export interface ExternalAuthManifest {
 export interface ExternalAuthCapabilityLocks {
   hasWhoAmIApiDisableLocked: boolean
   multiAuthEnabledDisableLocked: boolean
+  authTypeLocked?: boolean
+  lockedAuthType?: ExternalAuthType
   oauth2TypeLocked?: boolean
 }
 
@@ -603,9 +605,15 @@ export function prepareExternalAuthUpdateBody(
 
 export function externalAuthCapabilityLocks(response: ExternalAuthApiResponse): ExternalAuthCapabilityLocks {
   const locks = response.externalAuthConfig?.capabilityLocks
+  const authTypeLocked = locks?.authTypeLocked ?? false
+  const lockedAuthType = locks?.lockedAuthType === 'basic' || locks?.lockedAuthType === 'oauth2'
+    ? locks.lockedAuthType
+    : undefined
   return {
     hasWhoAmIApiDisableLocked: locks?.hasWhoAmIApiDisableLocked ?? false,
     multiAuthEnabledDisableLocked: locks?.multiAuthEnabledDisableLocked ?? false,
-    oauth2TypeLocked: false
+    authTypeLocked,
+    ...(authTypeLocked && lockedAuthType ? { lockedAuthType } : {}),
+    oauth2TypeLocked: authTypeLocked && lockedAuthType === 'oauth2'
   }
 }

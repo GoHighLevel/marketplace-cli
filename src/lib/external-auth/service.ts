@@ -18,7 +18,7 @@ interface ExternalAuthTestResultClient {
 }
 
 interface ExternalAuthLineageClient extends ExternalAuthReadClient {
-  listVersions(appId: string): Promise<Array<{ _id: string }>>
+  listVersions(appId: string): Promise<Array<{ _id: string; status?: string }>>
 }
 
 export interface ExternalAuthSnapshot {
@@ -37,6 +37,7 @@ const MAX_TEST_VALUE_LENGTH = 10_000
 const MAX_STATE_LENGTH = 16_384
 const SENSITIVE_OUTPUT_KEY = /(?:authorization|cookie|credential|password|passwd|secret|token|api[-_]?key)/i
 const DIAGNOSTIC_LOG_KEY = /^(?:consoleLogs|logs)$/i
+const PUBLISHED_APP_STATUSES = new Set(['live', 'deprecating', 'deprecated'])
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
@@ -53,24 +54,32 @@ export async function fetchExternalAuthSnapshot(
   return { raw, manifest: buildExternalAuthManifest(appId, versionId, raw) }
 }
 
-function externalAuthType(value: unknown): string | undefined {
+function externalAuthType(value: unknown): 'basic' | 'oauth2' | undefined {
   if (!isRecord(value)) return undefined
-  if (typeof value.externalAuthType === 'string') return value.externalAuthType
-  if (typeof value.authType === 'string') return value.authType
-  if (isRecord(value.externalAuthConfig) && typeof value.externalAuthConfig.type === 'string') {
-    return value.externalAuthConfig.type
-  }
-  if (isRecord(value.externalAuth) && typeof value.externalAuth.type === 'string') return value.externalAuth.type
-  return undefined
+  const type = value.externalAuthType ??
+    value.authType ??
+    (isRecord(value.externalAuthConfig) ? value.externalAuthConfig.type : undefined) ??
+    (isRecord(value.externalAuth) ? value.externalAuth.type : undefined)
+  return type === 'basic' || type === 'oauth2' ? type : undefined
 }
 
 export async function resolveExternalAuthLocks(
   client: ExternalAuthLineageClient,
   appId: string,
-  current: { versionId: string; response: ExternalAuthApiResponse; versions?: Array<{ _id: string }> }
+  current: { versionId: string; response: ExternalAuthApiResponse; versions?: Array<{ _id: string; status?: string }> }
 ): Promise<ExternalAuthCapabilityLocks> {
+  const serverLocks = current.response.externalAuthConfig?.capabilityLocks
+  const baseLocks = externalAuthCapabilityLocks(current.response)
+  if (
+    serverLocks?.authTypeLocked === false ||
+    (serverLocks?.authTypeLocked === true && baseLocks.lockedAuthType !== undefined)
+  ) return baseLocks
+
   const versions = current.versions ?? await client.listVersions(appId)
-  const types = await Promise.all(versions.map(async version => {
+  const publishedVersions = versions.filter(version =>
+    PUBLISHED_APP_STATUSES.has(version.status?.toLowerCase() ?? '')
+  )
+  const types = await Promise.all(publishedVersions.map(async version => {
     const listedType = externalAuthType(version)
     if (listedType) return listedType
     if (version._id === current.versionId) return externalAuthType(current.response)
@@ -80,9 +89,12 @@ export async function resolveExternalAuthLocks(
       return undefined
     }
   }))
+  const lockedAuthType = types.find(type => type !== undefined)
   return {
-    ...externalAuthCapabilityLocks(current.response),
-    oauth2TypeLocked: externalAuthType(current.response) === 'oauth2' || types.includes('oauth2')
+    ...baseLocks,
+    authTypeLocked: lockedAuthType !== undefined,
+    ...(lockedAuthType ? { lockedAuthType } : {}),
+    oauth2TypeLocked: lockedAuthType === 'oauth2'
   }
 }
 

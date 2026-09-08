@@ -99,7 +99,7 @@ describe('external auth service', () => {
     expect(wait).toHaveBeenCalledOnce()
   })
 
-  it('resolves the portal OAuth type lock across every app version', async () => {
+  it('resolves the auth type lock from published app versions for older API responses', async () => {
     const current = {
       hasExternalAuth: false,
       externalAuthConfig: {
@@ -108,7 +108,10 @@ describe('external auth service', () => {
       }
     }
     const client = {
-      listVersions: vi.fn().mockResolvedValue([{ _id: 'version-1' }, { _id: 'version-2' }]),
+      listVersions: vi.fn().mockResolvedValue([
+        { _id: 'version-1', status: 'draft' },
+        { _id: 'version-2', status: 'live' }
+      ]),
       getExternalAuthConfig: vi.fn().mockResolvedValue({ externalAuthConfig: { type: 'oauth2' } })
     }
 
@@ -118,10 +121,37 @@ describe('external auth service', () => {
     })).resolves.toEqual({
       hasWhoAmIApiDisableLocked: true,
       multiAuthEnabledDisableLocked: false,
+      authTypeLocked: true,
+      lockedAuthType: 'oauth2',
       oauth2TypeLocked: true
     })
     expect(client.getExternalAuthConfig).toHaveBeenCalledTimes(1)
     expect(client.getExternalAuthConfig).toHaveBeenCalledWith('app-1', 'version-2')
+  })
+
+  it('does not lock an unpublished draft when the API reports no lineage type lock', async () => {
+    const client = {
+      listVersions: vi.fn(),
+      getExternalAuthConfig: vi.fn()
+    }
+
+    await expect(resolveExternalAuthLocks(client, 'app-1', {
+      versionId: 'version-1',
+      response: {
+        hasExternalAuth: false,
+        externalAuthConfig: {
+          type: 'oauth2',
+          capabilityLocks: { authTypeLocked: false }
+        }
+      }
+    })).resolves.toEqual({
+      hasWhoAmIApiDisableLocked: false,
+      multiAuthEnabledDisableLocked: false,
+      authTypeLocked: false,
+      oauth2TypeLocked: false
+    })
+    expect(client.listVersions).not.toHaveBeenCalled()
+    expect(client.getExternalAuthConfig).not.toHaveBeenCalled()
   })
 
   it('redacts credentials from test diagnostics before returning them to the terminal', () => {

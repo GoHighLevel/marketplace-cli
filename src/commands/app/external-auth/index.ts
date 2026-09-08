@@ -39,7 +39,9 @@ export default class AppExternalAuth extends Command {
       this.log(`Installation fields: ${snapshot.manifest.fields.length}`)
       this.log(`Who Am I: ${snapshot.manifest.capabilities.hasWhoAmIApi ? 'enabled' : 'disabled'}`)
       this.log(`Multi-auth: ${snapshot.manifest.capabilities.multiAuthEnabled ? 'enabled' : 'disabled'}`)
-      if (locks.oauth2TypeLocked) this.log('Authentication type: locked to OAuth 2 by version history')
+      if (locks.authTypeLocked && locks.lockedAuthType) {
+        this.log(`Authentication type: locked to ${locks.lockedAuthType === 'oauth2' ? 'OAuth 2' : 'Basic'} by published version history`)
+      }
       return
     } catch (error) {
       this.error(error instanceof Error ? error.message : 'Failed to load external authentication.')

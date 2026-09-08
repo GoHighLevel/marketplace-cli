@@ -471,8 +471,10 @@ export function validateExternalAuthManifest(
   if (locks.multiAuthEnabledDisableLocked && !manifest.capabilities.multiAuthEnabled) {
     errors.push('Multi-auth capability cannot be disabled because a published version already uses it.')
   }
-  if (locks.oauth2TypeLocked && manifest.type !== 'oauth2') {
-    errors.push('Authentication type cannot be changed from OAuth 2 because an app version already uses OAuth 2.')
+  const lockedAuthType = locks.lockedAuthType ?? (locks.oauth2TypeLocked ? 'oauth2' : undefined)
+  if ((locks.authTypeLocked || locks.oauth2TypeLocked) && lockedAuthType && manifest.type !== lockedAuthType) {
+    const label = lockedAuthType === 'oauth2' ? 'OAuth 2' : 'Basic'
+    errors.push(`Authentication type cannot be changed from ${label} because a published version already uses it.`)
   }
 
   const required = manifest.enabled
