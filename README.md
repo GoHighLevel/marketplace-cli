@@ -37,7 +37,7 @@ ghl login                                 # authenticate via the browser
 ghl account                               # list accessible developer accounts
 ghl account switch                        # switch account using an interactive picker
 ghl app create                            # create the remote app + local JSON folder, then select it
-# edit ghl-app.json, webhooks, actions, and triggers under src/modules/workflows/
+# edit ghl-app.json and dedicated modules under src/
 ghl app validate                          # validate local JSON without an API call
 ghl app diff                              # preview local, portal, and conflicting changes
 ghl app push                              # update only changed API sections
@@ -48,6 +48,9 @@ ghl app actions push                      # sync only changed workflow actions
 ghl app triggers validate                 # validate every local workflow trigger
 ghl app triggers diff                     # preview workflow-trigger changes and conflicts
 ghl app triggers push                     # sync only changed workflow triggers
+ghl app external-auth validate            # validate Basic/OAuth 2 provider authentication
+ghl app external-auth diff                # inspect external-auth changes and conflicts
+ghl app external-auth push                # sync and verify external authentication
 ghl app validate --remote                 # optional server publish-readiness check
 ghl app publish                           # go live (private) / submit for review (public)
 ```
@@ -88,7 +91,9 @@ Inside a directory containing `ghl-app.json`, run `ghl app pull` with no app or 
 
 | File | Contents |
 |---|---|
-| `ghl-app.json` | App identity/version binding plus listing, profiles, OAuth metadata, support, basic/external billing settings, and review configuration. External authentication, external configuration, MCP configuration, and custom pages are intentionally excluded. |
+| `ghl-app.json` | App identity/version binding plus listing, profiles, OAuth metadata, support, basic/external billing settings, and review configuration. External configuration, MCP configuration, and custom pages are intentionally excluded. |
+| `src/external-auth/config.json` | Complete version-scoped Basic or OAuth 2 external-auth configuration. Secret-bearing values use `${remote}` or `${env:VARIABLE_NAME}` references. |
+| `src/external-auth/HIGHLEVEL_EXTERNAL_AUTH.md` | Generated external-auth field, security, testing, and synchronization reference. |
 | `src/webhooks/ghl-webhooks.json` | Webhook URL and event subscriptions, created only when a URL or event is configured. |
 | `src/modules/workflows/actions/<action-name>.json` | One app-scoped workflow action per file. A name such as `send-contact-sync-payload.json` requires the JSON key `send_contact_sync_payload`. |
 | `src/modules/workflows/actions/code/<action-key>.<version>.js` | JavaScript source for one code-backed action version, referenced by `executionConfig.codeFile` in its action JSON. |
@@ -102,13 +107,14 @@ Inside a directory containing `ghl-app.json`, run `ghl app pull` with no app or 
 | `.ghl/workflow-actions-state.json` | Sanitized workflow-action baseline used for separate three-way conflict detection. Do not edit it. |
 | `.ghl/workflow-triggers-state.json` | Sanitized workflow-trigger baseline used for separate three-way conflict detection. Do not edit it. |
 | `.ghl/billing-state.json` | App-level subscription-plan and usage-meter baseline used for separate three-way conflict detection. Do not edit it. |
+| `.ghl/external-auth-state.json` | Redacted external-auth baseline and version-lineage capability locks. Do not edit it. |
 | `AGENTS.md` | GHL workspace rules and a complete command reference for AI coding agents. |
 | `CLAUDE.md` | The same workspace rules and command reference, addressed specifically to Claude Code. |
 | `HIGHLEVEL_APP.md` | Structural guide covering workspace files, app configuration sections, exclusions, version binding, and the local synchronization workflow. |
 
-These files contain configuration, not credentials. Client secrets, SSO keys, review test credentials, password defaults, and secret-bearing external-auth values are never exported. Custom workflow action and trigger headers are exported as `${remote}` so a later push preserves the portal value without exposing it; use `${env:VARIABLE_NAME}` to inject a replacement at push time. Standard content-negotiation headers such as `Content-Type` may remain literal. Server-owned analytics, timestamps, install counts, and review workflow state are also excluded. The manifests use schema version `1`, deterministic formatting, atomic writes, and mode 0644; CLI baselines use mode 0600.
+These files contain configuration, not credentials. Client secrets, SSO keys, review test credentials, password defaults, and secret-bearing external-auth values are never exported in plaintext. External-auth and custom workflow headers use `${remote}` so a later push preserves the portal value without exposing it; use `${env:VARIABLE_NAME}` to inject a replacement at push time. Standard content-negotiation headers such as `Content-Type` may remain literal. Server-owned analytics, timestamps, install counts, and review workflow state are also excluded. The manifests use schema version `1`, deterministic formatting, atomic writes, and mode 0644; CLI baselines use mode 0600.
 
-The portal is the source of truth. `ghl app diff` performs a three-way comparison between the last pull, local JSON, and the current portal version. `ghl app push` first runs local validation, aborts before authentication when validation fails, rejects same-field conflicts, merges non-overlapping set changes, preserves other portal changes, and calls only the API sections owning local changes. Scope or webhook edits read only the current catalogs required to validate those edits before mutation. Billing resources use the independent `ghl app billing validate`, `diff`, and `push` lifecycle so app-profile and billing APIs are never called unnecessarily. After a successful push the CLI verifies remote fields and refreshes the corresponding manifests and baseline. Use `--dry-run` to see an API plan without changing remote or local state.
+The portal is the source of truth. `ghl app diff` performs a three-way comparison between the last pull, local JSON, and the current portal version. `ghl app push` first runs local validation, aborts before authentication when validation fails, rejects same-field conflicts, merges non-overlapping set changes, preserves other portal changes, and calls only the API sections owning local changes. Scope or webhook edits read only the current catalogs required to validate those edits before mutation. Billing and external-auth resources use independent `validate`, `diff`, and `push` lifecycles so unrelated APIs are never called unnecessarily. After a successful push the CLI verifies remote fields and refreshes the corresponding manifests and baseline. Use `--dry-run` to see an API plan without changing remote or local state.
 
 Webhook mutation shortcuts follow the same workspace contract: `url`, `subscribe`, and `unsubscribe` require an app folder (or `--directory`), validate the complete change, write `src/webhooks/ghl-webhooks.json` first, update only webhook settings remotely, verify the result, and then advance the baseline. A confirmed API rejection restores the JSON. If a lost response leaves the remote result uncertain, the desired JSON remains as a visible pending change for `ghl app diff` and `ghl app push`; the CLI never hides an unverified mutation by blindly rolling it back.
 
@@ -202,6 +208,19 @@ All section editors are interactive with current values prefilled, or fully flag
 | `ghl app webhook events` | List events your current scopes unlock. |
 | `ghl app webhook subscribe [events...]` | Update local JSON first, then subscribe to scope-compatible events (searchable picker when omitted). `--url` sets a per-event override URL. |
 | `ghl app webhook unsubscribe [events...]` | Update local JSON first, then unsubscribe (picker of current subscriptions when omitted). |
+
+### External authentication
+
+External authentication uses `src/external-auth/config.json` to represent all three portal steps: choose Basic or OAuth 2, configure every request/capability/identity option, and test the saved provider flow. Pull redacts OAuth client credentials, password defaults, authorization headers, and sensitive request values to `${remote}`. Commit-safe replacements use `${env:VARIABLE_NAME}` and are resolved only in memory during push.
+
+| Command | Description |
+|---|---|
+| `ghl app external-auth` | Show the remote configuration in redacted form, including authentication type, installation fields, capabilities, and version-lineage locks. |
+| `ghl app external-auth pull` | Refresh `config.json`, its generated guide, and the private redacted conflict baseline. |
+| `ghl app external-auth validate` | Validate schema, conditional fields, code syntax/size, templates, secret references, public URLs, XSS, header injection, and capability locks without authentication. |
+| `ghl app external-auth diff` | Three-way comparison of local, last-pull, and portal configuration with exact changed paths and conflicts. |
+| `ghl app external-auth push` | Resolve secret references in memory, update only a draft version, refetch, verify, and advance the redacted baseline. Supports `--dry-run`. |
+| `ghl app external-auth test` | Run the saved Basic verification request or OAuth 2 browser flow. Use `--input-file` for field values and `--no-browser` to print the authorization URL; returned credentials are redacted. |
 
 ### Workflow actions
 

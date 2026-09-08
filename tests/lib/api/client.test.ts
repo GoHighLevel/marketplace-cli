@@ -930,6 +930,43 @@ describe('ApiClient', () => {
     expect(fetchMock.mock.calls[0][1].method).toBe('DELETE')
   })
 
+  it('uses OAuth service routes for the external-auth lifecycle', async () => {
+    await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
+    const configResponse = { hasExternalAuth: false, externalAuthConfig: { type: 'basic' } }
+    const testUrlResponse = {
+      url: 'https://provider.example.com/authorize',
+      state: Buffer.from(JSON.stringify({ uuid: 'e1f345b9-4a73-44c0-9063-616d02e5f8d1' })).toString('base64url')
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(configResponse))
+      .mockResolvedValueOnce(jsonResponse({ saved: true }))
+      .mockResolvedValueOnce(jsonResponse({ response: { responseData: { ok: true } } }))
+      .mockResolvedValueOnce(jsonResponse(testUrlResponse))
+      .mockResolvedValueOnce(jsonResponse({ status: 'completed', result: { ok: true } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new ApiClient(config)
+    await client.init()
+    await expect(client.getExternalAuthConfig('app1', 'version1')).resolves.toEqual(configResponse)
+    await client.updateExternalAuthConfig('app1', 'version1', { hasExternalAuth: false })
+    await client.testExternalBasicAuth('app1', 'version1', { api_key: 'secret' })
+    await expect(client.getExternalAuthTestUrl('app1', 'version1', { region: 'us' })).resolves.toEqual(testUrlResponse)
+    await expect(client.getExternalAuthTestResult('app1', 'e1f345b9-4a73-44c0-9063-616d02e5f8d1')).resolves.toEqual({
+      status: 'completed',
+      result: { ok: true }
+    })
+
+    expect(fetchMock.mock.calls.map(call => String(call[0]))).toEqual([
+      'https://oauth.test/clients/app1/authentication/config/version1',
+      'https://oauth.test/clients/app1/authentication/version1',
+      'https://oauth.test/clients/app1/authentication/version1/test',
+      'https://oauth.test/clients/app1/authentication/version1/oauth2/test/url?userData=%7B%22region%22%3A%22us%22%7D',
+      'https://oauth.test/clients/app1/authentication/oauth2/test/result/e1f345b9-4a73-44c0-9063-616d02e5f8d1'
+    ])
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ hasExternalAuth: false })
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ userData: { api_key: 'secret' } })
+  })
+
   it('sends deprecation notes using the backend DTO field name', async () => {
     await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ success: true }))

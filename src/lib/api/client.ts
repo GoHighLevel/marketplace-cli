@@ -4,6 +4,7 @@ import { CLI_VERSION_HEADERS } from './version-header.js'
 import { isExpired, loadActiveSession, refreshSession } from '../auth/session.js'
 import { saveProfile, StoredProfile } from '../auth/token-store.js'
 import { isDeveloperTeamId } from '../shared/validation.js'
+import type { ExternalAuthApiResponse, ExternalAuthUpdateBody } from '../external-auth/manifest.js'
 
 export { isDeveloperTeamId } from '../shared/validation.js'
 
@@ -1484,6 +1485,78 @@ export class ApiClient {
   async requestSecurityReview(appId: string): Promise<unknown> {
     await this.ensureTeam()
     return this.request<unknown>(`/app/${appId}/securityReview`, { method: 'POST', body: {} })
+  }
+
+  async getExternalAuthConfig(appId: string, versionId: string): Promise<ExternalAuthApiResponse> {
+    await this.ensureTeam()
+    const response = await this.request<unknown>(`/clients/${appId}/authentication/config/${versionId}`, {
+      baseUrl: this.config.oauthUrl
+    })
+    if (
+      !isRecord(response) ||
+      (response.hasExternalAuth !== undefined && typeof response.hasExternalAuth !== 'boolean') ||
+      (response.updateAllRefreshTokens !== undefined && typeof response.updateAllRefreshTokens !== 'boolean') ||
+      (response.externalAuthConfig !== undefined && !isRecord(response.externalAuthConfig))
+    ) {
+      throw new Error('External-auth configuration API returned an unexpected response.')
+    }
+    return response as ExternalAuthApiResponse
+  }
+
+  async updateExternalAuthConfig(
+    appId: string,
+    versionId: string,
+    body: ExternalAuthUpdateBody | Record<string, unknown>
+  ): Promise<unknown> {
+    await this.ensureTeam()
+    return this.request<unknown>(`/clients/${appId}/authentication/${versionId}`, {
+      method: 'PUT',
+      body,
+      baseUrl: this.config.oauthUrl
+    })
+  }
+
+  async testExternalBasicAuth(
+    appId: string,
+    versionId: string,
+    userData: Record<string, string>
+  ): Promise<unknown> {
+    await this.ensureTeam()
+    return this.request<unknown>(`/clients/${appId}/authentication/${versionId}/test`, {
+      method: 'POST',
+      body: { userData },
+      baseUrl: this.config.oauthUrl
+    })
+  }
+
+  async getExternalAuthTestUrl(
+    appId: string,
+    versionId: string,
+    userData: Record<string, string>
+  ): Promise<{ state: string; url: string; codeModeLogs?: unknown[] }> {
+    await this.ensureTeam()
+    const response = await this.request<unknown>(`/clients/${appId}/authentication/${versionId}/oauth2/test/url`, {
+      query: Object.keys(userData).length > 0 ? { userData: JSON.stringify(userData) } : undefined,
+      baseUrl: this.config.oauthUrl
+    })
+    if (!isRecord(response) || typeof response.url !== 'string' || !response.url || typeof response.state !== 'string') {
+      throw new Error('External OAuth test URL API returned an unexpected response.')
+    }
+    if (response.codeModeLogs !== undefined && !Array.isArray(response.codeModeLogs)) {
+      throw new Error('External OAuth test URL API returned an unexpected response.')
+    }
+    return response as { state: string; url: string; codeModeLogs?: unknown[] }
+  }
+
+  async getExternalAuthTestResult(appId: string, testId: string): Promise<unknown> {
+    await this.ensureTeam()
+    const response = await this.request<unknown>(`/clients/${appId}/authentication/oauth2/test/result/${testId}`, {
+      baseUrl: this.config.oauthUrl
+    })
+    if (!isRecord(response) || typeof response.status !== 'string') {
+      throw new Error('External OAuth test result API returned an unexpected response.')
+    }
+    return response
   }
 
   async getBillingPlans(appId: string): Promise<BillingPlan[]> {

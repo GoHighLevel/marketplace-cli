@@ -2,6 +2,7 @@ import path from 'node:path'
 
 import { AppVersion, VersionListItem } from '../api/client.js'
 import type { BillingWorkspaceResult } from '../billing/workspace.js'
+import type { ExternalAuthWorkspaceResult } from '../external-auth/workspace.js'
 import { isRecord } from '../api/response.js'
 import { requireRegularFile } from './local-workspace.js'
 import { APP_MANIFEST_FILENAME, AppWorkspaceResult } from './workspace.js'
@@ -26,14 +27,21 @@ export function buildPullFilesOutput(options: {
   actions?: WorkflowActionsWorkspaceResult
   triggers?: WorkflowTriggersWorkspaceResult
   billing?: BillingWorkspaceResult
+  externalAuth?: ExternalAuthWorkspaceResult
 }): Record<string, unknown> {
   const { guideFile: actionGuideFile, stateFile: workflowActionStateFile, ...actionFiles } = options.actions ?? {}
   const { guideFile: billingGuideFile, stateFile: billingStateFile, ...billingFiles } = options.billing ?? {}
+  const {
+    guideFile: externalAuthGuideFile,
+    stateFile: externalAuthStateFile,
+    ...externalAuthFiles
+  } = options.externalAuth ?? {}
   return {
     ...options.app,
     ...(options.actions ? { ...actionFiles, actionGuideFile, workflowActionStateFile } : {}),
     ...(options.triggers ?? {}),
-    ...(options.billing ? { ...billingFiles, billingGuideFile, billingStateFile } : {})
+    ...(options.billing ? { ...billingFiles, billingGuideFile, billingStateFile } : {}),
+    ...(options.externalAuth ? { ...externalAuthFiles, externalAuthGuideFile, externalAuthStateFile } : {})
   }
 }
 

@@ -146,6 +146,10 @@ describe('buildPullFilesOutput', () => {
       billing: {
         billingDirectory: 'billing', subscriptionFile: 'subscription.json', usageFile: 'usage-based.json',
         guideFile: 'billing.md', stateFile: '.ghl/billing-state.json'
+      },
+      externalAuth: {
+        directory: root, configFile: 'src/external-auth/config.json', guideFile: 'src/external-auth/HIGHLEVEL_EXTERNAL_AUTH.md',
+        stateFile: '.ghl/external-auth-state.json'
       }
     })).toMatchObject({
       stateFile: '.ghl/state.json',
@@ -154,7 +158,9 @@ describe('buildPullFilesOutput', () => {
       triggerGuideFile: 'triggers.md',
       triggerStateFile: '.ghl/workflow-triggers-state.json',
       billingGuideFile: 'billing.md',
-      billingStateFile: '.ghl/billing-state.json'
+      billingStateFile: '.ghl/billing-state.json',
+      externalAuthGuideFile: 'src/external-auth/HIGHLEVEL_EXTERNAL_AUTH.md',
+      externalAuthStateFile: '.ghl/external-auth-state.json'
     })
   })
 })

@@ -76,6 +76,9 @@
       "app:webhook": {
         "description": "Webhook URL and event subscriptions (events unlock based on scopes)"
       },
+      "app:external-auth": {
+        "description": "JSON-first Basic and OAuth 2 provider authentication configuration and testing"
+      },
       "app:actions": {
         "description": "JSON-first workflow actions, action versions, validation, and synchronization"
       },

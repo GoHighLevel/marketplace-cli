@@ -20,6 +20,7 @@ const EXPECTED_DOMAINS = [
   'auth',
   'billing',
   'config',
+  'external-auth',
   'secrets',
   'shared',
   'webhooks',
@@ -32,6 +33,7 @@ const DOMAIN_FILENAME_RULES = [
   { directory: 'auth', redundantPrefixes: ['auth'] },
   { directory: 'billing', redundantPrefixes: ['billing'] },
   { directory: 'config', redundantPrefixes: ['config'] },
+  { directory: 'external-auth', redundantPrefixes: ['external-auth'] },
   { directory: 'secrets', redundantPrefixes: ['secret', 'secrets'] },
   { directory: 'webhooks', redundantPrefixes: ['webhook', 'webhooks'] },
   {

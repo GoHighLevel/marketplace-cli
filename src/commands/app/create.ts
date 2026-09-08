@@ -9,6 +9,8 @@ import {
   emptyBillingUsageManifest
 } from '../../lib/billing/manifest.js'
 import { writeBillingWorkspace } from '../../lib/billing/workspace.js'
+import { buildExternalAuthManifest } from '../../lib/external-auth/manifest.js'
+import { writeExternalAuthWorkspace } from '../../lib/external-auth/workspace.js'
 import { getConfig } from '../../lib/config/environment.js'
 import { buildCreateAppBody, CreateAppAnswers, validateAppName } from '../../lib/app/create.js'
 import { input, isPromptCancel, select } from '../../lib/shared/prompts.js'
@@ -102,7 +104,11 @@ export default class AppCreate extends Command {
               emptyBillingSubscriptionManifest(selected.appId),
               emptyBillingUsageManifest(selected.appId)
             )
-            return appFiles
+            const externalAuthFiles = await writeExternalAuthWorkspace(
+              directory,
+              buildExternalAuthManifest(selected.appId, selected.versionId, { hasExternalAuth: false })
+            )
+            return { ...appFiles, externalAuth: externalAuthFiles }
           },
           { quiet: this.jsonEnabled() }
         )

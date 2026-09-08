@@ -21,6 +21,11 @@ import {
 import { isPromptCancel } from '../../lib/shared/prompts.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { collectWorkspaceDirectory } from '../../lib/shared/workspace-input.js'
+import { fetchExternalAuthSnapshot, resolveExternalAuthLocks } from '../../lib/external-auth/service.js'
+import {
+  assertExternalAuthWorkspaceWritable,
+  writeExternalAuthWorkspace
+} from '../../lib/external-auth/workspace.js'
 import { fetchWorkflowActionsManifest } from '../../lib/workflows/actions/service.js'
 import { validateWorkflowActionsManifest } from '../../lib/workflows/actions/schema.js'
 import {
@@ -91,13 +96,19 @@ export default class AppPull extends Command {
           }
           const versions = await client.listVersions(selected.appId)
           const versionId = resolveVersionId(versions, flags.version, selected.versionId)
-          const [version, workflowActions, workflowTriggers, billing] = await Promise.all([
+          const [version, workflowActions, workflowTriggers, billing, externalAuth] = await Promise.all([
             loadAppVersionForExport(client, selected.appId, versionId),
             fetchWorkflowActionsManifest(client, selected.appId),
             fetchWorkflowTriggersManifest(client, selected.appId),
-            fetchBillingSnapshot(client, selected.appId)
+            fetchBillingSnapshot(client, selected.appId),
+            fetchExternalAuthSnapshot(client, selected.appId, versionId)
           ])
-          return { selected, version, workflowActions, workflowTriggers, billing }
+          const externalAuthLocks = await resolveExternalAuthLocks(client, selected.appId, {
+            versionId,
+            response: externalAuth.raw,
+            versions
+          })
+          return { selected, version, workflowActions, workflowTriggers, billing, externalAuth, externalAuthLocks }
         },
         { quiet: this.jsonEnabled() }
       )
@@ -130,7 +141,8 @@ export default class AppPull extends Command {
             directory,
             pulled.billing.subscriptions,
             pulled.billing.usage
-          )
+          ),
+          assertExternalAuthWorkspaceWritable(directory, pulled.externalAuth.manifest)
         ])
       }
       const workspace = await withSpinner(
@@ -144,6 +156,12 @@ export default class AppPull extends Command {
             pulled.billing.subscriptions,
             pulled.billing.usage
           )
+          const externalAuthFiles = await writeExternalAuthWorkspace(
+            directory,
+            pulled.externalAuth.manifest,
+            pulled.externalAuth.manifest,
+            pulled.externalAuthLocks
+          )
           await synchronizeUsageBillingSummary(directory, pulled.billing.usage.meters.length > 0)
           return buildPullFilesOutput({
             app: appFiles,
@@ -151,7 +169,8 @@ export default class AppPull extends Command {
             ...(pulled.workflowTriggers.triggers.length > 0 ? { triggers: triggerFiles } : {}),
             ...(pulled.billing.subscriptions.plans.length > 0 || pulled.billing.usage.meters.length > 0
               ? { billing: billingFiles }
-              : {})
+              : {}),
+            externalAuth: externalAuthFiles
           })
         },
         { quiet: this.jsonEnabled() }
@@ -188,6 +207,7 @@ export default class AppPull extends Command {
       if (pulled.workflowTriggers.triggers.length > 0) this.log(`  Triggers: ${workspace.triggerDirectory}`)
       if (pulled.billing.subscriptions.plans.length > 0) this.log(`  Plans:    ${workspace.subscriptionFile}`)
       if (pulled.billing.usage.meters.length > 0) this.log(`  Meters:   ${workspace.usageFile}`)
+      this.log(`  Ext auth: ${workspace.configFile}`)
       this.log(`Selected version ${selected.versionId}; subsequent commands will target it.`)
       return
     } catch (error) {

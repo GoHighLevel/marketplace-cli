@@ -16,6 +16,8 @@ import { planWorkflowActionsSync } from '../../lib/workflows/actions/sync.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../../lib/workflows/actions/workspace.js'
 import { planWorkflowTriggersSync } from '../../lib/workflows/triggers/sync.js'
 import { loadWorkflowTriggersWorkspaceIfPresent } from '../../lib/workflows/triggers/workspace.js'
+import { planExternalAuthSync } from '../../lib/external-auth/sync.js'
+import { loadExternalAuthWorkspaceIfPresent } from '../../lib/external-auth/workspace.js'
 
 export default class AppPush extends Command {
   static description = 'Validate and push changed local app sections to the developer portal'
@@ -36,10 +38,11 @@ export default class AppPush extends Command {
   async run(): Promise<unknown> {
     const { flags } = await this.parse(AppPush)
     try {
-      const [workflowActions, workflowTriggers, billing] = await Promise.all([
+      const [workflowActions, workflowTriggers, billing, externalAuth] = await Promise.all([
         loadWorkflowActionsWorkspaceIfPresent(flags.directory),
         loadWorkflowTriggersWorkspaceIfPresent(flags.directory),
-        loadBillingWorkspaceIfPresent(flags.directory)
+        loadBillingWorkspaceIfPresent(flags.directory),
+        loadExternalAuthWorkspaceIfPresent(flags.directory)
       ])
       if (workflowActions) {
         const actionPlan = planWorkflowActionsSync(
@@ -71,6 +74,20 @@ export default class AppPush extends Command {
         const billingErrors = await validateLocalBillingIntent(billing)
         if (billingErrors.length > 0) {
           throw new Error(`Billing configuration is invalid:\n- ${billingErrors.join('\n- ')}`)
+        }
+      }
+      if (externalAuth) {
+        const externalAuthPlan = planExternalAuthSync(
+          externalAuth.state.baseline,
+          externalAuth.manifest,
+          externalAuth.state.baseline,
+          { status: externalAuth.app.status }
+        )
+        if (externalAuthPlan.localChanges.length > 0) {
+          throw new Error(
+            'Local external-auth changes are pending. Run `ghl app external-auth validate`, ' +
+              '`ghl app external-auth diff`, and `ghl app external-auth push` before pushing app configuration.'
+          )
         }
       }
       const context = await withSpinner(

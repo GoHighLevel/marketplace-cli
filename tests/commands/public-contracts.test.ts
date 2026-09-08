@@ -11,6 +11,8 @@ import AppActionsValidate from '../../src/commands/app/actions/validate.js'
 import AppBillingValidate from '../../src/commands/app/billing/validate.js'
 import AppCreate from '../../src/commands/app/create.js'
 import AppDiff from '../../src/commands/app/diff.js'
+import AppExternalAuthTest from '../../src/commands/app/external-auth/test.js'
+import AppExternalAuthValidate from '../../src/commands/app/external-auth/validate.js'
 import AppKeysCreate from '../../src/commands/app/keys/create.js'
 import AppPublish from '../../src/commands/app/publish.js'
 import AppPull from '../../src/commands/app/pull.js'
@@ -266,6 +268,27 @@ describe('public command contracts', () => {
     const invalid = await runCommand(AppBillingValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)
     expect(invalid.stderr).toMatch(/billing|ghl-app\.json/i)
+    expect(invalid.stderr).not.toMatch(/not logged in/i)
+  })
+
+  it('exposes the complete external-auth lifecycle and validates local input before authentication', async () => {
+    expect([...commandIds]).toEqual(expect.arrayContaining([
+      'app:external-auth',
+      'app:external-auth:pull',
+      'app:external-auth:validate',
+      'app:external-auth:diff',
+      'app:external-auth:push',
+      'app:external-auth:test'
+    ]))
+    expect(AppExternalAuthTest.flags).toEqual(expect.objectContaining({
+      directory: expect.any(Object),
+      'input-file': expect.any(Object),
+      'no-browser': expect.any(Object)
+    }))
+
+    const invalid = await runCommand(AppExternalAuthValidate, ['--directory', configDir])
+    expect(invalid.exitCode).not.toBe(0)
+    expect(invalid.stderr).toMatch(/external auth|ghl-app\.json/i)
     expect(invalid.stderr).not.toMatch(/not logged in/i)
   })
 

@@ -21,12 +21,16 @@ This directory is the local, code-friendly representation of one HighLevel marke
 │   ├── state.json
 │   ├── workflow-actions-state.json
 │   ├── workflow-triggers-state.json
-│   └── billing-state.json
+│   ├── billing-state.json
+│   └── external-auth-state.json
 └── src/
     ├── billing/
     │   ├── HIGHLEVEL_BILLING.md
     │   ├── subscription.json
     │   └── usage-based.json
+    ├── external-auth/
+    │   ├── HIGHLEVEL_EXTERNAL_AUTH.md
+    │   └── config.json
     ├── webhooks/
     │   └── ghl-webhooks.json
     └── modules/
@@ -41,7 +45,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
                 └── <trigger-name>.json
 \`\`\`
 
-- The \`billing\`, \`webhooks\`, \`actions\`, \`triggers\`, and action \`code\` directories are created only when their corresponding configuration exists.
+- The \`webhooks\`, \`actions\`, \`triggers\`, billing source, and action \`code\` directories are created only when their corresponding configuration exists. The external-auth directory is always scaffolded so authentication can be configured locally.
 - **\`ghl-app.json\`**: Supported app metadata and the app/version binding used by local commands.
 - **\`src/webhooks/ghl-webhooks.json\`**: Configured app-level webhook URL and event subscriptions, kept separate from app metadata.
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
@@ -53,9 +57,12 @@ This directory is the local, code-friendly representation of one HighLevel marke
 - **\`src/billing/subscription.json\`**: App-level marketplace plans; amounts and durations become immutable after creation.
 - **\`src/billing/usage-based.json\`**: App-level usage meters and one or more non-overlapping price tiers.
 - **\`src/billing/HIGHLEVEL_BILLING.md\`**: Complete billing field, validation, versioning, and synchronization reference.
+- **\`src/external-auth/config.json\`**: Complete version-scoped Basic or OAuth 2 provider authentication with secret references instead of plaintext credentials.
+- **\`src/external-auth/HIGHLEVEL_EXTERNAL_AUTH.md\`**: External-auth fields, templates, security rules, testing, and synchronization reference.
 - **\`.ghl/workflow-actions-state.json\`**: Separate last-pull baseline for workflow-action conflict detection. It is CLI-managed and must not be edited.
 - **\`.ghl/workflow-triggers-state.json\`**: Separate last-pull baseline for workflow-trigger conflict detection. It is CLI-managed and must not be edited.
 - **\`.ghl/billing-state.json\`**: Separate app-level subscription and meter baseline. It is CLI-managed and must not be edited.
+- **\`.ghl/external-auth-state.json\`**: Redacted external-auth baseline and version-lineage capability locks. It is CLI-managed and must not be edited.
 - **\`AGENTS.md\`**: Workspace rules and the complete GHL CLI reference for AI coding agents.
 - **\`CLAUDE.md\`**: The same operational guidance addressed specifically to Claude Code.
 - **\`HIGHLEVEL_APP.md\`**: This structural reference for developers and AI agents.
@@ -107,6 +114,12 @@ These values are CLI-managed. Do not edit them to point a workspace at another a
 
 The \`webhook url\`, \`subscribe\`, and \`unsubscribe\` shortcuts require this workspace. They update the JSON atomically before the API call, validate and synchronize only webhook settings, verify the remote result, and then advance the baseline. A confirmed remote rejection restores the JSON; an uncertain result remains visible as a pending local change for \`app diff\` and \`app push\`.
 
+### External authentication
+
+\`src/external-auth/config.json\` represents the portal's complete three-step external-auth flow: select Basic or OAuth 2, configure installation fields and provider requests, then exercise the saved configuration. OAuth 2 includes client details, scopes, PKCE, authorization/access/refresh/long-lived/test/user-info requests, identity mapping, multi-auth, Who Am I, refresh propagation, and Code Mode replacements. Basic includes verification, optional account lookup, identity mapping, and the same capability controls.
+
+Pull replaces credentials and secret-bearing request values with \`\${remote}\`; use \`\${env:VARIABLE_NAME}\` for replacements. Validation rejects plaintext secret slots, unsafe templates, XSS-bearing display text, header injection, internal service headers, non-public URLs, invalid JavaScript, and capability reversals. The dedicated validate/diff/push commands use a redacted three-way baseline, and test diagnostics redact submitted and returned credentials.
+
 ### Workflow actions
 
 Each JSON file directly under \`src/modules/workflows/actions/\` contains one action and the fields exposed by the workflow-action UI: action information, input fields and conditional option sources, response variables and schema, API or code execution, payload customization, pause behavior, and branching configuration.
@@ -135,7 +148,7 @@ Trigger callback, external-option, and dynamic-filter headers use the same \`\${
 
 ## Intentionally excluded configuration
 
-The local app model currently excludes external authentication, external configuration, MCP configuration, custom pages, secrets, credentials, install analytics, timestamps, and marketplace review workflow state. Manage excluded portal features through their dedicated CLI command when one exists or through the developer portal.
+The local app model in \`ghl-app.json\` excludes external authentication because it lives in its dedicated module. External configuration, MCP configuration, custom pages, secrets, credentials, install analytics, timestamps, and marketplace review workflow state remain excluded. Manage excluded portal features through their dedicated CLI command when one exists or through the developer portal.
 
 ## Version model
 
@@ -144,7 +157,7 @@ An app can have multiple versions in the portal, but one local workspace represe
 ## Local workflow
 
 1. Run \`ghl app create\` for a new app or \`ghl app pull <appId>\` for an existing app.
-2. Edit \`ghl-app.json\`, configured webhook/workflow files, and any billing files under \`src/billing/\`.
+2. Edit \`ghl-app.json\` and the applicable webhook, workflow, billing, or external-auth files under \`src/\`.
 3. Run \`ghl app validate\` for local schema and conditional-field validation.
 4. Run \`ghl app diff\` to inspect local changes, portal changes, conflicts, and required API sections.
 5. Run \`ghl app push\` to validate again and push only supported changed sections.
@@ -154,6 +167,8 @@ An app can have multiple versions in the portal, but one local workspace represe
 For workflow actions, run \`ghl app actions validate\`, \`ghl app actions diff\`, and \`ghl app actions push\`. Use \`ghl app actions publish <key>\` only after the action push is clean.
 
 For workflow triggers, run \`ghl app triggers validate\`, \`ghl app triggers diff\`, and \`ghl app triggers push\`. Use \`ghl app triggers publish <key>\` only after the trigger push is clean.
+
+For external authentication, run \`ghl app external-auth validate\`, \`ghl app external-auth diff\`, and \`ghl app external-auth push\`, then exercise the saved provider flow with \`ghl app external-auth test\`.
 
 If the same field changed locally and in the portal, push stops without overwriting either value. Pull the portal version and then reapply the intended local change.
 

@@ -8,6 +8,7 @@ import { withSpinner } from '../../lib/shared/spinner.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../../lib/workflows/actions/workspace.js'
 import { workflowTriggerPrerequisiteErrors } from '../../lib/workflows/triggers/contract.js'
 import { loadWorkflowTriggersWorkspaceIfPresent } from '../../lib/workflows/triggers/workspace.js'
+import { loadExternalAuthWorkspaceIfPresent } from '../../lib/external-auth/workspace.js'
 
 /* Maps backend readiness fields to the CLI command that fixes them. */
 const FIX_HINTS: Record<string, string> = {
@@ -25,8 +26,8 @@ const FIX_HINTS: Record<string, string> = {
   redirectUri: 'ghl app redirect add <url>',
   clientKeys: 'ghl app keys create <name>',
   mcpUrl: 'not configurable in this CLI yet; use the developer portal',
-  externalAuth: 'not configurable in this CLI yet; use the developer portal',
-  externalAuthConfig: 'not configurable in this CLI yet; use the developer portal'
+  externalAuth: 'ghl app external-auth validate',
+  externalAuthConfig: 'ghl app external-auth validate'
 }
 
 export default class AppValidate extends Command {
@@ -51,10 +52,11 @@ export default class AppValidate extends Command {
     try {
       if (!flags.remote) {
         const workspace = await loadValidatedLocalWorkspace(flags.directory)
-        const [workflowActions, workflowTriggers, billing] = await Promise.all([
+        const [workflowActions, workflowTriggers, billing, externalAuth] = await Promise.all([
           loadWorkflowActionsWorkspaceIfPresent(flags.directory),
           loadWorkflowTriggersWorkspaceIfPresent(flags.directory),
-          loadBillingWorkspaceIfPresent(flags.directory)
+          loadBillingWorkspaceIfPresent(flags.directory),
+          loadExternalAuthWorkspaceIfPresent(flags.directory)
         ])
         const triggerErrors = workflowTriggers
           ? workflowTriggerPrerequisiteErrors({
@@ -80,13 +82,17 @@ export default class AppValidate extends Command {
           workflowTriggers: workflowTriggers?.manifest.triggers.length ?? 0,
           subscriptionPlans: billing?.subscriptions.plans.length ?? 0,
           usageMeters: billing?.usage.meters.length ?? 0,
+          externalAuth: externalAuth
+            ? { enabled: externalAuth.manifest.enabled, type: externalAuth.manifest.type }
+            : null,
           errors: []
         }
         if (this.jsonEnabled()) return result
         this.log(
           `Local app configuration is valid (${workspace.validation.sections.length} app section(s), ` +
             `${result.workflowActions} workflow action(s), ${result.workflowTriggers} workflow trigger(s), ` +
-            `${result.subscriptionPlans} subscription plan(s), ${result.usageMeters} usage meter(s)).`
+            `${result.subscriptionPlans} subscription plan(s), ${result.usageMeters} usage meter(s), ` +
+            `external auth ${result.externalAuth?.enabled ? 'enabled' : 'disabled'}).`
         )
         return
       }

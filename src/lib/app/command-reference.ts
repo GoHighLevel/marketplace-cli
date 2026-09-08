@@ -217,6 +217,35 @@ const COMMAND_GROUPS: CommandGroup[] = [
     ]
   },
   {
+    title: 'External authentication',
+    commands: [
+      {
+        command: 'ghl app external-auth',
+        description: 'Show the selected app version external-auth configuration with secret-bearing values redacted.'
+      },
+      {
+        command: 'ghl app external-auth pull',
+        description: 'Refresh `src/external-auth/config.json`, its generated guide, and the private redacted conflict baseline.'
+      },
+      {
+        command: 'ghl app external-auth validate',
+        description: 'Validate the complete Basic or OAuth 2 schema, public URLs, templates, code, secret references, and capability locks locally.'
+      },
+      {
+        command: 'ghl app external-auth diff',
+        description: 'Perform a three-way comparison and show exact local/portal changes plus conflicts without exposing credentials.'
+      },
+      {
+        command: 'ghl app external-auth push',
+        description: 'Resolve secret references in memory, update a draft, refetch, verify, and advance the redacted baseline. `--dry-run` previews the update.'
+      },
+      {
+        command: 'ghl app external-auth test',
+        description: 'Run the saved Basic request or OAuth 2 browser test. Supports `--input-file` and `--no-browser`; diagnostic credentials are redacted.'
+      }
+    ]
+  },
+  {
     title: 'Workflow actions',
     commands: [
       {
@@ -504,6 +533,9 @@ ${audience}
 - \`.ghl/workflow-actions-state.json\` stores the separate action baseline and must not be edited manually.
 - \`.ghl/workflow-triggers-state.json\` stores the separate trigger baseline and must not be edited manually.
 - \`.ghl/billing-state.json\` stores app-level plan and meter baselines and must not be edited manually.
+- \`src/external-auth/config.json\` contains complete version-scoped Basic or OAuth 2 provider authentication without plaintext secrets.
+- \`src/external-auth/HIGHLEVEL_EXTERNAL_AUTH.md\` documents external-auth fields, request templates, security rules, testing, and synchronization.
+- \`.ghl/external-auth-state.json\` stores the redacted external-auth baseline and capability locks and must not be edited manually.
 - The developer portal and marketplace API are the source of truth.
 - Client secrets, SSO keys, review credentials, passwords, and other secret values must never be stored in this workspace.
 
@@ -519,6 +551,8 @@ ${audience}
 - For workflow actions, use \`ghl app actions validate\`, optionally exercise one with \`ghl app actions test <key>\`, inspect \`ghl app actions diff\`, and then run \`ghl app actions push\`.
 - For workflow triggers, use \`ghl app triggers validate\`, inspect \`ghl app triggers diff\`, and then run \`ghl app triggers push\`.
 - For plans and usage meters, use \`ghl app billing validate\`, inspect \`ghl app billing diff\`, and then run \`ghl app billing push\`.
+- Keep external authentication in \`src/external-auth/config.json\`, never in \`ghl-app.json\`; use \`\${remote}\` or \`\${env:VARIABLE_NAME}\` for every secret-bearing value.
+- For external authentication, use \`ghl app external-auth validate\`, inspect \`ghl app external-auth diff\`, then run \`ghl app external-auth push\` and \`ghl app external-auth test\`.
 - Push validates again, preserves unrelated portal changes, and calls only API sections owning local changes.
 - If the same field changed locally and in the portal, pull first and then reapply the intended local edit.
 - Run \`ghl app pull\` from this workspace to replace generated JSON with current portal values.
