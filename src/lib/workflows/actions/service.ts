@@ -1,6 +1,7 @@
 import { WorkflowActionConfig, WorkflowActionSummary } from '../../api/client.js'
 import {
   buildWorkflowActionsManifest,
+  redactWorkflowActionVersion,
   WorkflowActionsManifest,
   WorkflowActionVersion,
   toWorkflowActionUpdateBody
@@ -373,7 +374,8 @@ export function reconcileWorkflowActionsAfterPush(
 
 function sameConfig(left: WorkflowActionVersion, right: WorkflowActionVersion): boolean {
   const options = { isSecretReference: isWorkflowActionSecretReference }
-  return JSON.stringify(canonicalWorkflowConfig(left, options)) === JSON.stringify(canonicalWorkflowConfig(right, options))
+  return JSON.stringify(canonicalWorkflowConfig(redactWorkflowActionVersion(left), options)) ===
+    JSON.stringify(canonicalWorkflowConfig(redactWorkflowActionVersion(right), options))
 }
 
 export function verifyWorkflowActionsApplied(

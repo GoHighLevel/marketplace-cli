@@ -217,6 +217,21 @@ describe('workflow action manifests', () => {
     expect(body).not.toHaveProperty('version')
   })
 
+  it('omits API-only payload fields from CODE update bodies', () => {
+    const body = toWorkflowActionUpdateBody({
+      version: '1.0',
+      status: 'draft',
+      info: { name: 'Run code' },
+      executionConfig: { type: 'CODE', code: 'return {}' },
+      payloadCustomizationType: 'default',
+      customizedPayload: {}
+    })
+
+    expect(body.executionConfig).toEqual({ type: 'CODE', code: 'return {}' })
+    expect(body).not.toHaveProperty('payloadCustomizationType')
+    expect(body).not.toHaveProperty('customizedPayload')
+  })
+
   it('redacts and restores nested request headers without relying on array order', () => {
     const remote = {
       templateId: 'action-1',

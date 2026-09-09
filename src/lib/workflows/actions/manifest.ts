@@ -332,8 +332,11 @@ export function toWorkflowActionUpdateBody(
   current?: WorkflowActionVersion,
   environment: NodeJS.ProcessEnv = process.env
 ): WorkflowActionUpdateBody {
-  const { version: _version, ...body } = clone(desired)
-  const currentBody = current ? clone(current) : undefined
+  const normalizedDesired = toVersion(desired as unknown as Record<string, unknown>, false)
+  const { version: _version, ...body } = normalizedDesired
+  const currentBody = current
+    ? toVersion(current as unknown as Record<string, unknown>, false)
+    : undefined
   hydrateWorkflowHeaders(body, currentBody, environment, 'action')
   return body
 }

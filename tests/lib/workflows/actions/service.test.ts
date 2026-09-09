@@ -462,4 +462,45 @@ describe('workflow action service orchestration', () => {
 
     expect(verifyWorkflowActionsApplied(plan, remote)).toEqual([])
   })
+
+  it('treats API-only payload defaults omitted from CODE actions as a successful create', () => {
+    const plan: WorkflowActionsSyncPlan = {
+      appId: 'app-1',
+      localChanges: ['actions.run_code'],
+      remoteChanges: [],
+      conflicts: [],
+      errors: [],
+      operations: [{
+        type: 'create',
+        key: 'run_code',
+        desired: {
+          key: 'run_code',
+          versions: [{
+            version: '1.0',
+            status: 'draft',
+            info: { name: 'Run code' },
+            executionConfig: { type: 'CODE', code: 'return {}' },
+            payloadCustomizationType: 'default',
+            customizedPayload: {}
+          }]
+        }
+      }]
+    }
+    const remote = {
+      schemaVersion: 1 as const,
+      appId: 'app-1',
+      actions: [{
+        templateId: 'template-1',
+        key: 'run_code',
+        versions: [{
+          version: '1.0',
+          status: 'draft' as const,
+          info: { name: 'Run code' },
+          executionConfig: { type: 'CODE' as const, code: 'return {}' }
+        }]
+      }]
+    }
+
+    expect(verifyWorkflowActionsApplied(plan, remote)).toEqual([])
+  })
 })
