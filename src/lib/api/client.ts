@@ -287,8 +287,14 @@ function hasOptionalStringFields(value: Record<string, unknown>, fields: string[
   )
 }
 
-function hasOptionalBooleanFields(value: Record<string, unknown>, fields: string[]): boolean {
-  return fields.every(field => value[field] === undefined || typeof value[field] === 'boolean')
+function hasOptionalBooleanFields(
+  value: Record<string, unknown>,
+  fields: string[],
+  allowNull = false
+): boolean {
+  return fields.every(
+    field => value[field] === undefined || (allowNull && value[field] === null) || typeof value[field] === 'boolean'
+  )
 }
 
 function hasOptionalFiniteNumberFields(
@@ -394,7 +400,7 @@ function isAppVersion(value: unknown): value is AppVersion {
       'isWhiteLabelFriendly',
       'isAgencyBulkInstallEnabled',
       'hasSubAccountProfile'
-    ]) ||
+    ], true) ||
     !hasOptionalFiniteNumberFields(value, ['freeTrialDuration', 'oneTimePrice'], true) ||
     !hasOptionalStringArrayFields(value, [
       'subcategory',
@@ -488,8 +494,12 @@ function isAppVersion(value: unknown): value is AppVersion {
 }
 
 function normalizeAppVersion(value: unknown): AppVersion | undefined {
-  if (!isAppVersion(value)) return undefined
-  const record = value as AppVersion & Record<string, unknown>
+  const normalizedValue =
+    isRecord(value) && typeof value.subcategory === 'string'
+      ? { ...value, subcategory: [value.subcategory] }
+      : value
+  if (!isAppVersion(normalizedValue)) return undefined
+  const record = normalizedValue as AppVersion & Record<string, unknown>
   const nestedValue = record.oAuthClient
   const nested = nestedValue == null ? [] : Array.isArray(nestedValue) ? nestedValue : [nestedValue]
   if (
@@ -505,7 +515,7 @@ function normalizeAppVersion(value: unknown): AppVersion | undefined {
   }
 
   const sources = nested as Record<string, unknown>[]
-  const keys = [...(normalizeClientKeys(value.clientKeys) ?? [])]
+  const keys = [...(normalizeClientKeys(normalizedValue.clientKeys) ?? [])]
   const seen = new Set(keys.map(key => key.id))
   for (const source of sources) {
     for (const key of normalizeClientKeys(source.clientKeys) ?? []) {
@@ -517,17 +527,23 @@ function normalizeAppVersion(value: unknown): AppVersion | undefined {
   }
 
   const nestedDefaults = sources.map(source => normalizeDefaults(source.defaults)).find(Boolean)
-  const defaults = nestedDefaults ?? normalizeDefaults(value.defaults)
+  const defaults = nestedDefaults ?? normalizeDefaults(normalizedValue.defaults)
   const redirectsSource = sources.find(source => source.redirectUris != null)
   const { oAuthClient: _oAuthClient, ...rawBase } = record
   const base = Object.fromEntries(Object.entries(rawBase).filter(([, field]) => field !== null))
   const legacyBillingType =
-    value.isPaidApp === undefined ? undefined : value.isPaidApp ? (value.isFreemium ? 'freemium' : 'paid') : 'free'
-  const billingType = value.billingType ?? legacyBillingType
+    normalizedValue.isPaidApp == null
+      ? undefined
+      : normalizedValue.isPaidApp
+        ? normalizedValue.isFreemium
+          ? 'freemium'
+          : 'paid'
+        : 'free'
+  const billingType = normalizedValue.billingType ?? legacyBillingType
   return {
     ...base,
     ...(billingType ? { billingType } : {}),
-    ...(keys.length > 0 || value.clientKeys !== undefined ? { clientKeys: keys } : {}),
+    ...(keys.length > 0 || normalizedValue.clientKeys !== undefined ? { clientKeys: keys } : {}),
     ...(defaults ? { defaults } : {}),
     ...(redirectsSource ? { redirectUris: redirectsSource.redirectUris as string[] } : {})
   } as AppVersion

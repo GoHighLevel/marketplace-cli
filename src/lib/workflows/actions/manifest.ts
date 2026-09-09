@@ -102,7 +102,7 @@ export interface WorkflowActionBranch {
   id: string
   branchName: string
   conditionType: 'default' | 'user-defined'
-  fields: Record<string, unknown>
+  fields?: Record<string, unknown>
   meta?: Record<string, unknown>
 }
 
@@ -230,7 +230,15 @@ function toExecutionConfig(value: unknown): WorkflowActionExecutionConfig | unde
   if (!isRecord(value)) return undefined
   const config = copyKnown(value, ['type', 'url', 'method', 'headers', 'code', 'pauseExecution'])
   if (config.type === undefined && typeof config.url === 'string' && config.url) config.type = 'API'
-  if (config.type === 'API' && config.method === undefined) config.method = 'POST'
+  if (config.type === 'API') {
+    delete config.code
+    if (Array.isArray(config.headers) && config.headers.length === 0) delete config.headers
+    if (config.method === undefined) config.method = 'POST'
+  } else if (config.type === 'CODE') {
+    delete config.url
+    delete config.method
+    delete config.headers
+  }
   return config as unknown as WorkflowActionExecutionConfig
 }
 
@@ -249,10 +257,12 @@ function toVersion(remote: Record<string, unknown>, redactSecrets: boolean): Wor
   if (isRecord(remote.customVarsJson)) result.customVarsJson = clone(remote.customVarsJson)
   const executionConfig = toExecutionConfig(remote.executionConfig)
   if (executionConfig) result.executionConfig = executionConfig
-  if (remote.payloadCustomizationType !== undefined) {
-    result.payloadCustomizationType = remote.payloadCustomizationType as WorkflowActionPayloadType
+  if (executionConfig?.type !== 'CODE') {
+    if (remote.payloadCustomizationType !== undefined) {
+      result.payloadCustomizationType = remote.payloadCustomizationType as WorkflowActionPayloadType
+    }
+    if (isRecord(remote.customizedPayload)) result.customizedPayload = clone(remote.customizedPayload)
   }
-  if (isRecord(remote.customizedPayload)) result.customizedPayload = clone(remote.customizedPayload)
   if (isRecord(remote.branchesConfig)) {
     result.branchesConfig = clone(remote.branchesConfig) as WorkflowActionBranchesConfig
   }
@@ -322,8 +332,11 @@ export function toWorkflowActionUpdateBody(
   current?: WorkflowActionVersion,
   environment: NodeJS.ProcessEnv = process.env
 ): WorkflowActionUpdateBody {
-  const { version: _version, ...body } = clone(desired)
-  const currentBody = current ? clone(current) : undefined
+  const normalizedDesired = toVersion(desired as unknown as Record<string, unknown>, false)
+  const { version: _version, ...body } = normalizedDesired
+  const currentBody = current
+    ? toVersion(current as unknown as Record<string, unknown>, false)
+    : undefined
   hydrateWorkflowHeaders(body, currentBody, environment, 'action')
   return body
 }

@@ -1,6 +1,6 @@
 {
   "name": "@gohighlevel/marketplace-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Command-line interface for the GoHighLevel marketplace developer portal — build, configure, and publish marketplace apps from the terminal",
   "keywords": [
     "gohighlevel",

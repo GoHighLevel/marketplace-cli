@@ -777,7 +777,9 @@ describe('ApiClient', () => {
           _id: 'legacy-live',
           appId: 'app1',
           status: 'live',
+          externalBilling: null,
           externalBillingUrl: null,
+          isPaidApp: null,
           paymentType: null,
           additionalInfoForBilling: null,
           webhookUrl: null,
@@ -793,6 +795,25 @@ describe('ApiClient', () => {
     const version = await client.getVersion('app1', 'legacy-live')
 
     expect(version).toEqual({ _id: 'legacy-live', appId: 'app1', status: 'live' })
+  })
+
+  it('normalizes a legacy scalar subcategory returned by older app versions', async () => {
+    await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(jsonResponse({
+        _id: 'legacy-subcategory',
+        appId: 'app1',
+        subcategory: 'CRM'
+      }))
+    )
+
+    const client = new ApiClient(config)
+    await client.init()
+
+    await expect(client.getVersion('app1', 'legacy-subcategory')).resolves.toMatchObject({
+      subcategory: ['CRM']
+    })
   })
 
   it('normalizes the legacy paid-app fields used by marketplace versions', async () => {

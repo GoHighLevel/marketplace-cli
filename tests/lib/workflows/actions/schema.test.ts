@@ -59,7 +59,7 @@ describe('workflow action manifest validation', () => {
     ]))
   })
 
-  it('requires custom-variable references and types to match response data', () => {
+  it('type-checks sampled custom variables without requiring the response sample to be exhaustive', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].customVarsJson = {
       result: {
@@ -76,11 +76,14 @@ describe('workflow action manifest validation', () => {
     ]
     invalid.actions[0].versions[0].customVarsJson.emptyTags = []
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/customVars\[0\]\.reference "result\.missing" does not resolve/),
+    const errors = validateWorkflowActionsManifest(invalid)
+    expect(errors).toEqual(expect.arrayContaining([
       expect.stringMatching(/customVars\[1\]\.fieldType must be "numerical"/),
       expect.stringMatching(/customVars\[2\]\.reference "result" must select a primitive value or a non-empty array/),
       expect.stringMatching(/customVars\[3\]\.reference "emptyTags" must select a primitive value or a non-empty array/)
+    ]))
+    expect(errors).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/customVars\[0\]\.reference "result\.missing" does not resolve/)
     ]))
   })
 
@@ -132,6 +135,14 @@ describe('workflow action manifest validation', () => {
         'workflow-actions.json.actions[0].versions[0].inputs[1] must define options, mappedTo, fetchOptions, or dynamicSource for radio fields.'
       ])
     )
+  })
+
+  it.each(['published', 'in_review'])('preserves duplicate input fields in immutable %s versions', status => {
+    const legacy = structuredClone(validManifest) as any
+    legacy.actions[0].versions[0].status = status
+    legacy.actions[0].versions[0].inputs.push(structuredClone(legacy.actions[0].versions[0].inputs[0]))
+
+    expect(validateWorkflowActionsManifest(legacy)).toEqual([])
   })
 
   it('requires lowercase stable action keys because the API normalizes stored keys', () => {
@@ -465,6 +476,21 @@ describe('workflow action manifest validation', () => {
     expect(validateWorkflowActionsManifest(valid)).toEqual([])
   })
 
+  it('accepts predefined branches with omitted or partial editor field values', () => {
+    const valid = structuredClone(validManifest) as any
+    valid.actions[0].versions[0].branchesConfig = {
+      fields: [{ field: 'test', title: 'Test', required: true, fieldType: 'string' }],
+      predefinedBranches: {
+        branches: [
+          { id: 'first', branchName: 'First', conditionType: 'default' },
+          { id: 'second', branchName: 'Second', conditionType: 'user-defined', fields: {} }
+        ]
+      }
+    }
+
+    expect(validateWorkflowActionsManifest(valid)).toEqual([])
+  })
+
   it('requires unique branch IDs and explicit condition types', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].branchesConfig = {
@@ -517,7 +543,7 @@ describe('workflow action manifest validation', () => {
     ]))
   })
 
-  it('validates predefined branch values against their field definitions', () => {
+  it('validates predefined branch values that are present against their field definitions', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].branchesConfig = {
       fields: [
@@ -559,7 +585,6 @@ describe('workflow action manifest validation', () => {
 
     expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
       expect.stringMatching(/fields\.unsupported does not match a configured branch field/),
-      expect.stringMatching(/fields\.message is required/),
       expect.stringMatching(/fields\.delivery_status must be one of: delivered/),
       expect.stringMatching(/fields\.labels\[1\] must be one of: priority/),
       expect.stringMatching(/fields\.attempts must be a finite number/),
@@ -723,6 +748,21 @@ describe('workflow action manifest validation', () => {
       expect.stringMatching(/validations\[0\]\.rule contains invalid arrow-function syntax/),
       expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
     ]))
+  })
+
+  it('preserves malformed code from immutable published versions while validating drafts', () => {
+    const draft = structuredClone(validManifest) as any
+    draft.actions[0].versions[0].executionConfig = {
+      type: 'CODE',
+      code: '{\n"legacy": true\n}'
+    }
+    const published = structuredClone(draft) as any
+    published.actions[0].versions[0].status = 'published'
+
+    expect(validateWorkflowActionsManifest(draft)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
+    ]))
+    expect(validateWorkflowActionsManifest(published)).toEqual([])
   })
 
   it.each([

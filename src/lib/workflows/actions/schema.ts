@@ -509,7 +509,13 @@ function validateRules(value: unknown, path: string, errors: string[]): void {
   })
 }
 
-function validateInput(input: unknown, path: string, seen: Set<string>, errors: string[]): void {
+function validateInput(
+  input: unknown,
+  path: string,
+  seen: Set<string>,
+  errors: string[],
+  validateUniqueField: boolean
+): void {
   if (!requireRecord(input, path, errors)) return
   unknownProperties(input, INPUT_PROPERTIES, path, errors)
   if (requiredString(input.field, `${path}.field`, errors)) {
@@ -519,7 +525,9 @@ function validateInput(input: unknown, path: string, seen: Set<string>, errors: 
       if (!isWorkflowFieldKey(input.field) && input.field !== 'DYNAMIC') {
         errors.push(`${path}.field must start with a letter and contain only letters, numbers, and underscores.`)
       }
-      if (seen.has(input.field)) errors.push(`${path}.field duplicates input field \"${input.field}\".`)
+      if (validateUniqueField && seen.has(input.field)) {
+        errors.push(`${path}.field duplicates input field \"${input.field}\".`)
+      }
       seen.add(input.field)
     }
   }
@@ -701,9 +709,8 @@ function validateCustomVariables(
       variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH
     ) return
     const resolved = resolveResponseReference(responseData, variable.reference)
-    if (!resolved.found) {
-      errors.push(`${variablePath}.reference "${variable.reference}" does not resolve in customVarsJson.`)
-    } else if (!resolved.type) {
+    if (!resolved.found) return
+    if (!resolved.type) {
       errors.push(`${variablePath}.reference "${variable.reference}" must select a primitive value or a non-empty array.`)
     } else if (
       typeof variable.fieldType === 'string' &&
@@ -715,7 +722,13 @@ function validateCustomVariables(
   })
 }
 
-function validateExecution(value: unknown, path: string, errors: string[], publishable: boolean): void {
+function validateExecution(
+  value: unknown,
+  path: string,
+  errors: string[],
+  publishable: boolean,
+  validateCodeSyntax: boolean
+): void {
   if (!requireRecord(value, path, errors)) return
   unknownProperties(value, new Set(['type', 'url', 'method', 'headers', 'code', 'pauseExecution']), path, errors)
   const type = value.type
@@ -749,7 +762,7 @@ function validateExecution(value: unknown, path: string, errors: string[], publi
     if (typeof value.code === 'string' && value.code.trim()) {
       if (Buffer.byteLength(value.code, 'utf8') > WORKFLOW_ACTION_CODE_MAX_BYTES) {
         errors.push(`${path}.code must be at most 1 MiB.`)
-      } else {
+      } else if (validateCodeSyntax) {
         validateJavaScriptBlock(value.code, `${path}.code`, errors)
       }
     }
@@ -849,6 +862,7 @@ function validatePredefinedBranchFields(
   errors: string[]
 ): void {
   const fieldsPath = `${path}.fields`
+  if (value.fields === undefined) return
   if (!isRecord(value.fields)) {
     errors.push(`${fieldsPath} must be an object.`)
     return
@@ -861,10 +875,7 @@ function validatePredefinedBranchFields(
   for (const [fieldName, field] of branchFields) {
     const fieldPath = propertyPath(fieldsPath, fieldName)
     const fieldValue = value.fields[fieldName]
-    if (!branchValuePresent(fieldValue)) {
-      if (field.required === true) errors.push(`${fieldPath} is required.`)
-      continue
-    }
+    if (!branchValuePresent(fieldValue)) continue
     validateBranchValue(fieldValue, field, fieldPath, errors)
   }
 }
@@ -1049,10 +1060,13 @@ function validateVersion(
   }
   validateInfo(value.info, `${path}.info`, errors, options.whiteLabel === true)
   const publishable = isPublishTarget(value, action, options)
+  const immutable = value.status === 'published' || value.status === 'in_review'
   if (value.inputs !== undefined) {
     if (requireArray(value.inputs, `${path}.inputs`, errors)) {
       const seen = new Set<string>()
-      value.inputs.forEach((input, index) => validateInput(input, `${path}.inputs[${index}]`, seen, errors))
+      value.inputs.forEach((input, index) =>
+        validateInput(input, `${path}.inputs[${index}]`, seen, errors, !immutable)
+      )
       const dynamicCount = value.inputs.filter(input => isRecord(input) && input.fieldType === 'DYNAMIC').length
       if (dynamicCount > 1) errors.push(`${path}.inputs may contain at most one DYNAMIC field.`)
       if (publishable && value.inputs.length === 0) {
@@ -1072,7 +1086,9 @@ function validateVersion(
     )
   }
   if (value.customVarsJson !== undefined && !isRecord(value.customVarsJson)) errors.push(`${path}.customVarsJson must be an object.`)
-  if (value.executionConfig !== undefined) validateExecution(value.executionConfig, `${path}.executionConfig`, errors, publishable)
+  if (value.executionConfig !== undefined) {
+    validateExecution(value.executionConfig, `${path}.executionConfig`, errors, publishable, !immutable)
+  }
   else if (publishable) errors.push(`${path}.executionConfig is required before submission for review.`)
   if (value.payloadCustomizationType !== undefined && !['custom', 'default'].includes(String(value.payloadCustomizationType))) {
     errors.push(`${path}.payloadCustomizationType must be \"custom\" or \"default\".`)
