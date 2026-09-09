@@ -701,9 +701,8 @@ function validateCustomVariables(
       variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH
     ) return
     const resolved = resolveResponseReference(responseData, variable.reference)
-    if (!resolved.found) {
-      errors.push(`${variablePath}.reference "${variable.reference}" does not resolve in customVarsJson.`)
-    } else if (!resolved.type) {
+    if (!resolved.found) return
+    if (!resolved.type) {
       errors.push(`${variablePath}.reference "${variable.reference}" must select a primitive value or a non-empty array.`)
     } else if (
       typeof variable.fieldType === 'string' &&
@@ -849,6 +848,7 @@ function validatePredefinedBranchFields(
   errors: string[]
 ): void {
   const fieldsPath = `${path}.fields`
+  if (value.fields === undefined) return
   if (!isRecord(value.fields)) {
     errors.push(`${fieldsPath} must be an object.`)
     return
@@ -861,10 +861,7 @@ function validatePredefinedBranchFields(
   for (const [fieldName, field] of branchFields) {
     const fieldPath = propertyPath(fieldsPath, fieldName)
     const fieldValue = value.fields[fieldName]
-    if (!branchValuePresent(fieldValue)) {
-      if (field.required === true) errors.push(`${fieldPath} is required.`)
-      continue
-    }
+    if (!branchValuePresent(fieldValue)) continue
     validateBranchValue(fieldValue, field, fieldPath, errors)
   }
 }

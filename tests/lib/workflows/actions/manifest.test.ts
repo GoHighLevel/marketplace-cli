@@ -132,6 +132,56 @@ describe('workflow action manifests', () => {
     })
   })
 
+  it('removes stale execution fields and empty header arrays returned by legacy API records', () => {
+    const manifest = buildWorkflowActionsManifest('app-1', [
+      {
+        templateId: 'action-1',
+        appId: 'app-1',
+        key: 'legacy_action',
+        version: '2.0',
+        status: 'draft',
+        info: { name: 'Legacy code action' },
+        executionConfig: {
+          type: 'CODE',
+          url: 'https://example.com/legacy',
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          code: 'return {}',
+          pauseExecution: false
+        },
+        payloadCustomizationType: 'custom',
+        customizedPayload: { legacy: true }
+      },
+      {
+        templateId: 'action-1',
+        appId: 'app-1',
+        key: 'legacy_action',
+        version: '1.0',
+        status: 'published',
+        info: { name: 'Legacy API action' },
+        executionConfig: {
+          type: 'API',
+          url: 'https://example.com/action',
+          method: 'POST',
+          headers: [],
+          code: 'return {}'
+        }
+      }
+    ])
+
+    expect(manifest.actions[0].versions[0]).toEqual({
+      version: '2.0',
+      status: 'draft',
+      info: { name: 'Legacy code action' },
+      executionConfig: { type: 'CODE', code: 'return {}', pauseExecution: false }
+    })
+    expect(manifest.actions[0].versions[1].executionConfig).toEqual({
+      type: 'API',
+      url: 'https://example.com/action',
+      method: 'POST'
+    })
+  })
+
   it('hydrates preserved and environment-backed headers only when creating the API body', () => {
     const body = toWorkflowActionUpdateBody(
       {

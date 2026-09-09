@@ -191,7 +191,7 @@ describe('public command contracts', () => {
         status: 'draft',
         info: { name: 'Send message' },
         customVarsJson: { result: { status: 'delivered' } },
-        customVars: [{ name: 'Status', reference: 'result.missing', fieldType: 'string' }]
+        customVars: [{ name: 'Status', reference: 'result', fieldType: 'string' }]
       }]
     }
     const baseline = { schemaVersion: 1, appId: 'app-1', actions: [] }
@@ -207,7 +207,7 @@ describe('public command contracts', () => {
     const validation = await runCommand(AppActionsValidate, ['--directory', workspace, '--json'])
     expect(validation.exitCode).not.toBe(0)
     const validationFailure = JSON.parse(validation.stdout) as { error: { message: string } }
-    expect(validationFailure.error.message).toMatch(/result\.missing.*does not resolve in customVarsJson/)
+    expect(validationFailure.error.message).toMatch(/reference "result" must select a primitive value or a non-empty array/)
     expect(validationFailure.error.message).not.toMatch(/not logged in/i)
 
     action.versions[0].customVars = []
