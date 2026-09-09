@@ -22,15 +22,17 @@ import {
   WORKFLOW_ACTION_KEY_MAX_LENGTH
 } from '../actions/key.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
+import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
 
 export const WORKFLOW_TRIGGERS_DIRECTORY_RELATIVE_PATH = path.join('src', 'modules', 'workflows', 'triggers')
 export const WORKFLOW_TRIGGERS_STATE_RELATIVE_PATH = path.join('.ghl', 'workflow-triggers-state.json')
 export const LEGACY_WORKFLOW_TRIGGERS_RELATIVE_PATH = path.join('src', 'modules', 'workflows', 'workflow-triggers.json')
 
 const TRIGGER_FILENAME_PATTERN = /^[a-z](?:[a-z0-9-]*[a-z0-9])?\.json$/
-const TRIGGER_FILE_KEYS = new Set(['schemaVersion', 'key', 'templateId', 'versions'])
+const TRIGGER_FILE_KEYS = new Set(['$schema', 'schemaVersion', 'key', 'templateId', 'versions'])
 
 interface WorkflowTriggerFile {
+  $schema?: string
   schemaVersion: 1
   key: string
   templateId?: string
@@ -206,6 +208,9 @@ function validateTriggerFile(value: unknown, relativeFile: string, filenameKey?:
   for (const key of Object.keys(value)) {
     if (!TRIGGER_FILE_KEYS.has(key)) errors.push(`${relativeFile}.${key} is not supported.`)
   }
+  if ('$schema' in value && typeof value.$schema !== 'string') {
+    errors.push(`${relativeFile}.$schema must be a string.`)
+  }
   if (value.schemaVersion !== 1) errors.push(`${relativeFile}.schemaVersion must be 1.`)
   if (typeof value.key !== 'string' || !value.key.trim()) {
     errors.push(`${relativeFile}.key must be a non-empty string.`)
@@ -290,6 +295,7 @@ async function writeTriggerSources(
 ): Promise<WorkflowTriggersWorkspaceResult> {
   assertValidManifest(manifest, binding)
   await assertWorkspaceDocumentationFilesWritable(binding.directory)
+  await writeJsonSchemaWorkspace(binding.directory)
   const triggerDirectory = triggerDirectoryFor(binding)
   if (manifest.triggers.length > 0) {
     await fs.mkdir(triggerDirectory, { recursive: true, mode: 0o755 })
@@ -302,12 +308,12 @@ async function writeTriggerSources(
     const filename = workflowTriggerFilenameFromKey(trigger.key)
     expectedFiles.add(filename)
     const filePath = path.join(triggerDirectory, filename)
-    const payload: WorkflowTriggerFile = {
+    const payload: WorkflowTriggerFile = withJsonSchemaReference({
       schemaVersion: 1,
       key: trigger.key,
       ...(trigger.templateId ? { templateId: trigger.templateId } : {}),
       versions: structuredClone(trigger.versions)
-    }
+    }, 'workflow-trigger')
     await writeJsonFileAtomic(filePath, payload, 0o644)
   }
   const existing = await triggerJsonEntries(triggerDirectory)

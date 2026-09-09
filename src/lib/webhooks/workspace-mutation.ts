@@ -19,6 +19,7 @@ import {
   writeAppWorkspace
 } from '../app/workspace.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../shared/workspace-files.js'
+import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../app/json-schema.js'
 
 export interface WebhookWorkspaceMutationContext extends RemoteAppSyncContext {
   remoteFiles: AppFiles
@@ -148,7 +149,12 @@ async function writeDesiredWebhookConfiguration(
   runtime: WebhookMutationRuntime
 ): Promise<void> {
   if (hasWebhookConfiguration(webhooks)) {
-    await runtime.writeJson(context.local.webhookFile, webhooks, 0o644)
+    await writeJsonSchemaWorkspace(context.local.directory)
+    await runtime.writeJson(
+      context.local.webhookFile,
+      withJsonSchemaReference(webhooks, 'webhooks'),
+      0o644
+    )
     return
   }
   await removeRegularFileIfPresent(context.local.webhookFile, 'Webhook manifest')

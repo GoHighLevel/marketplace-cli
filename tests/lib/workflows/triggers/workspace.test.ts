@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { JSON_SCHEMA_REFERENCES } from '../../../../src/lib/app/json-schema.js'
 import { WorkflowTriggersManifest } from '../../../../src/lib/workflows/triggers/manifest.js'
 import {
   loadWorkflowTriggersWorkspace,
@@ -85,6 +86,7 @@ describe('workflow trigger workspaces', () => {
     expect(result.triggerStateFile).toBe(path.join(directory, WORKFLOW_TRIGGERS_STATE_RELATIVE_PATH))
     expect(await fs.readFile(result.triggerGuideFile, 'utf8')).toMatch(/subscription callback/i)
     expect(JSON.parse(await fs.readFile(result.triggerFiles[0], 'utf8'))).toMatchObject({
+      $schema: JSON_SCHEMA_REFERENCES['workflow-trigger'],
       schemaVersion: 1,
       key: 'contact_changed',
       templateId: 'template-1'

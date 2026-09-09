@@ -8,6 +8,8 @@ import { withSpinner } from '../../lib/shared/spinner.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../../lib/workflows/actions/workspace.js'
 import { workflowTriggerPrerequisiteErrors } from '../../lib/workflows/triggers/contract.js'
 import { loadWorkflowTriggersWorkspaceIfPresent } from '../../lib/workflows/triggers/workspace.js'
+import { getJsonSchema, JSON_SCHEMA_NAMES } from '../../lib/app/json-schema.js'
+import type { JsonSchemaName } from '../../lib/app/json-schema.js'
 
 /* Maps backend readiness fields to the CLI command that fixes them. */
 const FIX_HINTS: Record<string, string> = {
@@ -35,6 +37,8 @@ export default class AppValidate extends Command {
   static examples = [
     '<%= config.bin %> app validate',
     '<%= config.bin %> app validate --directory ./my-app',
+    '<%= config.bin %> app validate --json-schema',
+    '<%= config.bin %> app validate --json-schema --schema workflow-action',
     '<%= config.bin %> app validate --remote --app 67ee6752f753647b1c9ae06e'
   ]
 
@@ -43,12 +47,32 @@ export default class AppValidate extends Command {
   static flags = {
     directory: Flags.string({ description: 'App workspace directory (default: current directory)', default: '.' }),
     remote: Flags.boolean({ description: 'Run the server-side publish-readiness validation instead' }),
-    app: Flags.string({ description: 'App id for --remote (defaults to the selected app)', dependsOn: ['remote'] })
+    app: Flags.string({ description: 'App id for --remote (defaults to the selected app)', dependsOn: ['remote'] }),
+    'json-schema': Flags.boolean({
+      description: 'Print a local configuration schema and exit'
+    }),
+    schema: Flags.string({
+      description: 'Configuration schema to print with --json-schema (default: app)',
+      helpValue: 'config',
+      options: [...JSON_SCHEMA_NAMES]
+    })
   }
 
   async run(): Promise<unknown> {
     const { flags } = await this.parse(AppValidate)
     try {
+      if (flags.schema && !flags['json-schema']) {
+        throw new Error('--schema requires --json-schema.')
+      }
+      if (flags['json-schema'] && flags.remote) {
+        throw new Error('--json-schema cannot be combined with --remote.')
+      }
+      if (flags['json-schema']) {
+        const schema = getJsonSchema((flags.schema ?? 'app') as JsonSchemaName)
+        if (this.jsonEnabled()) return schema
+        this.log(JSON.stringify(schema, null, 2))
+        return
+      }
       if (!flags.remote) {
         const workspace = await loadValidatedLocalWorkspace(flags.directory)
         const [workflowActions, workflowTriggers, billing] = await Promise.all([

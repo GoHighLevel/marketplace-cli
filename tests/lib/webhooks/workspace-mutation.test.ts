@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiClient, AppVersion } from '../../../src/lib/api/client.js'
 import { buildAppFiles, WebhookManifest } from '../../../src/lib/app/manifest.js'
+import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
 import { readLocalAppWorkspace } from '../../../src/lib/app/local-workspace.js'
 import { createAppSyncPlan, validateLocalAppWorkspace } from '../../../src/lib/app/sync.js'
 import { CliConfig } from '../../../src/lib/config/environment.js'
@@ -73,6 +74,7 @@ describe('applyWebhookWorkspaceMutation', () => {
     const executePlan = vi.fn().mockImplementation(async () => {
       const local = await readJsonFile<WebhookManifest>(context.local.webhookFile)
       const state = await readJsonFile<{ baseline: { webhooks: WebhookManifest } }>(context.local.stateFile)
+      expect(local).toMatchObject({ $schema: JSON_SCHEMA_REFERENCES.webhooks })
       expect(local?.subscribedEvents).toEqual([{ name: 'ContactCreate' }])
       expect(state?.baseline.webhooks.subscribedEvents).toHaveLength(2)
       return { appliedSections: ['authSettings'] as const, versionId: 'version-1' }

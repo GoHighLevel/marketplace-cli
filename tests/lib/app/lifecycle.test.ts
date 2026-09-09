@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { refreshAppWorkspaceLifecycle } from '../../../src/lib/app/lifecycle.js'
+import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
 import { readJsonFile } from '../../../src/lib/shared/json-file.js'
 import { AppManifest, WebhookManifest } from '../../../src/lib/app/manifest.js'
 import { WorkspaceState, writeAppWorkspace } from '../../../src/lib/app/workspace.js'
@@ -48,7 +49,8 @@ describe('refreshAppWorkspaceLifecycle', () => {
     expect(refreshed).toMatchObject({ directory, version: { _id: 'version-1', status: 'review' } })
     expect(client.listVersions).toHaveBeenCalledWith('app-1')
     expect(client.getVersion).toHaveBeenCalledWith('app-1', 'version-1')
-    await expect(readJsonFile<AppManifest>(workspace.appFile)).resolves.toMatchObject({
+    await expect(readJsonFile<AppManifest & { $schema: string }>(workspace.appFile)).resolves.toMatchObject({
+      $schema: JSON_SCHEMA_REFERENCES.app,
       version: '1.1.0',
       status: 'review',
       basicInfo: { tagline: 'Pending local tagline' }

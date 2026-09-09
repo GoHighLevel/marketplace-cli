@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { JSON_SCHEMA_REFERENCES } from '../../../../src/lib/app/json-schema.js'
 import {
   toWorkflowActionUpdateBody,
   WorkflowActionsManifest
@@ -91,6 +92,7 @@ describe('workflow action workspaces', () => {
 
     const sendMessageFile = JSON.parse(await fs.readFile(result.actionFiles[0], 'utf8'))
     expect(sendMessageFile).toEqual({
+      $schema: JSON_SCHEMA_REFERENCES['workflow-action'],
       schemaVersion: 1,
       key: 'send_message',
       templateId: 'template-1',

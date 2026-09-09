@@ -13,6 +13,7 @@ import {
 import { AppFiles, AppManifest, buildAppFiles, WebhookManifest } from './manifest.js'
 import { readJsonFile, writeJsonFileAtomic } from '../shared/json-file.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../shared/workspace-files.js'
+import { withJsonSchemaReference, writeJsonSchemaWorkspace } from './json-schema.js'
 
 export const APP_MANIFEST_FILENAME = 'ghl-app.json'
 export const WEBHOOK_MANIFEST_FILENAME = 'ghl-webhooks.json'
@@ -141,12 +142,19 @@ async function writeFiles(directory: string, options: WriteAppWorkspaceOptions):
     versionId: files.app.versionId,
     baseline: files
   }
+  await writeJsonSchemaWorkspace(directory)
   const writes: Array<Promise<void>> = [
-    writeJsonFileAtomic(path.join(directory, APP_MANIFEST_FILENAME), files.app, 0o644),
+    writeJsonFileAtomic(
+      path.join(directory, APP_MANIFEST_FILENAME),
+      withJsonSchemaReference(files.app, 'app'),
+      0o644
+    ),
     writeJsonFileAtomic(path.join(directory, WORKSPACE_STATE_RELATIVE_PATH), state, 0o600),
     writeWorkspaceDocumentation(directory)
   ]
-  if (hasWebhooks) writes.push(writeJsonFileAtomic(webhookFile, files.webhooks, 0o644))
+  if (hasWebhooks) {
+    writes.push(writeJsonFileAtomic(webhookFile, withJsonSchemaReference(files.webhooks, 'webhooks'), 0o644))
+  }
   await Promise.all(writes)
   if (hasWebhooks) {
     if (!sourceDirectoryExists) await fs.chmod(sourceDirectory, 0o755)

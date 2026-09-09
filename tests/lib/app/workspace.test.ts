@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { readJsonFile } from '../../../src/lib/shared/json-file.js'
+import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
 import {
   AGENTS_FILENAME,
   APP_MANIFEST_FILENAME,
@@ -121,11 +122,19 @@ describe('writeAppWorkspace', () => {
       webhookFile: path.join(target, WEBHOOK_MANIFEST_RELATIVE_PATH),
       stateFile: path.join(target, WORKSPACE_STATE_RELATIVE_PATH)
     })
-    await expect(readJsonFile(result.appFile)).resolves.toMatchObject({ appId: 'app-1', versionId: 'version-1' })
-    await expect(readJsonFile(result.webhookFile!)).resolves.toMatchObject({ webhookUrl: 'https://acme.test/webhooks' })
+    await expect(readJsonFile(result.appFile)).resolves.toMatchObject({
+      $schema: JSON_SCHEMA_REFERENCES.app,
+      appId: 'app-1',
+      versionId: 'version-1'
+    })
+    await expect(readJsonFile(result.webhookFile!)).resolves.toMatchObject({
+      $schema: JSON_SCHEMA_REFERENCES.webhooks,
+      webhookUrl: 'https://acme.test/webhooks'
+    })
     expect((await fs.stat(result.appFile)).mode & 0o777).toBe(0o644)
     expect((await fs.stat(result.webhookFile!)).mode & 0o777).toBe(0o644)
-    await expect(readJsonFile(result.stateFile)).resolves.toMatchObject({
+    const state = await readJsonFile<Record<string, unknown>>(result.stateFile)
+    expect(state).toMatchObject({
       schemaVersion: 1,
       appId: 'app-1',
       versionId: 'version-1',
@@ -134,6 +143,8 @@ describe('writeAppWorkspace', () => {
         webhooks: { appId: 'app-1', versionId: 'version-1' }
       }
     })
+    expect(state).not.toHaveProperty('baseline.app.$schema')
+    expect(state).not.toHaveProperty('baseline.webhooks.$schema')
     expect((await fs.stat(result.stateFile)).mode & 0o777).toBe(0o600)
     expect((await fs.stat(path.dirname(result.stateFile))).mode & 0o777).toBe(0o700)
     expect((await fs.stat(target)).mode & 0o777).toBe(0o755)

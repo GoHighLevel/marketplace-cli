@@ -9,6 +9,7 @@ import {
   WorkspaceState
 } from './workspace.js'
 import { readJsonFile } from '../shared/json-file.js'
+import { withoutJsonSchemaReference } from './json-schema.js'
 
 const MAX_MANAGED_FILE_BYTES = 2 * 1024 * 1024
 
@@ -74,14 +75,18 @@ export async function readLocalAppWorkspace(inputDirectory: string): Promise<Loc
     requireRegularFile(stateFile, 'Workspace state')
   ])
 
-  const [app, storedWebhooks, state] = await Promise.all([
-    readJsonFile<AppManifest>(appFile),
-    webhookFileExists ? readJsonFile<WebhookManifest>(webhookFile) : undefined,
+  const [appValue, storedWebhooksValue, state] = await Promise.all([
+    readJsonFile<unknown>(appFile),
+    webhookFileExists ? readJsonFile<unknown>(webhookFile) : undefined,
     readJsonFile<WorkspaceState>(stateFile)
   ])
-  if (!app || (webhookFileExists && !storedWebhooks) || !state) {
+  if (!appValue || (webhookFileExists && !storedWebhooksValue) || !state) {
     throw new Error(`App workspace "${directory}" contains an unreadable managed file.`)
   }
+  const app = withoutJsonSchemaReference(appValue) as AppManifest
+  const storedWebhooks = storedWebhooksValue
+    ? withoutJsonSchemaReference(storedWebhooksValue) as WebhookManifest
+    : undefined
   const webhooks: WebhookManifest = storedWebhooks ?? {
     schemaVersion: 1,
     appId: app.appId,

@@ -2,6 +2,7 @@ import { AppVersion } from '../api/client.js'
 import { writeJsonFileAtomic } from '../shared/json-file.js'
 import { readLocalAppWorkspace } from './local-workspace.js'
 import { readPullWorkspaceBinding } from './pull.js'
+import { withJsonSchemaReference, writeJsonSchemaWorkspace } from './json-schema.js'
 
 export interface AppLifecycleClient {
   listVersions(appId: string): Promise<Array<{ _id: string; version?: string }>>
@@ -74,13 +75,24 @@ export async function refreshAppWorkspaceLifecycle(
   workspace.state.baseline.app.status = status
 
   const managedWrites: Array<[string, unknown, unknown, number]> = [
-    [workspace.appFile, workspace.files.app, originalApp, 0o644],
+    [
+      workspace.appFile,
+      withJsonSchemaReference(workspace.files.app, 'app'),
+      withJsonSchemaReference(originalApp, 'app'),
+      0o644
+    ],
     [workspace.stateFile, workspace.state, originalState, 0o600]
   ]
   if (workspace.webhookFileExists) {
-    managedWrites.push([workspace.webhookFile, workspace.files.webhooks, originalWebhooks, 0o644])
+    managedWrites.push([
+      workspace.webhookFile,
+      withJsonSchemaReference(workspace.files.webhooks, 'webhooks'),
+      withJsonSchemaReference(originalWebhooks, 'webhooks'),
+      0o644
+    ])
   }
 
+  await writeJsonSchemaWorkspace(workspace.directory)
   const writes = await Promise.allSettled(
     managedWrites.map(([file, current, , mode]) => writeJsonFileAtomic(file, current, mode))
   )

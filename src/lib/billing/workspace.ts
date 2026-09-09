@@ -23,6 +23,11 @@ import {
 } from './schema.js'
 import { readJsonFile, writeJsonFileAtomic } from '../shared/json-file.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../shared/workspace-files.js'
+import {
+  withJsonSchemaReference,
+  withoutJsonSchemaReference,
+  writeJsonSchemaWorkspace
+} from '../app/json-schema.js'
 
 export { BILLING_GUIDE_FILENAME }
 export const BILLING_DIRECTORY_RELATIVE_PATH = path.join('src', 'billing')
@@ -210,16 +215,23 @@ async function writeBillingSources(
   validateManifests(binding, subscriptions, usage, contextual)
   assertManifestAppIds(binding, subscriptions, usage)
   await assertBillingPathsSafe(binding)
+  await writeJsonSchemaWorkspace(binding.directory)
   const billingDirectory = path.join(binding.directory, BILLING_DIRECTORY_RELATIVE_PATH)
   const subscriptionPath = path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH)
   const usagePath = path.join(binding.directory, BILLING_USAGE_RELATIVE_PATH)
   const guidePath = path.join(billingDirectory, BILLING_GUIDE_FILENAME)
   const hasSources = subscriptions.plans.length > 0 || usage.meters.length > 0
   if (hasSources) await fs.mkdir(billingDirectory, { recursive: true, mode: 0o755 })
-  if (subscriptions.plans.length > 0) await writeJsonFileAtomic(subscriptionPath, subscriptions, 0o644)
-  else await removeRegularFileIfPresent(subscriptionPath, 'Subscription manifest')
-  if (usage.meters.length > 0) await writeJsonFileAtomic(usagePath, usage, 0o644)
-  else await removeRegularFileIfPresent(usagePath, 'Usage-based manifest')
+  if (subscriptions.plans.length > 0) {
+    await writeJsonFileAtomic(subscriptionPath, withJsonSchemaReference(subscriptions, 'subscription'), 0o644)
+  } else {
+    await removeRegularFileIfPresent(subscriptionPath, 'Subscription manifest')
+  }
+  if (usage.meters.length > 0) {
+    await writeJsonFileAtomic(usagePath, withJsonSchemaReference(usage, 'usage-based'), 0o644)
+  } else {
+    await removeRegularFileIfPresent(usagePath, 'Usage-based manifest')
+  }
   if (hasSources) await writeTextFileAtomic(guidePath, buildBillingGuide())
   else await removeRegularFileIfPresent(guidePath, 'Billing guide')
   await removeEmptyDirectoryTree(billingDirectory, binding.directory)
@@ -315,8 +327,12 @@ export async function loadBillingWorkspace(directory: string): Promise<BillingWo
     readJsonFile<unknown>(usagePath),
     readJsonFile<unknown>(stateFile)
   ])
-  const unresolvedSubscriptions = subscriptionValue ?? emptyBillingSubscriptionManifest(binding.app.appId)
-  const unresolvedUsage = usageValue ?? emptyBillingUsageManifest(binding.app.appId)
+  const unresolvedSubscriptions = subscriptionValue
+    ? withoutJsonSchemaReference(subscriptionValue)
+    : emptyBillingSubscriptionManifest(binding.app.appId)
+  const unresolvedUsage = usageValue
+    ? withoutJsonSchemaReference(usageValue)
+    : emptyBillingUsageManifest(binding.app.appId)
   validateManifests(binding, unresolvedSubscriptions, unresolvedUsage, false)
   const subscriptions = unresolvedSubscriptions as BillingSubscriptionManifest
   const usage = unresolvedUsage as BillingUsageManifest
@@ -351,8 +367,9 @@ export async function synchronizeUsageBillingSummary(directory: string, hasUsage
   const workspace = await readLocalAppWorkspace(binding.directory)
   workspace.files.app.billing.hasUsageBasedPrice = hasUsageBasedPrice
   workspace.state.baseline.app.billing.hasUsageBasedPrice = hasUsageBasedPrice
+  await writeJsonSchemaWorkspace(workspace.directory)
   await Promise.all([
-    writeJsonFileAtomic(workspace.appFile, workspace.files.app, 0o644),
+    writeJsonFileAtomic(workspace.appFile, withJsonSchemaReference(workspace.files.app, 'app'), 0o644),
     writeJsonFileAtomic(workspace.stateFile, workspace.state, 0o600)
   ])
 }

@@ -30,6 +30,7 @@ import { WorkflowActionDefinition, WorkflowActionsManifest } from './manifest.js
 import { validateWorkflowActionsManifest } from './schema.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
 import { isWorkflowVersion } from '../shared/value-validation.js'
+import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
 
 export { WORKFLOW_ACTIONS_GUIDE_FILENAME }
 export { WORKFLOW_ACTION_CODE_MAX_BYTES }
@@ -47,9 +48,10 @@ export const LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH = path.join(
 )
 
 const ACTION_FILENAME_PATTERN = /^[a-z](?:[a-z0-9-]*[a-z0-9])?\.json$/
-const ACTION_FILE_KEYS = new Set(['schemaVersion', 'key', 'templateId', 'versions'])
+const ACTION_FILE_KEYS = new Set(['$schema', 'schemaVersion', 'key', 'templateId', 'versions'])
 
 interface WorkflowActionFile {
+  $schema?: string
   schemaVersion: 1
   key: string
   templateId?: string
@@ -216,12 +218,12 @@ function actionSourceFromDefinition(action: WorkflowActionDefinition): {
     )
   }
   return {
-    file: {
+    file: withJsonSchemaReference({
       schemaVersion: 1,
       key: action.key,
       ...(action.templateId ? { templateId: action.templateId } : {}),
       versions
-    },
+    }, 'workflow-action'),
     codeSources
   }
 }
@@ -231,6 +233,9 @@ function validateActionFile(value: unknown, relativeFile: string, filenameKey?: 
   const errors: string[] = []
   for (const key of Object.keys(value)) {
     if (!ACTION_FILE_KEYS.has(key)) errors.push(`${relativeFile}.${key} is not supported.`)
+  }
+  if ('$schema' in value && typeof value.$schema !== 'string') {
+    errors.push(`${relativeFile}.$schema must be a string.`)
   }
   if (value.schemaVersion !== 1) errors.push(`${relativeFile}.schemaVersion must be 1.`)
   if (typeof value.key !== 'string' || !value.key.trim()) {
@@ -489,6 +494,7 @@ async function writeActionSources(
     assertWorkspacePathsSafe(binding),
     assertWorkspaceDocumentationFilesWritable(binding.directory)
   ])
+  await writeJsonSchemaWorkspace(binding.directory)
   const legacyFile = path.join(binding.directory, LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH)
   const legacyExists = await requireRegularFile(legacyFile, 'Legacy workflow action file', true)
   const { actionDirectory, codeDirectory } = await sourceDirectories(binding)

@@ -133,6 +133,38 @@ describe('public command contracts', () => {
     }
   })
 
+  it('prints any supported configuration schema without requiring a workspace', async () => {
+    expect(AppValidate.flags['json-schema']).toMatchObject({ type: 'boolean' })
+    expect(AppValidate.flags.schema).toMatchObject({
+      options: ['app', 'webhooks', 'workflow-action', 'workflow-trigger', 'subscription', 'usage-based']
+    })
+
+    const appResult = await runCommand(AppValidate, ['--json-schema'])
+    expect(appResult.exitCode).toBe(0)
+    expect(appResult.stderr).toBe('')
+    expect(JSON.parse(appResult.stdout)).toMatchObject({
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      $id: 'ghl-app.schema.json',
+      title: 'HighLevel App Manifest'
+    })
+
+    const result = await runCommand(AppValidate, ['--json-schema', '--schema', 'workflow-action'])
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      $id: 'ghl-workflow-action.schema.json',
+      title: 'HighLevel Workflow Action'
+    })
+
+    const missingMode = await runCommand(AppValidate, ['--schema', 'workflow-action'])
+    expect(missingMode.exitCode).not.toBe(0)
+    expect(missingMode.stderr).toMatch(/--schema.*requires.*--json-schema/i)
+
+    const jsonMode = await runCommand(AppValidate, ['--json-schema', '--json'])
+    expect(JSON.parse(jsonMode.stdout)).toMatchObject({ $id: 'ghl-app.schema.json' })
+  })
+
   it('requires a local workspace for webhook mutations before authenticating', async () => {
     const commands = [
       { CommandType: AppWebhookUrl, args: ['https://hooks.example.com'] },

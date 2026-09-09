@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
 import {
   BillingSubscriptionManifest,
   BillingUsageManifest
@@ -92,6 +93,12 @@ describe('billing workspaces', () => {
     expect(result.guideFile).toBe(path.join(result.billingDirectory, BILLING_GUIDE_FILENAME))
     expect((await fs.stat(result.stateFile)).mode & 0o777).toBe(0o600)
     expect(await fs.readFile(result.guideFile as string, 'utf8')).toMatch(/immutable.*amount.*duration|amount.*paymentTime.*immutable/is)
+    await expect(fs.readFile(result.subscriptionFile!, 'utf8')).resolves.toContain(
+      `"$schema": "${JSON_SCHEMA_REFERENCES.subscription}"`
+    )
+    await expect(fs.readFile(result.usageFile!, 'utf8')).resolves.toContain(
+      `"$schema": "${JSON_SCHEMA_REFERENCES['usage-based']}"`
+    )
 
     const loaded = await loadBillingWorkspace(path.join(directory, 'src', 'billing'))
     expect(loaded.subscriptions).toEqual(subscriptions())
@@ -217,8 +224,12 @@ describe('billing workspaces', () => {
     const updatedApp = JSON.parse(await fs.readFile(appFile, 'utf8'))
     const updatedState = JSON.parse(await fs.readFile(path.join(directory, '.ghl', 'state.json'), 'utf8'))
     expect(updatedApp.basicInfo.name).toBe('Local pending name')
+    expect(updatedApp.$schema).toBe(JSON_SCHEMA_REFERENCES.app)
     expect(updatedApp.billing.hasUsageBasedPrice).toBe(true)
     expect(updatedState.baseline.app.basicInfo.name).toBe('Portal name')
     expect(updatedState.baseline.app.billing.hasUsageBasedPrice).toBe(true)
+    await expect(
+      fs.stat(path.join(directory, '.ghl', 'schemas', 'ghl-app.schema.json'))
+    ).resolves.toMatchObject({ isFile: expect.any(Function) })
   })
 })

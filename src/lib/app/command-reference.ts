@@ -58,7 +58,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app validate',
         description:
-          'Validate local manifests without authentication or API calls. Use `--directory <app-folder>` for another workspace. `--remote` runs the separate server publish-readiness validation and accepts `--app <appId>`.'
+          'Validate local manifests without authentication or API calls. Use `--directory <app-folder>` for another workspace. `--json-schema` prints the app schema and exits; add `--schema <config>` to select the webhook, workflow action, workflow trigger, subscription, or usage-based schema. `--remote` runs the separate server publish-readiness validation and accepts `--app <appId>`.'
       },
       {
         command: 'ghl app diff',

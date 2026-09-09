@@ -39,6 +39,8 @@ ghl account switch                        # switch account using an interactive 
 ghl app create                            # create the remote app + local JSON folder, then select it
 # edit ghl-app.json, webhooks, actions, and triggers under src/modules/workflows/
 ghl app validate                          # validate local JSON without an API call
+ghl app validate --json-schema            # print the app configuration schema
+ghl app validate --json-schema --schema workflow-action # select another schema
 ghl app diff                              # preview local, portal, and conflicting changes
 ghl app push                              # update only changed API sections
 ghl app actions validate                  # validate every local action and code file
@@ -72,7 +74,7 @@ The CLI talks to the GoHighLevel production environment by default. The environm
 | `GHL_WORKFLOWS_URL` | `https://backend.leadconnectorhq.com/workflows-marketplace` | Workflow action and trigger configuration service |
 | `GHL_CONFIG_DIR` | `~/.config/ghl` | Where credentials/config/secrets are stored |
 
-Local state (all files created with mode 0600, written atomically):
+Local workspace files are written atomically. User-editable files use mode 0644; private state files use mode 0600:
 
 | File | Contents |
 |---|---|
@@ -86,6 +88,8 @@ Local state (all files created with mode 0600, written atomically):
 
 Inside a directory containing `ghl-app.json`, run `ghl app pull` with no app or destination arguments. The CLI reads `appId` and `versionId` from that manifest and refreshes the current workspace directly without asking for a parent directory or folder. An explicit app ID must match the workspace. Passing `--directory` or `--folder` intentionally switches to the new-destination flow.
 
+Generated configuration JSON includes a local `$schema` reference. The CLI writes deterministic draft-07 schemas under `.ghl/schemas/` and creates `.vscode/settings.json` only when that file does not already exist. Existing editor settings are never replaced. Contextual and cross-file business rules remain enforced by the CLI validators.
+
 | File | Contents |
 |---|---|
 | `ghl-app.json` | App identity/version binding plus listing, profiles, OAuth metadata, support, basic/external billing settings, and review configuration. External authentication, external configuration, MCP configuration, and custom pages are intentionally excluded. |
@@ -98,6 +102,8 @@ Inside a directory containing `ghl-app.json`, run `ghl app pull` with no app or 
 | `src/billing/subscription.json` | App-level marketplace subscription plans, created only when the app has a plan. |
 | `src/billing/usage-based.json` | App-level fixed or dynamic usage meters and their price tiers, created only when the app has a meter. |
 | `src/billing/HIGHLEVEL_BILLING.md` | Generated key-by-key billing reference created only when billing source configuration exists. |
+| `.ghl/schemas/*.schema.json` | Offline schemas for app, webhook, workflow action/trigger, subscription, and usage-based JSON. |
+| `.vscode/settings.json` | VS Code schema associations, created only when no settings file exists. |
 | `.ghl/state.json` | Sanitized last-pull baseline used for three-way conflict detection. Keep it with the workspace and do not edit it. |
 | `.ghl/workflow-actions-state.json` | Sanitized workflow-action baseline used for separate three-way conflict detection. Do not edit it. |
 | `.ghl/workflow-triggers-state.json` | Sanitized workflow-trigger baseline used for separate three-way conflict detection. Do not edit it. |
@@ -150,7 +156,7 @@ Subscription plans and usage meters are app-scoped rather than tied to one app v
 | `ghl app list` | List apps. Flags: `--search <text>`, `--limit <n>` (default 50), `--skip <n>`, `--json`. |
 | `ghl app create` | Create an app in the portal, create its local JSON folder, and select it. Interactive, or provide `--name`, `--type public\|private`, `--target sub-account\|agency`, and `--listing white-label\|standard`; sub-account targets also require `--installer everyone\|agency-only`. Local flags: `--directory <parent>`, `--folder <name>`. |
 | `ghl app pull [appId]` | Refresh the current workspace using its `ghl-app.json`, or create a local workspace for an existing app when run elsewhere, then select that version. Flags: `--version <versionId\|semver>`, `--directory <parent>`, `--folder <name>`, `--json`. |
-| `ghl app validate` | Validate the local workspace without authentication or API calls. Use `--directory <app-folder>`; `--remote` runs the separate server publish-readiness checklist. |
+| `ghl app validate` | Validate the local workspace without authentication or API calls. Use `--directory <app-folder>`; `--json-schema` prints the app draft-07 schema, with `--schema <config>` selecting another supported configuration; `--remote` runs the separate server publish-readiness checklist. |
 | `ghl app diff` | Read the current portal version and show local changes, portal-only changes, conflicts, and the minimal API section plan. Flags: `--directory <app-folder>`, `--json`. |
 | `ghl app push` | Validate, three-way merge, and push only changed sections; then verify and refresh local state. Flags: `--directory <app-folder>`, `--dry-run`, `--json`. |
 | `ghl app use [appId]` | Select the app to work on (interactive picker when omitted). Stores appId **and** versionId. |
