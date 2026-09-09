@@ -221,6 +221,30 @@ describe('workflow action workspaces', () => {
     expect((await fs.stat(result.codeFiles[0])).mode & 0o777).toBe(0o644)
   })
 
+  it('round-trips malformed legacy code for immutable published versions', async () => {
+    const directory = await workspace()
+    const legacyCode = '{\n"legacy": true\n}'
+    const manifest: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [{
+        templateId: 'template-1',
+        key: 'legacy_action',
+        versions: [{
+          version: '1.0',
+          status: 'published',
+          info: { name: 'Legacy action' },
+          executionConfig: { type: 'CODE', code: legacyCode }
+        }]
+      }]
+    }
+
+    const result = await writeWorkflowActionsWorkspace(directory, manifest)
+
+    expect(await fs.readFile(result.codeFiles[0], 'utf8')).toBe(legacyCode)
+    expect((await loadWorkflowActionsWorkspace(directory)).manifest).toEqual(manifest)
+  })
+
   it('validates JavaScript files before validating the complete action', async () => {
     const directory = await workspace()
     const manifest: WorkflowActionsManifest = {

@@ -137,6 +137,14 @@ describe('workflow action manifest validation', () => {
     )
   })
 
+  it.each(['published', 'in_review'])('preserves duplicate input fields in immutable %s versions', status => {
+    const legacy = structuredClone(validManifest) as any
+    legacy.actions[0].versions[0].status = status
+    legacy.actions[0].versions[0].inputs.push(structuredClone(legacy.actions[0].versions[0].inputs[0]))
+
+    expect(validateWorkflowActionsManifest(legacy)).toEqual([])
+  })
+
   it('requires lowercase stable action keys because the API normalizes stored keys', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].key = 'Send_Message'
@@ -740,6 +748,21 @@ describe('workflow action manifest validation', () => {
       expect.stringMatching(/validations\[0\]\.rule contains invalid arrow-function syntax/),
       expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
     ]))
+  })
+
+  it('preserves malformed code from immutable published versions while validating drafts', () => {
+    const draft = structuredClone(validManifest) as any
+    draft.actions[0].versions[0].executionConfig = {
+      type: 'CODE',
+      code: '{\n"legacy": true\n}'
+    }
+    const published = structuredClone(draft) as any
+    published.actions[0].versions[0].status = 'published'
+
+    expect(validateWorkflowActionsManifest(draft)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
+    ]))
+    expect(validateWorkflowActionsManifest(published)).toEqual([])
   })
 
   it.each([

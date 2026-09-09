@@ -333,6 +333,7 @@ async function hydrateCodeSources(
     config: Record<string, unknown>
     filePath: string
     propertyPath: string
+    validateSyntax: boolean
   }> = []
 
   for (const source of sources) {
@@ -369,7 +370,8 @@ async function hydrateCodeSources(
       pending.push({
         config,
         filePath: path.join(codeDirectory, filename),
-        propertyPath
+        propertyPath,
+        validateSyntax: version.status !== 'published' && version.status !== 'in_review'
       })
     })
   }
@@ -382,7 +384,9 @@ async function hydrateCodeSources(
       return
     }
     const code = result.code ?? ''
-    const syntaxError = workflowActionCodeSyntaxError(code, item.filePath)
+    const syntaxError = item.validateSyntax
+      ? workflowActionCodeSyntaxError(code, item.filePath)
+      : undefined
     if (syntaxError) {
       errors.push(`${item.propertyPath}.codeFile ${syntaxError}`)
       return
