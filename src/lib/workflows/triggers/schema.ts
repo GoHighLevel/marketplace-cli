@@ -19,6 +19,16 @@ import {
   WORKFLOW_REFERENCE_MAX_LENGTH,
   WORKFLOW_VERSION_MAX_LENGTH
 } from '../shared/value-validation.js'
+import {
+  optionalBoolean,
+  optionalString,
+  propertyPath,
+  requireArray,
+  requireRecord,
+  requiredString,
+  stringArray,
+  unknownProperties
+} from '../shared/schema-primitives.js'
 
 export interface WorkflowTriggerValidationOptions {
   publishable?: boolean
@@ -28,10 +38,15 @@ export interface WorkflowTriggerValidationOptions {
 }
 
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+
 const STATUSES = new Set(['draft', 'in_review', 'published'])
+
 const FIELD_TYPES = new Set<string>(WORKFLOW_TRIGGER_FIELD_TYPES)
+
 const INTERNAL_REFERENCES = new Set<string>(WORKFLOW_TRIGGER_INTERNAL_REFERENCES)
+
 const CUSTOM_VARIABLE_TYPES = new Set(['array', 'boolean', 'date', 'numerical', 'string'])
+
 const FILTER_PROPERTIES = new Set([
   'field',
   'title',
@@ -43,50 +58,6 @@ const FILTER_PROPERTIES = new Set([
   'altersDynamicField',
   'dynamicFieldsConfig'
 ])
-
-function propertyPath(path: string, property: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$-]*$/.test(property) ? `${path}.${property}` : `${path}[${JSON.stringify(property)}]`
-}
-
-function unknownProperties(value: unknown, allowed: Set<string>, path: string, errors: string[]): void {
-  if (!isRecord(value)) return
-  for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) errors.push(`${propertyPath(path, key)} is not a supported property.`)
-  }
-}
-
-function requireRecord(value: unknown, path: string, errors: string[]): value is Record<string, unknown> {
-  if (isRecord(value)) return true
-  errors.push(`${path} must be an object.`)
-  return false
-}
-
-function requireArray(value: unknown, path: string, errors: string[]): value is unknown[] {
-  if (Array.isArray(value)) return true
-  errors.push(`${path} must be an array.`)
-  return false
-}
-
-function requiredString(value: unknown, path: string, errors: string[]): value is string {
-  if (typeof value === 'string' && value.trim()) return true
-  errors.push(`${path} must be a non-empty string.`)
-  return false
-}
-
-function optionalString(value: unknown, path: string, errors: string[]): void {
-  if (value !== undefined && typeof value !== 'string') errors.push(`${path} must be a string.`)
-}
-
-function optionalBoolean(value: unknown, path: string, errors: string[]): void {
-  if (value !== undefined && typeof value !== 'boolean') errors.push(`${path} must be a boolean.`)
-}
-
-function stringArray(value: unknown, path: string, errors: string[]): void {
-  if (!requireArray(value, path, errors)) return
-  value.forEach((item, index) => {
-    if (typeof item !== 'string') errors.push(`${path}[${index}] must be a string.`)
-  })
-}
 
 function validateHeaders(value: unknown, path: string, errors: string[]): void {
   if (!requireRecord(value, path, errors)) return
