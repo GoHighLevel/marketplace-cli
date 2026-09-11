@@ -178,6 +178,12 @@ describe('writeAppWorkspace', () => {
       /GHL marketplace app workspace[\s\S]*ghl-app\.json[\s\S]*src\/webhooks\/ghl-webhooks\.json[\s\S]*complete command reference/i
     )
     expect(claude).toMatch(/CLAUDE\.md[\s\S]*Claude Code[\s\S]*complete command reference/i)
+    for (const document of [agents, claude]) {
+      expect(document).toContain('`ghl-app.d.ts` provides optional compile-time types')
+      expect(document).toContain('`.ghl/schemas/*.schema.json` and `.vscode/settings.json` provide JSON validation')
+      expect(document).toContain('`--with-types`')
+      expect(document).toContain('`--json-schema`')
+    }
     for (const command of commandNames) {
       expect(agents, `${command} missing from AGENTS.md`).toContain(`\`${command}`)
       expect(claude, `${command} missing from CLAUDE.md`).toContain(`\`${command}`)

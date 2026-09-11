@@ -512,6 +512,8 @@ ${audience}
 ## GHL marketplace app workspace
 
 - \`ghl-app.json\` contains app identity, listing, profiles, OAuth metadata, support, billing settings, and review configuration.
+- \`ghl-app.d.ts\` provides optional compile-time types only when TypeScript or JavaScript tooling imports its interfaces.
+- \`.ghl/schemas/*.schema.json\` and \`.vscode/settings.json\` provide JSON validation and autocomplete when type/schema generation is enabled.
 - \`src/webhooks/ghl-webhooks.json\` contains configured webhook settings and is omitted when unused.
 - \`src/modules/workflows/actions/<action-name>.json\` contains one app-scoped action and all of its versions; its required underscore \`key\` must match the hyphenated filename.
 - \`src/modules/workflows/actions/code/<action-key>.<version>.js\` contains one code-backed action version and is referenced through \`executionConfig.codeFile\`.

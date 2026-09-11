@@ -92,6 +92,8 @@ Inside a directory containing `ghl-app.json`, run `ghl app pull` with no app or 
 
 Type and editor support is opt-in. Run `ghl app pull --with-types` while refreshing portal data, or run `ghl app types` in an existing workspace without an API call. The CLI then writes `ghl-app.d.ts`, adds local `$schema` references to files written by that pull, writes deterministic draft-07 schemas under `.ghl/schemas/`, and creates `.vscode/settings.json` only when that file does not already exist. Existing editor settings are never replaced. Contextual and cross-file business rules remain enforced by the CLI validators.
 
+VS Code uses the JSON Schemas and schema associations to validate JSON automatically. The declaration file is separate: TypeScript or JavaScript tooling must explicitly import its exported interfaces before it provides type checking or autocomplete in source code.
+
 | File | Contents |
 |---|---|
 | `ghl-app.json` | App identity/version binding plus listing, profiles, OAuth metadata, support, basic/external billing settings, and review configuration. External authentication, external configuration, MCP configuration, and custom pages are intentionally excluded. |

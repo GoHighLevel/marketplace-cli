@@ -54,7 +54,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
 - The \`billing\`, \`webhooks\`, \`actions\`, \`triggers\`, and action \`code\` directories are created only when their corresponding configuration exists.
 - \`ghl-app.d.ts\`, \`.ghl/schemas/\`, and \`.vscode/settings.json\` are optional; generate them with \`ghl app types\` or \`ghl app pull --with-types\`.
 - **\`ghl-app.json\`**: Supported app metadata and the app/version binding used by local commands.
-- **\`ghl-app.d.ts\`**: Readonly TypeScript declarations for code that consumes the workspace configuration.
+- **\`ghl-app.d.ts\`**: Readonly declarations for TypeScript or JavaScript tooling that explicitly imports the generated interfaces; JSON files are validated by the schemas instead.
 - **\`src/webhooks/ghl-webhooks.json\`**: Configured app-level webhook URL and event subscriptions, kept separate from app metadata.
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
 - **\`src/modules/workflows/actions/<action-name>.json\`**: One JSON file per action, including every action-owned version. Its required \`key\` must match the key derived from the filename.
