@@ -173,5 +173,5 @@ export class ApiClientCore {
 
 /* Class-expression mixins must accept an any[] rest parameter in their
    constructor constraint; this is the one place the codebase needs `any`. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 export type ApiClientConstructor = new (...args: any[]) => ApiClientCore

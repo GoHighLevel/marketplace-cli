@@ -9,7 +9,7 @@ interface DeveloperAccountClient {
 
 export function developerAccountName(account: DeveloperTeam): string {
   const name = account.name
-    // eslint-disable-next-line no-control-regex -- control characters are stripped from account names on purpose.
+    /* eslint-disable-next-line no-control-regex -- Control characters are stripped intentionally. */
     ?.replace(/[\u0000-\u001F\u007F-\u009F]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()

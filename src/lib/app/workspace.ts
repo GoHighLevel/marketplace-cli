@@ -22,7 +22,7 @@ export const WORKSPACE_STATE_RELATIVE_PATH = path.join('.ghl', 'state.json')
 export { AGENTS_FILENAME, CLAUDE_FILENAME, HIGHLEVEL_APP_FILENAME }
 
 const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i
-// eslint-disable-next-line no-control-regex -- control characters are rejected in folder names on purpose.
+/* eslint-disable-next-line no-control-regex -- Control characters are rejected intentionally. */
 const INVALID_FOLDER_CHARACTER = /[<>:"/\\|?*\u0000-\u001F]/
 const MAX_FOLDER_NAME_LENGTH = 100
 
