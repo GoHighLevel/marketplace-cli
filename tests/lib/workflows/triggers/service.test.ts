@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { type WorkflowTriggerSummary } from '../../../../src/lib/api/client.js'
+import type { WorkflowTriggerSummary } from '../../../../src/lib/api/types.js'
 import {
   executeWorkflowTriggersSyncPlanIndependently,
   fetchWorkflowTriggersSnapshot,

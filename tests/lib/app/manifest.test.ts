@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { type AppVersion } from '../../../src/lib/api/client.js'
+import type { AppVersion } from '../../../src/lib/api/types.js'
 import { buildAppFiles } from '../../../src/lib/app/manifest.js'
 
 const omittedCredential = ['must-never', 'be-exported'].join('-')

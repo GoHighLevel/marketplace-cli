@@ -1,4 +1,4 @@
-import { type BillingPlan, type BillingUsageMeter } from '../api/client.js'
+import type { BillingPlan, BillingUsageMeter } from '../api/types.js'
 
 export type BillingPaymentTime = 'month' | 'year' | 'life_time'
 export type BillingPaymentType = 'recurring' | 'one_time'

@@ -1,4 +1,5 @@
-import { ApiClient, type AppVersion, type ProfileUpdateResult } from '../api/client.js'
+import { ApiClient } from '../api/client.js'
+import type { AppVersion, ProfileUpdateResult } from '../api/types.js'
 import { persistSelection, resolveApp } from './context.js'
 import { type CliConfig, getConfig } from '../config/environment.js'
 import { type SelectedApp } from '../config/selection-store.js'

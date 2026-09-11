@@ -1,4 +1,4 @@
-import { type AppVersion } from '../api/client.js'
+import type { AppVersion } from '../api/types.js'
 
 export interface AppManifest {
   schemaVersion: 1

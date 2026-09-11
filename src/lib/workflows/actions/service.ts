@@ -1,5 +1,5 @@
 import { errorMessage } from '../../shared/errors.js'
-import { type WorkflowActionConfig, type WorkflowActionSummary } from '../../api/client.js'
+import type { WorkflowActionConfig, WorkflowActionSummary } from '../../api/types.js'
 import {
   buildWorkflowActionsManifest,
   redactWorkflowActionVersion,

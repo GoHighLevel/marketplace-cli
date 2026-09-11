@@ -1,7 +1,8 @@
 import { Args } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
-import { ApiClient, isDeveloperTeamId } from '../../lib/api/client.js'
+import { ApiClient } from '../../lib/api/client.js'
+import { isDeveloperTeamId } from '../../lib/shared/validation.js'
 import { getConfig } from '../../lib/config/environment.js'
 import {
   developerAccountChoice,

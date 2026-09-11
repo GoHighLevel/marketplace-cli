@@ -1,4 +1,4 @@
-import { type BillingSettings } from '../api/client.js'
+import type { BillingSettings } from '../api/types.js'
 import { normalizeStatus } from '../app/rules.js'
 import { validateHttpsUrl, validatePositiveInteger, validateTextForWhiteLabel } from '../shared/validation.js'
 

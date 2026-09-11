@@ -1,4 +1,4 @@
-import { type AppVersion, type WebhooksCatalog } from '../api/client.js'
+import type { AppVersion, WebhooksCatalog } from '../api/types.js'
 import { isRecord } from '../api/response.js'
 import { validateHttpUrl, validateHttpsUrl } from '../shared/validation.js'
 

@@ -1,5 +1,5 @@
 import { errorMessage } from '../shared/errors.js'
-import { type AppVersion, type BillingSettings, type ProfileUpdateResult } from '../api/client.js'
+import type { AppVersion, BillingSettings, ProfileUpdateResult } from '../api/types.js'
 import { buildAuthSettingsBody } from '../auth/settings.js'
 import { buildBillingSettings } from '../billing/pricing.js'
 import {

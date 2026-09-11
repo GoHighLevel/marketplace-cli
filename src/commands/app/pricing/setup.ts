@@ -3,7 +3,7 @@ import { Flags } from '@oclif/core'
 import { GhlCommand } from '../../../lib/shared/command.js'
 import { errorMessage } from '../../../lib/shared/errors.js'
 import { confirm, input, select } from '../../../lib/shared/prompts.js'
-import { type BillingSettings } from '../../../lib/api/client.js'
+import type { BillingSettings } from '../../../lib/api/types.js'
 import {
   buildBillingSettings,
   defaultFreePlan,

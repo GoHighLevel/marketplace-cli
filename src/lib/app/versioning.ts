@@ -1,4 +1,4 @@
-import { type VersionListItem } from '../api/client.js'
+import type { VersionListItem } from '../api/types.js'
 import { normalizeStatus } from './rules.js'
 
 export type BumpType = 'patch' | 'minor' | 'major'

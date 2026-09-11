@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-import { type AppVersion } from '../api/client.js'
+import type { AppVersion } from '../api/types.js'
 import {
   AGENTS_FILENAME,
   assertWorkspaceDocumentationFilesWritable,

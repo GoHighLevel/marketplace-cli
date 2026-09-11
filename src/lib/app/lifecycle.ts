@@ -1,5 +1,5 @@
 import { errorMessage } from '../shared/errors.js'
-import { type AppVersion } from '../api/client.js'
+import type { AppVersion } from '../api/types.js'
 import { writeJsonFileAtomic } from '../shared/json-file.js'
 import { readLocalAppWorkspace } from './local-workspace.js'
 import { readPullWorkspaceBinding } from './pull.js'

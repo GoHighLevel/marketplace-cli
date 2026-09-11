@@ -1,4 +1,5 @@
-import { type ApiClient, type AppListItem } from '../api/client.js'
+import { type ApiClient } from '../api/client.js'
+import type { AppListItem } from '../api/types.js'
 import { readPullWorkspaceBinding } from './pull.js'
 import { type CliConfig } from '../config/environment.js'
 import { getSelectedApp, saveSelectedApp, type SelectedApp } from '../config/selection-store.js'

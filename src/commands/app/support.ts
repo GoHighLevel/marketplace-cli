@@ -1,7 +1,7 @@
 import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
-import { type AppVersion } from '../../lib/api/client.js'
+import type { AppVersion } from '../../lib/api/types.js'
 import { checkbox, input } from '../../lib/shared/prompts.js'
 import {
   buildSupportBody,

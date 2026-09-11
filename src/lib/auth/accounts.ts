@@ -1,4 +1,4 @@
-import type { DeveloperTeam } from '../api/client.js'
+import type { DeveloperTeam } from '../api/types.js'
 import { clearSelectedApp, getSelectedApp, saveSelectedApp } from '../config/selection-store.js'
 
 interface DeveloperAccountClient {

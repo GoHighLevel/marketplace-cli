@@ -1,5 +1,5 @@
 import { errorMessage } from '../shared/errors.js'
-import { type BillingPlan, type BillingUsageMeter } from '../api/client.js'
+import type { BillingPlan, BillingUsageMeter } from '../api/types.js'
 import {
   type BillingSubscriptionManifest,
   type BillingSubscriptionPlan,

@@ -1,4 +1,4 @@
-import { type AppVersion } from '../api/client.js'
+import type { AppVersion } from '../api/types.js'
 import { isRecord } from '../api/response.js'
 import { type AppFiles } from './manifest.js'
 import { isAppResourceIdentifier, validateAppWorkspaceSchema } from './schema.js'

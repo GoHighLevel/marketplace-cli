@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DeveloperTeam } from '../../../src/lib/api/client.js'
+import type { DeveloperTeam } from '../../../src/lib/api/types.js'
 import { getSelectedApp, saveSelectedApp } from '../../../src/lib/config/selection-store.js'
 import {
   developerAccountChoice,

@@ -1,7 +1,8 @@
 import { Args, Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
-import { ApiClient, type SandboxAccount } from '../../lib/api/client.js'
+import { ApiClient } from '../../lib/api/client.js'
+import type { SandboxAccount } from '../../lib/api/types.js'
 import { getConfig } from '../../lib/config/environment.js'
 import { confirm, select } from '../../lib/shared/prompts.js'
 import { removeSecrets } from '../../lib/secrets/ledger.js'

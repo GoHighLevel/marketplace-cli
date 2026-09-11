@@ -1,4 +1,5 @@
-import { ApiClient, type AppVersion } from '../api/client.js'
+import { ApiClient } from '../api/client.js'
+import type { AppVersion } from '../api/types.js'
 import { sanitizeTerminalText } from '../api/response.js'
 import { buildAppFiles } from './manifest.js'
 import { readLocalAppWorkspace, type LocalAppWorkspace } from './local-workspace.js'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { type WorkflowActionSummary } from '../../../../src/lib/api/client.js'
+import type { WorkflowActionSummary } from '../../../../src/lib/api/types.js'
 import {
   executeWorkflowActionsSyncPlan,
   executeWorkflowActionsSyncPlanIndependently,

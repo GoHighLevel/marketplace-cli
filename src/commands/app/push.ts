@@ -2,7 +2,7 @@ import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
 import { errorMessage } from '../../lib/shared/errors.js'
-import { type AppVersion } from '../../lib/api/client.js'
+import type { AppVersion } from '../../lib/api/types.js'
 import { persistSelection } from '../../lib/app/context.js'
 import { buildAppFiles } from '../../lib/app/manifest.js'
 import { validateLocalBillingIntent } from '../../lib/billing/command-context.js'

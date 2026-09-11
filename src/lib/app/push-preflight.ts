@@ -1,4 +1,4 @@
-import { type WebhooksCatalog } from '../api/client.js'
+import type { WebhooksCatalog } from '../api/types.js'
 import { eventsAllowedByScopes, scopeNamesFromCatalog } from '../auth/settings.js'
 import { type AppSyncPlan } from './sync.js'
 

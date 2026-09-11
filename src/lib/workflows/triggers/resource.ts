@@ -1,4 +1,4 @@
-import type { WorkflowTriggerSummary } from '../../api/client.js'
+import type { WorkflowTriggerSummary } from '../../api/types.js'
 import { type WorkflowResource } from '../shared/resource.js'
 import { workflowTriggerPrerequisiteErrors } from './contract.js'
 import { createWorkflowTriggerScaffold, type WorkflowTriggersManifest } from './manifest.js'

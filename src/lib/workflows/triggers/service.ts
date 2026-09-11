@@ -1,5 +1,5 @@
 import { errorMessage } from '../../shared/errors.js'
-import { type WorkflowTriggerConfig, type WorkflowTriggerSummary } from '../../api/client.js'
+import type { WorkflowTriggerConfig, WorkflowTriggerSummary } from '../../api/types.js'
 import {
   buildWorkflowTriggersManifest,
   type WorkflowTriggersManifest,

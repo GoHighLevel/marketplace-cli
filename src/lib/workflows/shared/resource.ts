@@ -1,4 +1,4 @@
-import type { ApiClient } from '../../api/client.js'
+import { type ApiClient } from '../../api/client.js'
 
 export interface WorkflowResourceManifest {
   schemaVersion: 1

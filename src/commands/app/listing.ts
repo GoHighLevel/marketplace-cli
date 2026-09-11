@@ -2,7 +2,7 @@ import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
 import { input, select } from '../../lib/shared/prompts.js'
-import { type AppVersion } from '../../lib/api/client.js'
+import type { AppVersion } from '../../lib/api/types.js'
 import { normalizeKeywords } from '../../lib/app/categories.js'
 import {
   buildListingBody,

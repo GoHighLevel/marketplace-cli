@@ -2,7 +2,7 @@ import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
 import { confirm, input } from '../../lib/shared/prompts.js'
-import { type AppVersion } from '../../lib/api/client.js'
+import type { AppVersion } from '../../lib/api/types.js'
 import {
   buildProfilesBody,
   type ProfilesChanges,

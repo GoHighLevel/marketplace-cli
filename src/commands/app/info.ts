@@ -2,7 +2,7 @@ import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
 import { errorMessage } from '../../lib/shared/errors.js'
-import { type AppVersion, type PreSubmitValidation } from '../../lib/api/client.js'
+import type { AppVersion, PreSubmitValidation } from '../../lib/api/types.js'
 import { currentInstaller, currentTarget } from '../../lib/app/profile-sections.js'
 import { publishReadinessSymbol } from '../../lib/app/publish-readiness.js'
 import { loadAppContext } from '../../lib/app/section-context.js'

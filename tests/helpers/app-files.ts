@@ -1,4 +1,4 @@
-import { type AppVersion } from '../../src/lib/api/client.js'
+import type { AppVersion } from '../../src/lib/api/types.js'
 import { type AppFiles, buildAppFiles } from '../../src/lib/app/manifest.js'
 
 const DESCRIPTION = 'A'.repeat(320)

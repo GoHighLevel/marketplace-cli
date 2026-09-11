@@ -2,7 +2,7 @@ import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../../lib/shared/command.js'
 import { errorMessage } from '../../../lib/shared/errors.js'
-import { type ProfileUpdateResult } from '../../../lib/api/client.js'
+import type { ProfileUpdateResult } from '../../../lib/api/types.js'
 import { normalizeVariadicArgs } from '../../../lib/shared/arguments.js'
 import { buildUploadForm, validateScreenshotCount } from '../../../lib/app/media.js'
 import {

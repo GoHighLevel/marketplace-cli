@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { type AppVersion, type VersionListItem } from '../api/client.js'
+import type { AppVersion, VersionListItem } from '../api/types.js'
 import type { BillingWorkspaceResult } from '../billing/workspace.js'
 import { isRecord } from '../api/response.js'
 import { requireRegularFile } from './local-workspace.js'

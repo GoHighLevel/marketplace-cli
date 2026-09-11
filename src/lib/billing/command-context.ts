@@ -1,4 +1,5 @@
-import { ApiClient, type AppVersion } from '../api/client.js'
+import { ApiClient } from '../api/client.js'
+import type { AppVersion } from '../api/types.js'
 import { resolveApp } from '../app/context.js'
 import { readPullWorkspaceBinding } from '../app/pull.js'
 import {

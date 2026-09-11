@@ -1,4 +1,4 @@
-import { type AppVersion, type ProfileUpdateResult } from '../api/client.js'
+import type { AppVersion, ProfileUpdateResult } from '../api/types.js'
 import { BUSINESS_NICHE_VALUES, SUBCATEGORY_VALUES } from './categories.js'
 import {
   validateEmail,

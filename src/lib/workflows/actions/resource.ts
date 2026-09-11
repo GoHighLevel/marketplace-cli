@@ -1,4 +1,4 @@
-import type { WorkflowActionSummary } from '../../api/client.js'
+import type { WorkflowActionSummary } from '../../api/types.js'
 import { type WorkflowResource } from '../shared/resource.js'
 import { workflowActionPrerequisiteErrors } from './contract.js'
 import { createWorkflowActionScaffold, type WorkflowActionsManifest } from './manifest.js'

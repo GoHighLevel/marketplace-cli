@@ -1,4 +1,4 @@
-import type { WorkflowActionTestRequest, WorkflowActionTestResponse } from '../../api/client.js'
+import type { WorkflowActionTestRequest, WorkflowActionTestResponse } from '../../api/types.js'
 import { isRecord } from '../../api/response.js'
 import { toWorkflowActionUpdateBody, type WorkflowActionExecutionType, type WorkflowActionVersion } from './manifest.js'
 
