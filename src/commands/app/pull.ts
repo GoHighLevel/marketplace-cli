@@ -63,7 +63,8 @@ export default class AppPull extends GhlCommand {
     directory: Flags.string({ description: 'Parent directory for the app folder (default: current directory)' }),
     folder: Flags.string({ description: 'App folder name (default: app-name slug)' }),
     'with-types': Flags.boolean({
-      description: 'Generate TypeScript declarations, JSON Schemas, and editor associations'
+      description: 'Generate TypeScript declarations, JSON Schemas, and editor associations',
+      default: false
     })
   }
 
@@ -136,7 +137,7 @@ export default class AppPull extends GhlCommand {
     const workspace = await withSpinner(
       'Writing app files...',
       async () => {
-        const includeJsonSchema = flags['with-types']
+        const includeJsonSchema = flags['with-types'] === true
         const appFiles = await writeAppWorkspace({
           directory,
           version: pulled.version,

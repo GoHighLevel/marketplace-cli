@@ -117,7 +117,7 @@ describe('public command contracts', () => {
         version: expect.any(Object),
         directory: expect.any(Object),
         folder: expect.any(Object),
-        'with-types': expect.objectContaining({ type: 'boolean' })
+        'with-types': expect.objectContaining({ type: 'boolean', default: false })
       })
     )
     expect(commandIds).toContain('app:pull')
