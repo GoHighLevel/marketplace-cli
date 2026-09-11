@@ -60,6 +60,7 @@ const HEADER_NAME_PATTERN = "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$"
 
 const stringValue = (): JsonSchema => ({ type: 'string' })
 const nonEmptyString = (): JsonSchema => ({ type: 'string', minLength: 1 })
+const nonBlankString = (): JsonSchema => ({ type: 'string', minLength: 1, pattern: '\\S' })
 const booleanValue = (): JsonSchema => ({ type: 'boolean' })
 const integer = (minimum?: number, maximum?: number): JsonSchema => ({
   type: 'integer',
@@ -119,7 +120,7 @@ function rootSchema(
   }
 }
 
-const appSchema = rootSchema(
+const appBaseSchema = rootSchema(
   'app',
   'HighLevel App Manifest',
   {
@@ -276,6 +277,25 @@ const appSchema = rootSchema(
     'review'
   ]
 )
+
+const appSchema: JsonSchema = {
+  ...appBaseSchema,
+  allOf: [
+    {
+      if: {
+        properties: { appType: { not: { const: 'template' } } },
+        required: ['appType']
+      },
+      then: {
+        properties: {
+          basicInfo: {
+            properties: { name: nonBlankString() }
+          }
+        }
+      }
+    }
+  ]
+}
 
 const webhookSchema = rootSchema(
   'webhooks',

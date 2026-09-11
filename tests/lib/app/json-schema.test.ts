@@ -80,6 +80,28 @@ describe('JSON schema registry', () => {
 
     expect(getJsonSchema('app').title).toBe('HighLevel App Manifest')
   })
+
+  it('requires standard app names to contain visible characters', () => {
+    expect(getJsonSchema('app')).toMatchObject({
+      allOf: [
+        {
+          if: {
+            properties: { appType: { not: { const: 'template' } } },
+            required: ['appType']
+          },
+          then: {
+            properties: {
+              basicInfo: {
+                properties: {
+                  name: { type: 'string', minLength: 1, pattern: '\\S' }
+                }
+              }
+            }
+          }
+        }
+      ]
+    })
+  })
 })
 
 describe('writeJsonSchemaWorkspace', () => {
