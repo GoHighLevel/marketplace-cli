@@ -4,7 +4,7 @@ import path from 'node:path'
 import { GhlCommand } from '../../../lib/shared/command.js'
 import { isRecord } from '../../../lib/api/response.js'
 import { readJsonFile } from '../../../lib/shared/json-file.js'
-import { loadWorkflowActionsRemoteContext } from '../../../lib/workflows/actions/command-context.js'
+import { loadWorkflowRemoteContext } from '../../../lib/workflows/shared/context.js'
 import {
   assertWorkflowActionTestSucceeded,
   prepareWorkflowActionTestRequest
@@ -71,7 +71,7 @@ export default class AppActionsTest extends GhlCommand {
       )
     }
 
-    const context = await loadWorkflowActionsRemoteContext({
+    const context = await loadWorkflowRemoteContext({
       appId: workspace.manifest.appId,
       directory: workspace.directory,
       requireWorkspaceMatch: true
