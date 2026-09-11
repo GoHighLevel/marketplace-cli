@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import Ajv from 'ajv'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
@@ -12,6 +13,203 @@ import {
 } from '../../../src/lib/app/json-schema.js'
 
 const directories: string[] = []
+
+type SchemaObject = Record<string, unknown>
+
+function schemaObject(value: unknown): SchemaObject {
+  expect(value).toBeTypeOf('object')
+  expect(value).not.toBeNull()
+  expect(Array.isArray(value)).toBe(false)
+  return value as SchemaObject
+}
+
+function schemaProperty(schema: SchemaObject, ...pathSegments: string[]): SchemaObject {
+  return pathSegments.reduce((current, segment) => {
+    const properties = schemaObject(current.properties)
+    return schemaObject(properties[segment])
+  }, schema)
+}
+
+function schemaAccepts(name: (typeof JSON_SCHEMA_NAMES)[number], value: unknown): boolean {
+  const validate = new Ajv({
+    allErrors: true,
+    strict: false,
+    validateFormats: false,
+    multipleOfPrecision: 8
+  }).compile(getJsonSchema(name))
+  return validate(value) as boolean
+}
+
+function validAppManifest(): SchemaObject {
+  return {
+    schemaVersion: 1,
+    appId: 'app-1',
+    versionId: 'version-1',
+    version: '1.0.0',
+    status: 'draft',
+    appType: 'standard',
+    basicInfo: {
+      name: 'Contact Sync Hub',
+      tagline: 'Synchronize contacts safely',
+      companyName: 'Contact Sync Labs',
+      contact: { name: '', email: '' },
+      website: 'https://contact-sync.example.com',
+      category: '',
+      subcategory: ['crm'],
+      businessNiche: ['marketing agency'],
+      logoUrl: 'https://contact-sync.example.com/logo.png'
+    },
+    listing: {
+      private: true,
+      userTypes: ['Location'],
+      isWhiteLabelFriendly: false,
+      isAgencyBulkInstallEnabled: false,
+      searchKeywords: ['contact sync']
+    },
+    profiles: {
+      agency: {
+        description: 'A'.repeat(300),
+        previewImageUrls: [],
+        previewVideoUrl: ''
+      },
+      subAccount: {
+        enabled: false,
+        description: '',
+        previewImageUrls: [],
+        previewVideoUrl: ''
+      }
+    },
+    oauth: {
+      allowedScopes: [],
+      redirectUris: [],
+      defaults: { clientKey: null, redirectUrl: null },
+      clientKeys: []
+    },
+    supportConfig: {
+      supportEmail: 'support@example.com',
+      supportPhone: '',
+      websiteUrl: 'https://contact-sync.example.com/support',
+      documentationUrl: '',
+      termsAndConditionsUrl: '',
+      privacyPolicyUrl: '',
+      supportedServices: []
+    },
+    billing: {
+      billingType: 'free',
+      isPaidApp: false,
+      isFreemium: false,
+      externalBilling: false,
+      externalBillingUrl: '',
+      hasFreeTrial: false,
+      freeTrialDuration: null,
+      hasUsageBasedPrice: false,
+      paymentType: '',
+      oneTimePrice: null,
+      additionalInfoForBilling: ''
+    },
+    review: {
+      endToEndDemoUrl: 'https://contact-sync.example.com/demo',
+      scopesDemoUrl: 'https://contact-sync.example.com/scopes',
+      additionalDetails: '',
+      privateReason: 'Internal application'
+    }
+  }
+}
+
+function validWorkflowAction(): SchemaObject {
+  return {
+    schemaVersion: 1,
+    key: 'send_message',
+    templateId: 'action-1',
+    versions: [
+      {
+        version: '1.0',
+        status: 'published',
+        info: { name: 'Send message' },
+        inputs: [
+          {
+            field: 'channel',
+            title: 'Channel',
+            fieldType: 'select',
+            options: [{ label: 'Email', value: 'email' }]
+          }
+        ],
+        executionConfig: { type: 'API', url: 'https://api.example.com/send', method: 'POST' }
+      }
+    ]
+  }
+}
+
+function validWorkflowTrigger(): SchemaObject {
+  return {
+    schemaVersion: 1,
+    key: 'contact_created',
+    templateId: 'trigger-1',
+    versions: [
+      {
+        version: '1.0',
+        status: 'published',
+        info: { name: 'Contact created' },
+        filters: [
+          {
+            field: 'country',
+            title: 'Country',
+            fieldType: 'select',
+            options: [{ label: 'India', value: 'IN' }]
+          }
+        ],
+        subscriptionConfig: { url: 'https://api.example.com/subscribe' }
+      }
+    ]
+  }
+}
+
+function validSubscription(): SchemaObject {
+  return {
+    schemaVersion: 1,
+    appId: 'app-1',
+    plans: [
+      {
+        name: 'Pro',
+        features: ['Automation'],
+        paymentTime: 'month',
+        paymentType: 'recurring',
+        amount: 19.99,
+        freePlan: false,
+        freeForAgency: false,
+        freeForLocation: false
+      }
+    ]
+  }
+}
+
+function validUsageMeter(): SchemaObject {
+  return {
+    schemaVersion: 1,
+    appId: 'app-1',
+    meters: [
+      {
+        productType: 'custom',
+        productId: 'custom_contact_score',
+        productName: 'Contact score',
+        customPriceType: 'dynamic',
+        usageUnit: 'score',
+        pricingPageUrl: 'https://billing.example.com/contact-score',
+        tiers: [
+          {
+            name: 'Scores',
+            minVolume: 0,
+            maxVolume: null,
+            pricePerUnit: 0.02,
+            minPricePerUnit: 0.01,
+            maxPricePerUnit: 0.05,
+            executionLimitPerCycle: 1_000
+          }
+        ]
+      }
+    ]
+  }
+}
 
 function localReferences(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(localReferences)
@@ -82,25 +280,150 @@ describe('JSON schema registry', () => {
   })
 
   it('requires standard app names to contain visible characters', () => {
-    expect(getJsonSchema('app')).toMatchObject({
-      allOf: [
-        {
-          if: {
-            properties: { appType: { not: { const: 'template' } } },
-            required: ['appType']
-          },
-          then: {
+    const schema = getJsonSchema('app')
+    expect(schemaObject((schema.allOf as unknown[])[0])).toMatchObject({
+      if: {
+        properties: { appType: { not: { const: 'template' } } },
+        required: ['appType']
+      },
+      then: {
+        properties: {
+          basicInfo: {
             properties: {
-              basicInfo: {
-                properties: {
-                  name: { type: 'string', minLength: 1, pattern: '\\S' }
-                }
-              }
+              name: { type: 'string', minLength: 1, pattern: '\\S' }
             }
           }
         }
-      ]
+      }
     })
+  })
+
+  it('describes and constrains app names, taglines, categories, and business niches', () => {
+    const schema = getJsonSchema('app')
+    const name = schemaProperty(schema, 'basicInfo', 'name')
+    const tagline = schemaProperty(schema, 'basicInfo', 'tagline')
+    const subcategory = schemaProperty(schema, 'basicInfo', 'subcategory')
+    const niche = schemaProperty(schema, 'basicInfo', 'businessNiche')
+
+    expect(name).toMatchObject({ type: 'string', maxLength: 50, description: expect.stringMatching(/1.*50/i) })
+    expect(tagline).toMatchObject({
+      type: 'string',
+      maxLength: 170,
+      description: expect.stringMatching(/20.*170/i)
+    })
+    expect(JSON.stringify(schema.allOf)).toMatch(/tagline.*minLength.*20/)
+    expect(subcategory).toMatchObject({
+      maxItems: 3,
+      uniqueItems: true,
+      description: expect.stringMatching(/one.*three/i)
+    })
+    expect(JSON.stringify(schema.allOf)).toMatch(/subcategory.*minItems.*1/)
+    expect(schemaObject(subcategory.items).enum).toContain('crm')
+    expect(schemaObject(niche.items).enum).toContain('marketing agency')
+  })
+
+  it('rejects app values that violate editor-visible field and cross-field rules', () => {
+    const valid = validAppManifest()
+    expect(schemaAccepts('app', valid)).toBe(true)
+
+    for (const mutate of [
+      (value: SchemaObject) => ((value.basicInfo as SchemaObject).name = ''),
+      (value: SchemaObject) => ((value.basicInfo as SchemaObject).tagline = 'Too short'),
+      (value: SchemaObject) => ((value.basicInfo as SchemaObject).subcategory = ['not-a-category']),
+      (value: SchemaObject) => ((value.basicInfo as SchemaObject).businessNiche = ['not-a-niche']),
+      (value: SchemaObject) => {
+        const listing = value.listing as SchemaObject
+        listing.userTypes = ['Company']
+        listing.isAgencyBulkInstallEnabled = true
+      },
+      (value: SchemaObject) => {
+        const billing = value.billing as SchemaObject
+        billing.billingType = 'paid'
+        billing.isPaidApp = false
+      },
+      (value: SchemaObject) => {
+        const subAccount = (value.profiles as SchemaObject).subAccount as SchemaObject
+        subAccount.description = 'Unexpected profile content'
+      }
+    ]) {
+      const invalid = structuredClone(valid)
+      mutate(invalid)
+      expect(schemaAccepts('app', invalid)).toBe(false)
+    }
+  })
+
+  it('adds actionable descriptions and local constraints to every configuration schema', () => {
+    const webhooks = getJsonSchema('webhooks')
+    expect(schemaProperty(webhooks, 'webhookUrl')).toMatchObject({
+      description: expect.stringMatching(/https/i)
+    })
+    expect(schemaProperty(webhooks, 'subscribedEvents')).toMatchObject({
+      description: expect.stringMatching(/event/i)
+    })
+
+    const action = getJsonSchema('workflow-action')
+    expect(schemaProperty(action, 'key')).toMatchObject({ description: expect.stringMatching(/stable/i) })
+    expect(schemaObject((action.definitions as SchemaObject).actionInput)).toHaveProperty('allOf')
+    expect(schemaObject((action.definitions as SchemaObject).executionConfig)).toHaveProperty('description')
+
+    const trigger = getJsonSchema('workflow-trigger')
+    expect(schemaProperty(trigger, 'key')).toMatchObject({ description: expect.stringMatching(/stable/i) })
+    expect(schemaObject((trigger.definitions as SchemaObject).triggerFilter)).toHaveProperty('allOf')
+    expect(schemaObject((trigger.definitions as SchemaObject).subscriptionConfig)).toHaveProperty('description')
+
+    const subscription = getJsonSchema('subscription')
+    expect(schemaProperty(subscription, 'plans')).toMatchObject({ description: expect.stringMatching(/plan/i) })
+    expect(schemaObject((subscription.definitions as SchemaObject).subscriptionPlan)).toHaveProperty('allOf')
+
+    const usage = getJsonSchema('usage-based')
+    expect(schemaProperty(usage, 'meters')).toMatchObject({ description: expect.stringMatching(/meter/i) })
+    expect(schemaObject((usage.definitions as SchemaObject).usageMeter)).toHaveProperty('allOf')
+  })
+
+  it('enforces webhook, workflow, and billing relationships without rejecting valid manifests', () => {
+    const webhook = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      versionId: 'version-1',
+      webhookUrl: 'https://hooks.example.com/default',
+      subscribedEvents: [{ name: 'ContactCreate', url: 'https://hooks.example.com/contact' }]
+    }
+    expect(schemaAccepts('webhooks', webhook)).toBe(true)
+    expect(schemaAccepts('webhooks', { ...webhook, webhookUrl: '' })).toBe(false)
+    expect(schemaAccepts('webhooks', { ...webhook, subscribedEvents: [{ name: 'not valid', url: '' }] })).toBe(false)
+
+    const action = validWorkflowAction()
+    expect(schemaAccepts('workflow-action', action)).toBe(true)
+    const actionWithTwoSources = structuredClone(action)
+    const actionInput = ((actionWithTwoSources.versions as SchemaObject[])[0].inputs as SchemaObject[])[0] ?? {}
+    actionInput.fetchOptions = { url: 'https://api.example.com/options' }
+    expect(schemaAccepts('workflow-action', actionWithTwoSources)).toBe(false)
+
+    const trigger = validWorkflowTrigger()
+    expect(schemaAccepts('workflow-trigger', trigger)).toBe(true)
+    const triggerWithoutOptions = structuredClone(trigger)
+    delete (((triggerWithoutOptions.versions as SchemaObject[])[0].filters as SchemaObject[])[0] ?? {}).options
+    expect(schemaAccepts('workflow-trigger', triggerWithoutOptions)).toBe(false)
+
+    const subscription = validSubscription()
+    expect(schemaAccepts('subscription', subscription)).toBe(true)
+    const mismatchedPayment = structuredClone(subscription)
+    const mismatchedPlan = (mismatchedPayment.plans as SchemaObject[])[0]
+    mismatchedPlan.paymentTime = 'life_time'
+    expect(schemaAccepts('subscription', mismatchedPayment)).toBe(false)
+
+    const usage = validUsageMeter()
+    expect(schemaAccepts('usage-based', usage)).toBe(true)
+    const invalidUsageUnit = structuredClone(usage)
+    const meter = (invalidUsageUnit.meters as SchemaObject[])[0]
+    meter.productType = 'workflow_action'
+    meter.customPriceType = 'fixed'
+    meter.usageUnit = 'message'
+    delete meter.pricingPageUrl
+    const tier = (meter.tiers as SchemaObject[])[0]
+    delete tier.minPricePerUnit
+    delete tier.maxPricePerUnit
+    expect(schemaAccepts('usage-based', invalidUsageUnit)).toBe(false)
   })
 })
 

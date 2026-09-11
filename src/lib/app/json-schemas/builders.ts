@@ -11,31 +11,49 @@ export const WORKFLOW_VERSION_PATTERN = '^\\d{1,10}\\.\\d{1,10}$'
 
 export const HEADER_NAME_PATTERN = "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$"
 
-export const stringValue = (): JsonSchema => ({ type: 'string' })
+export const MAX_URL_LENGTH = 2_048
 
-export const nonEmptyString = (): JsonSchema => ({ type: 'string', minLength: 1 })
+export const OAUTH_SCOPE_PATTERN = '^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$'
 
-export const nonBlankString = (): JsonSchema => ({ type: 'string', minLength: 1, pattern: '\\S' })
+export const WEBHOOK_EVENT_PATTERN = '^[a-zA-Z][a-zA-Z0-9._:-]{0,199}$'
 
-export const booleanValue = (): JsonSchema => ({ type: 'boolean' })
+export const stringValue = (constraints: JsonSchema = {}): JsonSchema => ({ type: 'string', ...constraints })
 
-export const integer = (minimum?: number, maximum?: number): JsonSchema => ({
+export const nonEmptyString = (constraints: JsonSchema = {}): JsonSchema => ({
+  type: 'string',
+  minLength: 1,
+  pattern: '\\S',
+  ...constraints
+})
+
+export const nonBlankString = (constraints: JsonSchema = {}): JsonSchema => ({
+  type: 'string',
+  minLength: 1,
+  pattern: '\\S',
+  ...constraints
+})
+
+export const booleanValue = (constraints: JsonSchema = {}): JsonSchema => ({ type: 'boolean', ...constraints })
+
+export const integer = (minimum?: number, maximum?: number, constraints: JsonSchema = {}): JsonSchema => ({
   type: 'integer',
   ...(minimum === undefined ? {} : { minimum }),
-  ...(maximum === undefined ? {} : { maximum })
+  ...(maximum === undefined ? {} : { maximum }),
+  ...constraints
 })
 
 export const stringArray = (
-  options: { maxItems?: number; minItems?: number; uniqueItems?: boolean } = {}
+  options: { description?: string; maxItems?: number; minItems?: number; uniqueItems?: boolean } = {},
+  items: JsonSchema = stringValue()
 ): JsonSchema => ({
   type: 'array',
-  items: stringValue(),
+  items,
   ...options
 })
 
 export const arrayOf = (
   items: JsonSchema,
-  options: { maxItems?: number; minItems?: number; uniqueItems?: boolean } = {}
+  options: { description?: string; maxItems?: number; minItems?: number; uniqueItems?: boolean } = {}
 ): JsonSchema => ({
   type: 'array',
   items,
@@ -60,6 +78,38 @@ export const arbitraryObject = (): JsonSchema => ({ type: 'object' })
 export const nullableNumber = (constraints: JsonSchema = {}): JsonSchema => ({
   type: ['number', 'null'],
   ...constraints
+})
+
+export const requiredHttpUrl = (description: string): JsonSchema =>
+  nonBlankString({
+    maxLength: MAX_URL_LENGTH,
+    format: 'uri',
+    pattern: '^https?://',
+    description
+  })
+
+export const requiredHttpsUrl = (description: string): JsonSchema =>
+  nonBlankString({
+    maxLength: MAX_URL_LENGTH,
+    format: 'uri',
+    pattern: '^https://',
+    description
+  })
+
+export const optionalHttpUrl = (description: string): JsonSchema => ({
+  type: 'string',
+  maxLength: MAX_URL_LENGTH,
+  format: 'uri-reference',
+  pattern: '^(?:$|https?://)',
+  description
+})
+
+export const optionalHttpsUrl = (description: string): JsonSchema => ({
+  type: 'string',
+  maxLength: MAX_URL_LENGTH,
+  format: 'uri-reference',
+  pattern: '^(?:$|https://)',
+  description
 })
 
 const schemaProperty = (): JsonSchema => ({

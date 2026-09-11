@@ -3,6 +3,8 @@ import {
   booleanValue,
   nonEmptyString,
   object,
+  optionalHttpsUrl,
+  requiredHttpsUrl,
   stringArray,
   stringValue,
   type JsonSchema
@@ -11,19 +13,31 @@ import {
 export const headersSchema = (): JsonSchema => ({
   type: 'object',
   propertyNames: { pattern: HEADER_NAME_PATTERN },
-  additionalProperties: nonEmptyString()
+  additionalProperties: nonEmptyString(),
+  description: 'HTTP header names and non-empty values. Header names must use RFC token characters.'
 })
 
 export const workflowInfoSchema = (limits = false): JsonSchema =>
   object(
     {
-      name: nonEmptyString(),
-      description: { type: 'string', ...(limits ? { maxLength: 200 } : {}) },
-      summary: { type: 'string', ...(limits ? { maxLength: 500 } : {}) },
-      groupName: stringValue(),
-      keywords: stringArray(),
-      icon: stringValue(),
-      screenshots: stringArray()
+      name: nonEmptyString({ description: 'Marketplace display name.' }),
+      description: {
+        type: 'string',
+        ...(limits ? { maxLength: 200 } : {}),
+        description: limits ? 'Description with at most 200 characters.' : 'Marketplace description.'
+      },
+      summary: {
+        type: 'string',
+        ...(limits ? { maxLength: 500 } : {}),
+        description: limits ? 'Summary with at most 500 characters.' : 'Marketplace summary.'
+      },
+      groupName: stringValue({ description: 'Optional workflow picker group.' }),
+      keywords: stringArray({ description: 'Workflow search keywords.' }),
+      icon: stringValue({ description: 'Optional icon identifier.' }),
+      screenshots: stringArray(
+        { description: 'Public HTTPS screenshot URLs.' },
+        requiredHttpsUrl('Public HTTPS workflow screenshot URL.')
+      )
     },
     ['name']
   )
@@ -31,12 +45,12 @@ export const workflowInfoSchema = (limits = false): JsonSchema =>
 export const workflowOptionSchema = (): JsonSchema =>
   object(
     {
-      label: nonEmptyString(),
-      value: nonEmptyString(),
-      description: stringValue(),
-      disabled: booleanValue(),
-      icon: stringValue(),
-      iconUrl: stringValue()
+      label: nonEmptyString({ description: 'Option label shown to users.' }),
+      value: nonEmptyString({ description: 'Unique option value within the option list.' }),
+      description: stringValue({ description: 'Optional option description.' }),
+      disabled: booleanValue({ description: 'Whether this option is disabled.' }),
+      icon: stringValue({ description: 'Optional icon identifier.' }),
+      iconUrl: optionalHttpsUrl('Optional public HTTPS option icon URL.')
     },
     ['label', 'value']
   )
