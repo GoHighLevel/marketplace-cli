@@ -1,6 +1,7 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
-import { input, isPromptCancel } from '../../lib/shared/prompts.js'
+import { GhlCommand } from '../../lib/shared/command.js'
+import { input } from '../../lib/shared/prompts.js'
 import { type AppVersion } from '../../lib/api/client.js'
 import {
   buildReviewDetailsBody,
@@ -12,7 +13,7 @@ import {
 import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
-export default class AppReviewDetails extends Command {
+export default class AppReviewDetails extends GhlCommand {
   static description = 'Edit the app-review details (demo videos, test credentials) required for review submission'
 
   static examples = [
@@ -29,7 +30,7 @@ export default class AppReviewDetails extends Command {
     'private-reason': Flags.string({ description: 'Why the app stays private (private apps only)' })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { flags } = await this.parse(AppReviewDetails)
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
@@ -38,40 +39,32 @@ export default class AppReviewDetails extends Command {
       this.error('Pass at least one field flag (--demo, --scopes-demo, ...) when running non-interactively.')
     }
 
-    try {
-      const context = await loadAppContext(flags.app)
-      if (context.version.appType === 'template') {
-        this.error('Template apps do not use app-review details; the developer portal skips this step.')
-      }
-      if (flags['private-reason'] !== undefined && context.version.private !== true) {
-        this.error('--private-reason only applies to private apps.')
-      }
-      const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
-
-      for (const url of [finalChanges.demoUrl, finalChanges.scopesDemoUrl]) {
-        if (url !== undefined) {
-          const valid = validateDemoUrl(url)
-          if (valid !== true) this.error(valid)
-        }
-      }
-      const changesValidation = validateReviewDetailsChanges(finalChanges)
-      if (changesValidation !== true) this.error(changesValidation)
-
-      const body = buildReviewDetailsBody(context.version, finalChanges)
-      const validation = validateReviewDetailsBody(body, context.version.private === true)
-      if (validation !== true) this.error(validation)
-      const result = await withSpinner('Saving review details...', () =>
-        context.client.updateReviewDetails(context.selected.appId, context.selected.versionId, body)
-      )
-      this.log('Review details updated.')
-      await followVersionChange(context, result, message => this.log(message))
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to update review details')
+    const context = await loadAppContext(flags.app)
+    if (context.version.appType === 'template') {
+      this.error('Template apps do not use app-review details; the developer portal skips this step.')
     }
+    if (flags['private-reason'] !== undefined && context.version.private !== true) {
+      this.error('--private-reason only applies to private apps.')
+    }
+    const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
+
+    for (const url of [finalChanges.demoUrl, finalChanges.scopesDemoUrl]) {
+      if (url !== undefined) {
+        const valid = validateDemoUrl(url)
+        if (valid !== true) this.error(valid)
+      }
+    }
+    const changesValidation = validateReviewDetailsChanges(finalChanges)
+    if (changesValidation !== true) this.error(changesValidation)
+
+    const body = buildReviewDetailsBody(context.version, finalChanges)
+    const validation = validateReviewDetailsBody(body, context.version.private === true)
+    if (validation !== true) this.error(validation)
+    const result = await withSpinner('Saving review details...', () =>
+      context.client.updateReviewDetails(context.selected.appId, context.selected.versionId, body)
+    )
+    this.log('Review details updated.')
+    await followVersionChange(context, result, message => this.log(message))
   }
 
   private changesFromFlags(flags: Record<string, string | undefined>): ReviewDetailsChanges {

@@ -1,3 +1,4 @@
+import { errorMessage } from '../shared/errors.js'
 import { type AppVersion } from '../api/client.js'
 import { writeJsonFileAtomic } from '../shared/json-file.js'
 import { readLocalAppWorkspace } from './local-workspace.js'
@@ -101,7 +102,7 @@ export async function refreshAppWorkspaceLifecycle(
     const restored = await Promise.allSettled(
       managedWrites.map(([file, , original, mode]) => writeJsonFileAtomic(file, original, mode))
     )
-    const reason = failure.reason instanceof Error ? failure.reason.message : 'Unknown write failure.'
+    const reason = errorMessage(failure.reason, 'Unknown write failure.')
     if (restored.some(result => result.status === 'rejected')) {
       throw new Error(
         `Local lifecycle synchronization failed and rollback was incomplete: ${reason} ` +

@@ -1,7 +1,8 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
+import { GhlCommand } from '../../lib/shared/command.js'
 import { type AppVersion } from '../../lib/api/client.js'
-import { checkbox, input, isPromptCancel } from '../../lib/shared/prompts.js'
+import { checkbox, input } from '../../lib/shared/prompts.js'
 import {
   buildSupportBody,
   SUPPORTED_SERVICES,
@@ -23,7 +24,7 @@ interface SupportFlags {
   service?: string[]
 }
 
-export default class AppSupport extends Command {
+export default class AppSupport extends GhlCommand {
   static description = 'Edit the support details of the selected app (interactive, or via flags)'
 
   static examples = [
@@ -46,7 +47,7 @@ export default class AppSupport extends Command {
     })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { flags } = await this.parse(AppSupport)
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
@@ -55,28 +56,20 @@ export default class AppSupport extends Command {
       this.error('Pass at least one field flag (--email, --phone, ...) when running non-interactively.')
     }
 
-    try {
-      const context = await loadAppContext(flags.app)
-      if (flags.service !== undefined && context.version.appType !== 'template') {
-        this.error('--service only applies to template apps.')
-      }
-      const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
-
-      const body = buildSupportBody(context.version, finalChanges)
-      const validation = validateSupportBody(body, context.version.appType === 'template')
-      if (validation !== true) this.error(validation)
-      const result = await withSpinner('Saving support details...', () =>
-        context.client.updateProfileSection('supportDetails', context.selected.appId, context.selected.versionId, body)
-      )
-      this.log('Support details updated.')
-      await followVersionChange(context, result, message => this.log(message))
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to update support details')
+    const context = await loadAppContext(flags.app)
+    if (flags.service !== undefined && context.version.appType !== 'template') {
+      this.error('--service only applies to template apps.')
     }
+    const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
+
+    const body = buildSupportBody(context.version, finalChanges)
+    const validation = validateSupportBody(body, context.version.appType === 'template')
+    if (validation !== true) this.error(validation)
+    const result = await withSpinner('Saving support details...', () =>
+      context.client.updateProfileSection('supportDetails', context.selected.appId, context.selected.versionId, body)
+    )
+    this.log('Support details updated.')
+    await followVersionChange(context, result, message => this.log(message))
   }
 
   private changesFromFlags(flags: SupportFlags): SupportChanges {

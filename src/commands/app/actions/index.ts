@@ -1,10 +1,11 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
+import { GhlCommand } from '../../../lib/shared/command.js'
 import { loadWorkflowActionsRemoteContext } from '../../../lib/workflows/actions/command-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 import { renderTable } from '../../../lib/shared/table.js'
 
-export default class AppActions extends Command {
+export default class AppActions extends GhlCommand {
   static description = 'List workflow actions registered for an app'
 
   static examples = [
@@ -19,29 +20,24 @@ export default class AppActions extends Command {
     directory: Flags.string({ description: 'App workspace directory used to resolve the app id', default: '.' })
   }
 
-  async run(): Promise<unknown> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppActions)
-    try {
-      const context = await loadWorkflowActionsRemoteContext({ appId: flags.app, directory: flags.directory })
-      const actions = await withSpinner(
-        'Loading workflow actions...',
-        () => context.client.listWorkflowActionSummaries(context.appId),
-        { quiet: this.jsonEnabled() }
-      )
-      if (this.jsonEnabled()) return { appId: context.appId, actions }
-      if (actions.length === 0) {
-        this.log('No workflow actions are registered for this app.')
-        return
-      }
-      this.log(
-        renderTable(
-          ['ACTION ID', 'NAME', 'VERSION', 'STATUS'],
-          actions.map(action => [action.actionId, action.name, action.version, action.status])
-        )
-      )
+    const context = await loadWorkflowActionsRemoteContext({ appId: flags.app, directory: flags.directory })
+    const actions = await withSpinner(
+      'Loading workflow actions...',
+      () => context.client.listWorkflowActionSummaries(context.appId),
+      { quiet: this.jsonEnabled() }
+    )
+    if (this.jsonEnabled()) return { appId: context.appId, actions }
+    if (actions.length === 0) {
+      this.log('No workflow actions are registered for this app.')
       return
-    } catch (error) {
-      this.error(error instanceof Error ? error.message : 'Failed to list workflow actions.')
     }
+    this.log(
+      renderTable(
+        ['ACTION ID', 'NAME', 'VERSION', 'STATUS'],
+        actions.map(action => [action.actionId, action.name, action.version, action.status])
+      )
+    )
   }
 }

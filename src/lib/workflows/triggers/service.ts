@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/errors.js'
 import { type WorkflowTriggerConfig, type WorkflowTriggerSummary } from '../../api/client.js'
 import {
   buildWorkflowTriggersManifest,
@@ -236,10 +237,7 @@ async function createAvailabilityErrors(
   checks.forEach((check, index) => {
     const operation = creates[index]
     if (check.status === 'rejected') {
-      errors.set(
-        operation,
-        check.reason instanceof Error ? check.reason.message : 'Trigger key availability check failed.'
-      )
+      errors.set(operation, errorMessage(check.reason, 'Trigger key availability check failed.'))
     } else if (!check.value) {
       errors.set(
         operation,
@@ -315,7 +313,7 @@ export async function executeWorkflowTriggersSyncPlanIndependently(
         type: operation.type,
         key: operation.key,
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage(error, 'Unknown error')
       })
     }
   }

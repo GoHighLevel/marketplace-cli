@@ -1,12 +1,14 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
+import { GhlCommand } from '../../lib/shared/command.js'
+import { errorMessage } from '../../lib/shared/errors.js'
 import { type AppVersion, type PreSubmitValidation } from '../../lib/api/client.js'
 import { currentInstaller, currentTarget } from '../../lib/app/profile-sections.js'
 import { publishReadinessSymbol } from '../../lib/app/publish-readiness.js'
 import { loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
-export default class AppInfo extends Command {
+export default class AppInfo extends GhlCommand {
   static description = 'Show all details of the selected app'
 
   static examples = ['<%= config.bin %> app info', '<%= config.bin %> app info --json']
@@ -17,33 +19,28 @@ export default class AppInfo extends Command {
     app: Flags.string({ description: 'App id (defaults to the selected app)' })
   }
 
-  async run(): Promise<unknown> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppInfo)
 
+    const context = await loadAppContext(flags.app, this.jsonEnabled())
+    let validation: PreSubmitValidation | undefined
+    let readinessError: string | undefined
     try {
-      const context = await loadAppContext(flags.app, this.jsonEnabled())
-      let validation: PreSubmitValidation | undefined
-      let readinessError: string | undefined
-      try {
-        validation = await withSpinner(
-          'Checking publish readiness...',
-          () => context.client.preSubmitValidation(context.selected.appId, context.selected.versionId),
-          { quiet: this.jsonEnabled() }
-        )
-      } catch (error) {
-        readinessError = error instanceof Error ? error.message : 'Publish readiness check failed.'
-      }
-
-      if (this.jsonEnabled()) {
-        return { version: context.version, readiness: validation?.mandatoryFields ?? null, readinessError }
-      }
-
-      this.render(context.version, context.selected.appId, validation)
-      if (readinessError) this.warn(`Publish readiness unavailable: ${readinessError}`)
-      return
+      validation = await withSpinner(
+        'Checking publish readiness...',
+        () => context.client.preSubmitValidation(context.selected.appId, context.selected.versionId),
+        { quiet: this.jsonEnabled() }
+      )
     } catch (error) {
-      this.error(error instanceof Error ? error.message : 'Failed to load app details')
+      readinessError = errorMessage(error, 'Publish readiness check failed.')
     }
+
+    if (this.jsonEnabled()) {
+      return { version: context.version, readiness: validation?.mandatoryFields ?? null, readinessError }
+    }
+
+    this.render(context.version, context.selected.appId, validation)
+    if (readinessError) this.warn(`Publish readiness unavailable: ${readinessError}`)
   }
 
   private render(v: AppVersion, appId: string, validation?: PreSubmitValidation): void {

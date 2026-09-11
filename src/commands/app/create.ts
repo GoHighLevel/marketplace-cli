@@ -1,5 +1,7 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
+import { GhlCommand } from '../../lib/shared/command.js'
+import { errorMessage } from '../../lib/shared/errors.js'
 import { ApiClient } from '../../lib/api/client.js'
 import { persistSelection, toSelectedApp } from '../../lib/app/context.js'
 import { loadAppVersionForExport } from '../../lib/app/pull.js'
@@ -8,7 +10,7 @@ import { emptyBillingSubscriptionManifest, emptyBillingUsageManifest } from '../
 import { writeBillingWorkspace } from '../../lib/billing/workspace.js'
 import { getConfig } from '../../lib/config/environment.js'
 import { buildCreateAppBody, type CreateAppAnswers, validateAppName } from '../../lib/app/create.js'
-import { input, isPromptCancel, select } from '../../lib/shared/prompts.js'
+import { input, select } from '../../lib/shared/prompts.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { collectWorkspaceDirectory } from '../../lib/shared/workspace-input.js'
 import { createEmptyWorkflowActionsManifest } from '../../lib/workflows/actions/manifest.js'
@@ -16,7 +18,7 @@ import { writeWorkflowActionsWorkspace } from '../../lib/workflows/actions/works
 import { createEmptyWorkflowTriggersManifest } from '../../lib/workflows/triggers/manifest.js'
 import { writeWorkflowTriggersWorkspace } from '../../lib/workflows/triggers/workspace.js'
 
-export default class AppCreate extends Command {
+export default class AppCreate extends GhlCommand {
   static description = 'Create a new app and its local JSON workspace'
 
   static examples = [
@@ -40,7 +42,7 @@ export default class AppCreate extends Command {
     folder: Flags.string({ description: 'App folder name (default: app-name slug)' })
   }
 
-  async run(): Promise<unknown> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppCreate)
     const interactive = process.stdin.isTTY === true && !this.jsonEnabled()
 
@@ -48,76 +50,68 @@ export default class AppCreate extends Command {
       this.error('--installer only applies when --target is sub-account (agency apps are installed by agencies).')
     }
 
-    try {
-      const answers = await this.collectAnswers(flags, interactive)
-      const directory = await collectWorkspaceDirectory({
-        appName: answers.name,
-        flags,
-        interactive
-      })
-      await assertAppDirectoryAvailable(directory)
-      if (answers.type === 'private' && !this.jsonEnabled()) {
-        this.log('Note: private apps have install limits — see the marketplace policies for details.')
-      }
+    const answers = await this.collectAnswers(flags, interactive)
+    const directory = await collectWorkspaceDirectory({
+      appName: answers.name,
+      flags,
+      interactive
+    })
+    await assertAppDirectoryAvailable(directory)
+    if (answers.type === 'private' && !this.jsonEnabled()) {
+      this.log('Note: private apps have install limits — see the marketplace policies for details.')
+    }
 
-      const config = getConfig()
-      const client = new ApiClient(config)
-      const created = await withSpinner(
-        'Creating app...',
+    const config = getConfig()
+    const client = new ApiClient(config)
+    const created = await withSpinner(
+      'Creating app...',
+      async () => {
+        await client.init()
+        return client.createApp(buildCreateAppBody(answers))
+      },
+      { quiet: this.jsonEnabled() }
+    )
+
+    const selected = toSelectedApp(created)
+    try {
+      await persistSelection(client, config, selected)
+      const version = await withSpinner(
+        'Loading created app...',
+        () => loadAppVersionForExport(client, selected.appId, selected.versionId),
+        { quiet: this.jsonEnabled() }
+      )
+      const workspace = await withSpinner(
+        'Writing app files...',
         async () => {
-          await client.init()
-          return client.createApp(buildCreateAppBody(answers))
+          const appFiles = await writeAppWorkspace({
+            directory,
+            version: { ...version, name: version.name ?? selected.name }
+          })
+          await writeWorkflowActionsWorkspace(directory, createEmptyWorkflowActionsManifest(selected.appId))
+          await writeWorkflowTriggersWorkspace(directory, createEmptyWorkflowTriggersManifest(selected.appId))
+          await writeBillingWorkspace(
+            directory,
+            emptyBillingSubscriptionManifest(selected.appId),
+            emptyBillingUsageManifest(selected.appId)
+          )
+          return appFiles
         },
         { quiet: this.jsonEnabled() }
       )
 
-      const selected = toSelectedApp(created)
-      try {
-        await persistSelection(client, config, selected)
-        const version = await withSpinner(
-          'Loading created app...',
-          () => loadAppVersionForExport(client, selected.appId, selected.versionId),
-          { quiet: this.jsonEnabled() }
-        )
-        const workspace = await withSpinner(
-          'Writing app files...',
-          async () => {
-            const appFiles = await writeAppWorkspace({
-              directory,
-              version: { ...version, name: version.name ?? selected.name }
-            })
-            await writeWorkflowActionsWorkspace(directory, createEmptyWorkflowActionsManifest(selected.appId))
-            await writeWorkflowTriggersWorkspace(directory, createEmptyWorkflowTriggersManifest(selected.appId))
-            await writeBillingWorkspace(
-              directory,
-              emptyBillingSubscriptionManifest(selected.appId),
-              emptyBillingUsageManifest(selected.appId)
-            )
-            return appFiles
-          },
-          { quiet: this.jsonEnabled() }
-        )
+      if (this.jsonEnabled()) return { app: created, selected, files: workspace }
 
-        if (this.jsonEnabled()) return { app: created, selected, files: workspace }
-
-        this.log(`\nCreated "${selected.name}" (appId: ${selected.appId}, versionId: ${selected.versionId}).`)
-        this.log(`App files were created in ${workspace.directory}`)
-        this.log('This app is now selected — subsequent commands will target it.')
-        return
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : 'Local initialization failed.'
-        throw new Error(
-          `The app was created (appId: ${selected.appId}, versionId: ${selected.versionId}), ` +
-            `but its local files could not be initialized: ${reason} ` +
-            `Run \`ghl app pull ${selected.appId}\` to recover it.`
-        )
-      }
+      this.log(`\nCreated "${selected.name}" (appId: ${selected.appId}, versionId: ${selected.versionId}).`)
+      this.log(`App files were created in ${workspace.directory}`)
+      this.log('This app is now selected — subsequent commands will target it.')
+      return
     } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to create app')
+      const reason = errorMessage(error, 'Local initialization failed.')
+      throw new Error(
+        `The app was created (appId: ${selected.appId}, versionId: ${selected.versionId}), ` +
+          `but its local files could not be initialized: ${reason} ` +
+          `Run \`ghl app pull ${selected.appId}\` to recover it.`
+      )
     }
   }
 

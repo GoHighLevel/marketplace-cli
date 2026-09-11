@@ -1,15 +1,14 @@
-import { Command } from '@oclif/core'
-
+import { GhlCommand } from '../lib/shared/command.js'
 import { getConfig } from '../lib/config/environment.js'
 import { clearStoredSession, loadCredentials } from '../lib/auth/token-store.js'
 
-export default class Logout extends Command {
+export default class Logout extends GhlCommand {
   static description =
     'Log out of the CLI: delete the stored tokens and app selection so every API command requires `ghl login` again'
 
   static examples = ['<%= config.bin %> logout']
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const config = getConfig()
 
     let who: string | undefined
@@ -20,18 +19,14 @@ export default class Logout extends Command {
       /* A corrupt credentials file should not block logout — delete it anyway. */
     }
 
-    try {
-      const removed = await clearStoredSession(config.configDir)
-      if (removed.length === 0) {
-        this.log('Already logged out — no stored credentials found.')
-        return
-      }
-
-      this.log(`Logged out${who ? ` ${who}` : ''}`)
-      this.log('')
-      this.log('Run `ghl login` to authenticate again.')
-    } catch (error) {
-      this.error(error instanceof Error ? error.message : 'Logout failed')
+    const removed = await clearStoredSession(config.configDir)
+    if (removed.length === 0) {
+      this.log('Already logged out — no stored credentials found.')
+      return
     }
+
+    this.log(`Logged out${who ? ` ${who}` : ''}`)
+    this.log('')
+    this.log('Run `ghl login` to authenticate again.')
   }
 }

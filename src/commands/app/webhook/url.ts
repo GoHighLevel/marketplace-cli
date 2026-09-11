@@ -1,6 +1,7 @@
-import { Args, Command } from '@oclif/core'
+import { Args } from '@oclif/core'
 
-import { input, isPromptCancel } from '../../../lib/shared/prompts.js'
+import { GhlCommand } from '../../../lib/shared/command.js'
+import { input } from '../../../lib/shared/prompts.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 import { validateHttpsUrl } from '../../../lib/shared/validation.js'
 import {
@@ -9,7 +10,7 @@ import {
   webhookWorkspaceFlags
 } from '../../../lib/webhooks/workspace-mutation.js'
 
-export default class AppWebhookUrl extends Command {
+export default class AppWebhookUrl extends GhlCommand {
   static description = 'Set the webhook URL in a local app workspace and synchronize it'
 
   static examples = [
@@ -24,7 +25,7 @@ export default class AppWebhookUrl extends Command {
 
   static flags = webhookWorkspaceFlags()
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { args, flags } = await this.parse(AppWebhookUrl)
 
     if (args.url === undefined && !process.stdin.isTTY) {
@@ -38,40 +39,32 @@ export default class AppWebhookUrl extends Command {
       if (validation !== true) this.error(validation)
     }
 
-    try {
-      const context = await withSpinner('Loading webhook workspace...', () =>
-        loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
-      )
+    const context = await withSpinner('Loading webhook workspace...', () =>
+      loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
+    )
 
-      const url =
-        providedUrl ??
-        (
-          await input({
-            message: 'Webhook URL (https):',
-            default: context.remoteFiles.webhooks.webhookUrl,
-            validate: value => validateHttpsUrl(value, 'Webhook URL', { publicOnly: true })
-          })
-        ).trim()
-      const validation = validateHttpsUrl(url, 'Webhook URL', { publicOnly: true })
-      if (validation !== true) this.error(validation)
-
-      const result = await withSpinner('Saving local and remote webhook URL...', () =>
-        applyWebhookWorkspaceMutation(context, {
-          webhookUrl: url,
-          subscribedEvents: context.remoteFiles.webhooks.subscribedEvents
+    const url =
+      providedUrl ??
+      (
+        await input({
+          message: 'Webhook URL (https):',
+          default: context.remoteFiles.webhooks.webhookUrl,
+          validate: value => validateHttpsUrl(value, 'Webhook URL', { publicOnly: true })
         })
-      )
-      this.log(
-        result.applied
-          ? `Webhook URL set to ${url}; local workspace synchronized.`
-          : `Webhook URL already set to ${url}; local workspace synchronized.`
-      )
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to set webhook URL')
-    }
+      ).trim()
+    const validation = validateHttpsUrl(url, 'Webhook URL', { publicOnly: true })
+    if (validation !== true) this.error(validation)
+
+    const result = await withSpinner('Saving local and remote webhook URL...', () =>
+      applyWebhookWorkspaceMutation(context, {
+        webhookUrl: url,
+        subscribedEvents: context.remoteFiles.webhooks.subscribedEvents
+      })
+    )
+    this.log(
+      result.applied
+        ? `Webhook URL set to ${url}; local workspace synchronized.`
+        : `Webhook URL already set to ${url}; local workspace synchronized.`
+    )
   }
 }

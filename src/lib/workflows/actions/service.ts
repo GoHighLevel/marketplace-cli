@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/errors.js'
 import { type WorkflowActionConfig, type WorkflowActionSummary } from '../../api/client.js'
 import {
   buildWorkflowActionsManifest,
@@ -241,10 +242,7 @@ async function createAvailabilityErrors(
   checks.forEach((check, index) => {
     const operation = creates[index]
     if (check.status === 'rejected') {
-      errors.set(
-        operation,
-        check.reason instanceof Error ? check.reason.message : 'Action key availability check failed.'
-      )
+      errors.set(operation, errorMessage(check.reason, 'Action key availability check failed.'))
     } else if (!check.value) {
       errors.set(
         operation,
@@ -321,7 +319,7 @@ export async function executeWorkflowActionsSyncPlanIndependently(
         type: operation.type,
         key: operation.key,
         success: false,
-        error: error instanceof Error ? error.message : 'Workflow action operation failed.'
+        error: errorMessage(error, 'Workflow action operation failed.')
       })
     }
   }

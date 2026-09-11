@@ -1,3 +1,4 @@
+import { errorMessage } from '../shared/errors.js'
 import { type AppVersion, type BillingSettings, type ProfileUpdateResult } from '../api/client.js'
 import { buildAuthSettingsBody } from '../auth/settings.js'
 import { buildBillingSettings } from '../billing/pricing.js'
@@ -124,7 +125,7 @@ export async function executeAppSyncPlan(
       appliedSections.push(section)
     }
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'The API rejected the update.'
+    const reason = errorMessage(error, 'The API rejected the update.')
     const applied = appliedSections.length > 0 ? appliedSections.join(', ') : 'none'
     throw new Error(
       `${reason} Push stopped while applying ${activeSection ?? 'the plan'}; completed sections: ${applied}. ` +

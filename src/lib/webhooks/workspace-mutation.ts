@@ -2,6 +2,7 @@ import path from 'node:path'
 
 import { Flags } from '@oclif/core'
 
+import { errorMessage } from '../shared/errors.js'
 import { type ApiClient, type AppVersion } from '../api/client.js'
 import { persistSelection } from '../app/context.js'
 import { buildAppFiles, type AppFiles, type WebhookManifest } from '../app/manifest.js'
@@ -203,14 +204,14 @@ async function recoverFailedMutation(
   failure: unknown,
   runtime: WebhookMutationRuntime
 ): Promise<WebhookWorkspaceMutationResult> {
-  const reason = failure instanceof Error ? failure.message : 'The webhook API request failed.'
+  const reason = errorMessage(failure, 'The webhook API request failed.')
   const candidates = await recoveryCandidates(context, runtime)
   const applied = candidates.find(version => verifyAppliedChanges(plan, buildAppFiles(version)).length === 0)
   if (applied) {
     try {
       return await finalizeMutation(context, plan, applied, true, true, runtime)
     } catch (error) {
-      const syncReason = error instanceof Error ? error.message : 'Local workspace synchronization failed.'
+      const syncReason = errorMessage(error, 'Local workspace synchronization failed.')
       throw new Error(
         `${reason} The remote webhook change was applied, but local synchronization failed: ${syncReason} ` +
           'The desired webhook JSON was retained; run `ghl app diff` and `ghl app push` to reconcile it.'
@@ -259,7 +260,7 @@ export async function applyWebhookWorkspaceMutation(
     try {
       return await finalizeMutation(context, plan, context.remoteVersion, false, false, runtime)
     } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Local workspace synchronization failed.'
+      const reason = errorMessage(error, 'Local workspace synchronization failed.')
       throw new Error(
         `Remote webhook settings already matched, but the local workspace could not be synchronized: ${reason}`
       )
@@ -278,7 +279,7 @@ export async function applyWebhookWorkspaceMutation(
     version = await runtime.loadVersion(context.client, context.plan.appId, versionId)
     return await finalizeMutation(context, plan, version, true, false, runtime)
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'Remote verification or local synchronization failed.'
+    const reason = errorMessage(error, 'Remote verification or local synchronization failed.')
     throw new Error(
       `The remote webhook update completed, but verification and local synchronization failed: ${reason} ` +
         'The desired webhook JSON was retained; run `ghl app diff` and `ghl app push` to reconcile it.'

@@ -1,12 +1,13 @@
-import { Args, Command, Flags } from '@oclif/core'
+import { Args, Flags } from '@oclif/core'
 
+import { GhlCommand } from '../../lib/shared/command.js'
 import { ApiClient, type SandboxAccount } from '../../lib/api/client.js'
 import { getConfig } from '../../lib/config/environment.js'
-import { confirm, isPromptCancel, select } from '../../lib/shared/prompts.js'
+import { confirm, select } from '../../lib/shared/prompts.js'
 import { removeSecrets } from '../../lib/secrets/ledger.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
-export default class SandboxDelete extends Command {
+export default class SandboxDelete extends GhlCommand {
   static description = 'Delete a sandbox agency account from your developer account'
 
   static examples = ['<%= config.bin %> sandbox delete', '<%= config.bin %> sandbox delete <companyId> --force']
@@ -19,7 +20,7 @@ export default class SandboxDelete extends Command {
     force: Flags.boolean({ description: 'Skip the confirmation prompt', default: false })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { args, flags } = await this.parse(SandboxDelete)
 
     if (args.companyId === undefined && !process.stdin.isTTY) {
@@ -30,55 +31,47 @@ export default class SandboxDelete extends Command {
     }
 
     const client = new ApiClient(getConfig())
-    try {
-      const result = await withSpinner('Fetching sandbox accounts...', async () => {
-        await client.init()
-        return client.listSandboxAccounts()
-      })
-      const accounts = result.accounts.filter(account => account._id)
-      if (accounts.length === 0) this.error('You have no sandbox accounts to delete.')
+    const result = await withSpinner('Fetching sandbox accounts...', async () => {
+      await client.init()
+      return client.listSandboxAccounts()
+    })
+    const accounts = result.accounts.filter(account => account._id)
+    if (accounts.length === 0) this.error('You have no sandbox accounts to delete.')
 
-      const account =
-        args.companyId === undefined
-          ? await select({
-              message: 'Which sandbox account should be deleted?',
-              choices: accounts.map(item => ({ name: this.describe(item), value: item }))
-            })
-          : accounts.find(item => item.companyId === args.companyId || item._id === args.companyId)
-      if (!account) {
-        this.error(`No sandbox account found with company id "${args.companyId}". Run \`ghl sandbox\` to list them.`)
-      }
-
-      if (!flags.force) {
-        const ok = await confirm({
-          message: `Delete sandbox ${this.describe(account)}? The agency and its data will be removed.`,
-          default: false
-        })
-        if (!ok) return
-      }
-
-      await withSpinner('Deleting sandbox account...', () => client.deleteSandboxAccount(account._id as string))
-
-      /* The account is gone, so its ledgered password is useless — prune it.
-         Best-effort: the deletion itself already succeeded. */
-      try {
-        const config = getConfig()
-        await removeSecrets(config.configDir, client.activeProfileName, {
-          kind: 'sandbox-password',
-          reference: account.companyId
-        })
-      } catch {
-        this.warn('Could not update the local secrets ledger — `ghl secrets` may show a stale entry.')
-      }
-
-      this.log(`Sandbox account ${this.describe(account)} deleted.`)
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to delete sandbox account')
+    const account =
+      args.companyId === undefined
+        ? await select({
+            message: 'Which sandbox account should be deleted?',
+            choices: accounts.map(item => ({ name: this.describe(item), value: item }))
+          })
+        : accounts.find(item => item.companyId === args.companyId || item._id === args.companyId)
+    if (!account) {
+      this.error(`No sandbox account found with company id "${args.companyId}". Run \`ghl sandbox\` to list them.`)
     }
+
+    if (!flags.force) {
+      const ok = await confirm({
+        message: `Delete sandbox ${this.describe(account)}? The agency and its data will be removed.`,
+        default: false
+      })
+      if (!ok) return
+    }
+
+    await withSpinner('Deleting sandbox account...', () => client.deleteSandboxAccount(account._id as string))
+
+    /* The account is gone, so its ledgered password is useless — prune it.
+       Best-effort: the deletion itself already succeeded. */
+    try {
+      const config = getConfig()
+      await removeSecrets(config.configDir, client.activeProfileName, {
+        kind: 'sandbox-password',
+        reference: account.companyId
+      })
+    } catch {
+      this.warn('Could not update the local secrets ledger — `ghl secrets` may show a stale entry.')
+    }
+
+    this.log(`Sandbox account ${this.describe(account)} deleted.`)
   }
 
   private describe(account: SandboxAccount): string {

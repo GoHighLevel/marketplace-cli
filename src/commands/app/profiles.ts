@@ -1,6 +1,7 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
-import { confirm, input, isPromptCancel } from '../../lib/shared/prompts.js'
+import { GhlCommand } from '../../lib/shared/command.js'
+import { confirm, input } from '../../lib/shared/prompts.js'
 import { type AppVersion } from '../../lib/api/client.js'
 import {
   buildProfilesBody,
@@ -12,7 +13,7 @@ import { followVersionChange, loadAppContext } from '../../lib/app/section-conte
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateYouTubeUrl } from '../../lib/shared/validation.js'
 
-export default class AppProfiles extends Command {
+export default class AppProfiles extends GhlCommand {
   static description = 'Edit the agency and sub-account profiles of the selected app'
 
   static examples = [
@@ -29,7 +30,7 @@ export default class AppProfiles extends Command {
     'sub-video-url': Flags.string({ description: 'Sub-account preview video URL (HTTPS YouTube)' })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { flags } = await this.parse(AppProfiles)
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
@@ -38,34 +39,26 @@ export default class AppProfiles extends Command {
       this.error('Pass at least one field flag (--description, --sub-account, ...) when running non-interactively.')
     }
 
-    try {
-      const context = await loadAppContext(flags.app)
-      const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
+    const context = await loadAppContext(flags.app)
+    const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
 
-      /* Enabling the sub-account profile requires 3+ screenshots already attached. */
-      const enablingSubProfile = finalChanges.hasSubAccountProfile === true && !context.version.hasSubAccountProfile
-      if (enablingSubProfile && (context.version.subAccountPreviewImageUrls ?? []).length < 3) {
-        this.error(
-          'Enabling the sub-account profile requires at least 3 screenshots. ' +
-            'Run `ghl app media upload <3+ files> --profile sub-account` first — it enables the profile automatically.'
-        )
-      }
-
-      const body = buildProfilesBody(context.version, finalChanges)
-      const validation = validateProfilesBody(body)
-      if (validation !== true) this.error(validation)
-      const result = await withSpinner('Saving app profiles...', () =>
-        context.client.updateProfileSection('appProfiles', context.selected.appId, context.selected.versionId, body)
+    /* Enabling the sub-account profile requires 3+ screenshots already attached. */
+    const enablingSubProfile = finalChanges.hasSubAccountProfile === true && !context.version.hasSubAccountProfile
+    if (enablingSubProfile && (context.version.subAccountPreviewImageUrls ?? []).length < 3) {
+      this.error(
+        'Enabling the sub-account profile requires at least 3 screenshots. ' +
+          'Run `ghl app media upload <3+ files> --profile sub-account` first — it enables the profile automatically.'
       )
-      this.log('App profiles updated. (Screenshots are managed with `ghl app media upload`.)')
-      await followVersionChange(context, result, message => this.log(message))
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to update app profiles')
     }
+
+    const body = buildProfilesBody(context.version, finalChanges)
+    const validation = validateProfilesBody(body)
+    if (validation !== true) this.error(validation)
+    const result = await withSpinner('Saving app profiles...', () =>
+      context.client.updateProfileSection('appProfiles', context.selected.appId, context.selected.versionId, body)
+    )
+    this.log('App profiles updated. (Screenshots are managed with `ghl app media upload`.)')
+    await followVersionChange(context, result, message => this.log(message))
   }
 
   private changesFromFlags(flags: {

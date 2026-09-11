@@ -1,6 +1,7 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
-import { input, isPromptCancel, select } from '../../lib/shared/prompts.js'
+import { GhlCommand } from '../../lib/shared/command.js'
+import { input, select } from '../../lib/shared/prompts.js'
 import { type AppVersion } from '../../lib/api/client.js'
 import { normalizeKeywords } from '../../lib/app/categories.js'
 import {
@@ -12,7 +13,7 @@ import {
 import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
-export default class AppListing extends Command {
+export default class AppListing extends GhlCommand {
   static description = 'Edit the listing configuration of the selected app (interactive, or via flags)'
 
   static examples = [
@@ -36,7 +37,7 @@ export default class AppListing extends Command {
     keywords: Flags.string({ description: 'Comma-separated search keywords (200 characters total)' })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { flags } = await this.parse(AppListing)
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
@@ -45,35 +46,27 @@ export default class AppListing extends Command {
       this.error('Pass at least one field flag (--target, --listing, ...) when running non-interactively.')
     }
 
-    try {
-      const context = await loadAppContext(flags.app)
-      const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
+    const context = await loadAppContext(flags.app)
+    const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
 
-      const body = buildListingBody(context.version, finalChanges)
-      const result = await withSpinner('Saving listing configuration...', () =>
-        context.client.updateProfileSection(
-          'listingConfiguration',
-          context.selected.appId,
-          context.selected.versionId,
-          body
-        )
+    const body = buildListingBody(context.version, finalChanges)
+    const result = await withSpinner('Saving listing configuration...', () =>
+      context.client.updateProfileSection(
+        'listingConfiguration',
+        context.selected.appId,
+        context.selected.versionId,
+        body
       )
-      this.log('Listing configuration updated.')
-      const wasPrivate = context.version.private ?? false
-      if (finalChanges.type === 'public' && wasPrivate) {
-        this.log('App converted to public — publishing now submits it for marketplace review.')
-        this.log('Review submissions need demo details: `ghl app review-details`.')
-      } else if (finalChanges.type === 'private' && !wasPrivate) {
-        this.log('App converted to private — publishing takes it live directly.')
-      }
-      await followVersionChange(context, result, message => this.log(message))
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to update listing configuration')
+    )
+    this.log('Listing configuration updated.')
+    const wasPrivate = context.version.private ?? false
+    if (finalChanges.type === 'public' && wasPrivate) {
+      this.log('App converted to public — publishing now submits it for marketplace review.')
+      this.log('Review submissions need demo details: `ghl app review-details`.')
+    } else if (finalChanges.type === 'private' && !wasPrivate) {
+      this.log('App converted to private — publishing takes it live directly.')
     }
+    await followVersionChange(context, result, message => this.log(message))
   }
 
   private changesFromFlags(flags: Record<string, string | undefined>): ListingChanges {

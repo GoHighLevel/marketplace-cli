@@ -1,6 +1,7 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
-import { checkbox, input, isPromptCancel } from '../../lib/shared/prompts.js'
+import { GhlCommand } from '../../lib/shared/command.js'
+import { checkbox, input } from '../../lib/shared/prompts.js'
 import { type AppVersion } from '../../lib/api/client.js'
 import { CATEGORY_GROUPS, normalizeBusinessNiches, normalizeSubcategories } from '../../lib/app/categories.js'
 import { validateAppName } from '../../lib/app/create.js'
@@ -9,7 +10,7 @@ import { followVersionChange, loadAppContext } from '../../lib/app/section-conte
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateHttpsUrl } from '../../lib/shared/validation.js'
 
-export default class AppBasicInfo extends Command {
+export default class AppBasicInfo extends GhlCommand {
   static description = 'Edit the basic info of the selected app (interactive, or via flags)'
 
   static examples = [
@@ -28,7 +29,7 @@ export default class AppBasicInfo extends Command {
     'logo-url': Flags.string({ description: 'HTTPS logo URL (prefer `ghl app media upload --logo`)' })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { flags } = await this.parse(AppBasicInfo)
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
@@ -37,31 +38,23 @@ export default class AppBasicInfo extends Command {
       this.error('Pass at least one field flag (--name, --tagline, ...) when running non-interactively.')
     }
 
-    try {
-      const context = await loadAppContext(flags.app)
-      if (context.version.appType === 'template') {
-        const unsupported = Object.keys(changes).filter(key => !['companyName', 'website'].includes(key))
-        if (unsupported.length > 0) {
-          this.error('Template apps only support --company and --website in basic info, matching the developer portal.')
-        }
+    const context = await loadAppContext(flags.app)
+    if (context.version.appType === 'template') {
+      const unsupported = Object.keys(changes).filter(key => !['companyName', 'website'].includes(key))
+      if (unsupported.length > 0) {
+        this.error('Template apps only support --company and --website in basic info, matching the developer portal.')
       }
-      const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
-
-      const body = buildBasicInfoBody(context.version, finalChanges)
-      const validation = validateBasicInfoBody(body, context.version.isWhiteLabelFriendly ?? true)
-      if (validation !== true) this.error(validation)
-      const result = await withSpinner('Saving basic info...', () =>
-        context.client.updateProfileSection('basicInfo', context.selected.appId, context.selected.versionId, body)
-      )
-      this.log('Basic info updated.')
-      await followVersionChange(context, result, message => this.log(message))
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to update basic info')
     }
+    const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
+
+    const body = buildBasicInfoBody(context.version, finalChanges)
+    const validation = validateBasicInfoBody(body, context.version.isWhiteLabelFriendly ?? true)
+    if (validation !== true) this.error(validation)
+    const result = await withSpinner('Saving basic info...', () =>
+      context.client.updateProfileSection('basicInfo', context.selected.appId, context.selected.versionId, body)
+    )
+    this.log('Basic info updated.')
+    await followVersionChange(context, result, message => this.log(message))
   }
 
   private changesFromFlags(flags: Record<string, string | undefined>): BasicInfoChanges {

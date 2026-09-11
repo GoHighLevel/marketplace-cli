@@ -1,11 +1,12 @@
-import { Args, Command, Flags } from '@oclif/core'
+import { Args, Flags } from '@oclif/core'
 
-import { isPromptCancel, select } from '../../../lib/shared/prompts.js'
+import { GhlCommand } from '../../../lib/shared/command.js'
+import { select } from '../../../lib/shared/prompts.js'
 import { requireVersionStatus } from '../../../lib/app/rules.js'
 import { loadAppContext } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
-export default class AppRedirectDefault extends Command {
+export default class AppRedirectDefault extends GhlCommand {
   static description = 'Mark a redirect URI as the default one'
 
   static examples = [
@@ -21,53 +22,41 @@ export default class AppRedirectDefault extends Command {
     app: Flags.string({ description: 'App id (defaults to the selected app)' })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { args, flags } = await this.parse(AppRedirectDefault)
 
     if (args.url === undefined && !process.stdin.isTTY) {
       this.error('Pass the redirect URI when running non-interactively, e.g. `ghl app redirect default <url>`.')
     }
 
-    try {
-      const context = await loadAppContext(flags.app)
-      requireVersionStatus(
-        context.version.status,
-        ['live', 'deprecating', 'deprecated'],
-        'set a default redirect URI on'
-      )
-      const uris = context.version.redirectUris ?? []
-      const currentDefault = context.version.defaults?.redirectUrl
+    const context = await loadAppContext(flags.app)
+    requireVersionStatus(context.version.status, ['live', 'deprecating', 'deprecated'], 'set a default redirect URI on')
+    const uris = context.version.redirectUris ?? []
+    const currentDefault = context.version.defaults?.redirectUrl
 
-      const url =
-        args.url ??
-        (await (async () => {
-          if (uris.length === 0) this.error('This app has no redirect URIs — add one with `ghl app redirect add`.')
-          return select({
-            message: 'Which redirect URI should be the default?',
-            choices: uris.map(uri => ({
-              name: `${uri}${uri === currentDefault ? ' — current default' : ''}`,
-              value: uri
-            }))
-          })
-        })())
+    const url =
+      args.url ??
+      (await (async () => {
+        if (uris.length === 0) this.error('This app has no redirect URIs — add one with `ghl app redirect add`.')
+        return select({
+          message: 'Which redirect URI should be the default?',
+          choices: uris.map(uri => ({
+            name: `${uri}${uri === currentDefault ? ' — current default' : ''}`,
+            value: uri
+          }))
+        })
+      })())
 
-      if (!uris.includes(url)) {
-        this.error(`"${url}" is not one of this app's redirect URIs — add it first with \`ghl app redirect add\`.`)
-      }
-      if (currentDefault === url) {
-        this.log(`${url} is already the default redirect URI.`)
-        return
-      }
-      await withSpinner('Setting default redirect URI...', () =>
-        context.client.makeRedirectUrlDefault(context.selected.appId, context.selected.versionId, url)
-      )
-      this.log(`Default redirect URI set to ${url}.`)
-    } catch (error) {
-      if (isPromptCancel(error)) {
-        this.log(error.message)
-        return
-      }
-      this.error(error instanceof Error ? error.message : 'Failed to set default redirect URI')
+    if (!uris.includes(url)) {
+      this.error(`"${url}" is not one of this app's redirect URIs — add it first with \`ghl app redirect add\`.`)
     }
+    if (currentDefault === url) {
+      this.log(`${url} is already the default redirect URI.`)
+      return
+    }
+    await withSpinner('Setting default redirect URI...', () =>
+      context.client.makeRedirectUrlDefault(context.selected.appId, context.selected.versionId, url)
+    )
+    this.log(`Default redirect URI set to ${url}.`)
   }
 }

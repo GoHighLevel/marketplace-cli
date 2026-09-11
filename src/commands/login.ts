@@ -1,6 +1,8 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 import open from 'open'
 
+import { GhlCommand } from '../lib/shared/command.js'
+import { errorMessage } from '../lib/shared/errors.js'
 import { exchangeCodeForTokens, storedProfileFromTokenResponse } from '../lib/api/token-exchange.js'
 import { getConfig } from '../lib/config/environment.js'
 import { startLoopbackServer } from '../lib/auth/loopback.js'
@@ -27,7 +29,7 @@ export function loginSuccessMessage(developer?: string): string {
   return `Logged in successfully${developer ? ` as ${developer}` : ''}.`
 }
 
-export default class Login extends Command {
+export default class Login extends GhlCommand {
   static description = 'Log in to your GoHighLevel developer account'
 
   static examples = ['<%= config.bin %> login', '<%= config.bin %> login --no-browser']
@@ -43,7 +45,7 @@ export default class Login extends Command {
     })
   }
 
-  async run(): Promise<void> {
+  protected async execute(): Promise<void> {
     const { flags } = await this.parse(Login)
     const profileName = flags.profile.trim()
     const profileValidation = validateProfileName(profileName)
@@ -77,7 +79,7 @@ export default class Login extends Command {
       )
     } catch (error) {
       server.close()
-      this.error(error instanceof Error ? error.message : 'Login failed')
+      this.error(errorMessage(error, 'Login failed'))
     }
 
     const tokens = await withSpinner('Signing you in...', () => exchangeCodeForTokens(config.apiUrl, code, verifier))

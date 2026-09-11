@@ -1,3 +1,4 @@
+import { errorMessage } from '../shared/errors.js'
 import { type BillingPlan, type BillingUsageMeter } from '../api/client.js'
 import {
   type BillingSubscriptionManifest,
@@ -156,7 +157,7 @@ export async function executeBillingSyncPlans(
         operation: label,
         resource: 'subscription',
         success: false,
-        error: error instanceof Error ? error.message : 'Subscription billing operation failed.'
+        error: errorMessage(error, 'Subscription billing operation failed.')
       })
     }
   }
@@ -170,7 +171,7 @@ export async function executeBillingSyncPlans(
         operation: label,
         resource: 'usage',
         success: false,
-        error: error instanceof Error ? error.message : 'Usage-based billing operation failed.'
+        error: errorMessage(error, 'Usage-based billing operation failed.')
       })
     }
   }
