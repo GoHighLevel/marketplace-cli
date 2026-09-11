@@ -42,6 +42,7 @@ export interface WorkspaceState {
 
 export interface WriteAppWorkspaceOptions {
   directory: string
+  includeJsonSchema?: boolean
   version: AppVersion
 }
 
@@ -147,14 +148,25 @@ async function writeFiles(directory: string, options: WriteAppWorkspaceOptions):
     versionId: files.app.versionId,
     baseline: files
   }
-  await writeJsonSchemaWorkspace(directory)
+  const includeJsonSchema = options.includeJsonSchema !== false
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(directory)
   const writes: Array<Promise<void>> = [
-    writeJsonFileAtomic(path.join(directory, APP_MANIFEST_FILENAME), withJsonSchemaReference(files.app, 'app'), 0o644),
+    writeJsonFileAtomic(
+      path.join(directory, APP_MANIFEST_FILENAME),
+      includeJsonSchema ? withJsonSchemaReference(files.app, 'app') : files.app,
+      0o644
+    ),
     writeJsonFileAtomic(path.join(directory, WORKSPACE_STATE_RELATIVE_PATH), state, 0o600),
     writeWorkspaceDocumentation(directory)
   ]
   if (hasWebhooks) {
-    writes.push(writeJsonFileAtomic(webhookFile, withJsonSchemaReference(files.webhooks, 'webhooks'), 0o644))
+    writes.push(
+      writeJsonFileAtomic(
+        webhookFile,
+        includeJsonSchema ? withJsonSchemaReference(files.webhooks, 'webhooks') : files.webhooks,
+        0o644
+      )
+    )
   }
   await Promise.all(writes)
   if (hasWebhooks) {

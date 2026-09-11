@@ -75,6 +75,25 @@ describe('app workspace paths', () => {
 })
 
 describe('writeAppWorkspace', () => {
+  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+    const target = resolveAppDirectory(directory, 'without-types')
+    const result = await writeAppWorkspace({
+      directory: target,
+      version: {
+        _id: 'version-1',
+        appId: 'app-1',
+        name: 'Acme',
+        webhookUrl: 'https://acme.test/webhooks'
+      },
+      includeJsonSchema: false
+    })
+
+    await expect(readJsonFile(result.appFile)).resolves.not.toHaveProperty('$schema')
+    await expect(readJsonFile(result.webhookFile!)).resolves.not.toHaveProperty('$schema')
+    await expect(fs.stat(path.join(target, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(target, '.vscode'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('omits webhook files and directories when the app has no webhook configuration', async () => {
     const target = resolveAppDirectory(directory, 'without-webhooks')
     const result = await writeAppWorkspace({

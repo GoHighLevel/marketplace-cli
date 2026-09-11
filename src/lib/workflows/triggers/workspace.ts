@@ -57,6 +57,10 @@ export interface WorkflowTriggersWorkspaceResult {
   triggerStateFile: string
 }
 
+export interface WriteWorkflowTriggersWorkspaceOptions {
+  includeJsonSchema?: boolean
+}
+
 interface WorkflowTriggersAppBinding {
   directory: string
   appId: string
@@ -285,11 +289,13 @@ function triggerDirectoryFor(binding: WorkflowTriggersAppBinding): string {
 
 async function writeTriggerSources(
   binding: WorkflowTriggersAppBinding,
-  manifest: WorkflowTriggersManifest
+  manifest: WorkflowTriggersManifest,
+  options: WriteWorkflowTriggersWorkspaceOptions = {}
 ): Promise<WorkflowTriggersWorkspaceResult> {
   assertValidManifest(manifest, binding)
   await assertWorkspaceDocumentationFilesWritable(binding.directory)
-  await writeJsonSchemaWorkspace(binding.directory)
+  const includeJsonSchema = options.includeJsonSchema !== false
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(binding.directory)
   const triggerDirectory = triggerDirectoryFor(binding)
   if (manifest.triggers.length > 0) {
     await fs.mkdir(triggerDirectory, { recursive: true, mode: 0o755 })
@@ -302,15 +308,13 @@ async function writeTriggerSources(
     const filename = workflowTriggerFilenameFromKey(trigger.key)
     expectedFiles.add(filename)
     const filePath = path.join(triggerDirectory, filename)
-    const payload: WorkflowTriggerFile = withJsonSchemaReference(
-      {
-        schemaVersion: 1,
-        key: trigger.key,
-        ...(trigger.templateId ? { templateId: trigger.templateId } : {}),
-        versions: structuredClone(trigger.versions)
-      },
-      'workflow-trigger'
-    )
+    const triggerFile: WorkflowTriggerFile = {
+      schemaVersion: 1,
+      key: trigger.key,
+      ...(trigger.templateId ? { templateId: trigger.templateId } : {}),
+      versions: structuredClone(trigger.versions)
+    }
+    const payload = includeJsonSchema ? withJsonSchemaReference(triggerFile, 'workflow-trigger') : triggerFile
     await writeJsonFileAtomic(filePath, payload, 0o644)
   }
   const existing = await triggerJsonEntries(triggerDirectory)
@@ -380,11 +384,12 @@ export async function loadWorkflowTriggersWorkspace(directory: string): Promise<
 export async function writeWorkflowTriggersWorkspace(
   directory: string,
   manifest: WorkflowTriggersManifest,
-  baseline = manifest
+  baseline = manifest,
+  options: WriteWorkflowTriggersWorkspaceOptions = {}
 ): Promise<WorkflowTriggersWorkspaceResult> {
   const binding = await appBindingForWorkspace(directory)
   assertValidManifest(baseline, binding)
-  const result = await writeTriggerSources(binding, manifest)
+  const result = await writeTriggerSources(binding, manifest, options)
   await writeJsonFileAtomic(
     result.triggerStateFile,
     {

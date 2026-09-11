@@ -85,6 +85,17 @@ describe('workflow trigger filenames', () => {
 })
 
 describe('workflow trigger workspaces', () => {
+  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+    const directory = await workspace()
+    const triggerManifest = manifest()
+    const result = await writeWorkflowTriggersWorkspace(directory, triggerManifest, triggerManifest, {
+      includeJsonSchema: false
+    })
+
+    await expect(fs.readFile(result.triggerFiles[0], 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.stat(path.join(directory, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('writes one file per trigger, state, guide, and reloads the aggregate manifest', async () => {
     const directory = await workspace()
     const result = await writeWorkflowTriggersWorkspace(directory, manifest())

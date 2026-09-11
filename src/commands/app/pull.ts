@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { Args, Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
@@ -22,6 +24,7 @@ import {
 } from '../../lib/billing/workspace.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { collectWorkspaceDirectory } from '../../lib/shared/workspace-input.js'
+import { writeTypeDeclarationFile } from '../../lib/app/types.js'
 import { fetchWorkflowActionsManifest } from '../../lib/workflows/actions/service.js'
 import { validateWorkflowActionsManifest } from '../../lib/workflows/actions/schema.js'
 import {
@@ -41,6 +44,7 @@ export default class AppPull extends GhlCommand {
   static examples = [
     '<%= config.bin %> app pull 67ee6752f753647b1c9ae06e',
     '<%= config.bin %> app pull',
+    '<%= config.bin %> app pull --with-types',
     '<%= config.bin %> app pull --version 1.2.0 --directory ./apps',
     '<%= config.bin %> app pull 67ee6752f753647b1c9ae06e --folder acme-app --json'
   ]
@@ -57,7 +61,10 @@ export default class AppPull extends GhlCommand {
   static flags = {
     version: Flags.string({ description: 'Version id or semantic version (defaults to the selected app version)' }),
     directory: Flags.string({ description: 'Parent directory for the app folder (default: current directory)' }),
-    folder: Flags.string({ description: 'App folder name (default: app-name slug)' })
+    folder: Flags.string({ description: 'App folder name (default: app-name slug)' }),
+    'with-types': Flags.boolean({
+      description: 'Generate TypeScript declarations, JSON Schemas, and editor associations'
+    })
   }
 
   protected async execute(): Promise<unknown> {
@@ -129,12 +136,35 @@ export default class AppPull extends GhlCommand {
     const workspace = await withSpinner(
       'Writing app files...',
       async () => {
-        const appFiles = await writeAppWorkspace({ directory, version: pulled.version })
-        const actionFiles = await writeWorkflowActionsWorkspace(directory, pulled.workflowActions)
-        const triggerFiles = await writeWorkflowTriggersWorkspace(directory, pulled.workflowTriggers)
-        const billingFiles = await writeBillingWorkspace(directory, pulled.billing.subscriptions, pulled.billing.usage)
-        await synchronizeUsageBillingSummary(directory, pulled.billing.usage.meters.length > 0)
-        return buildPullFilesOutput({
+        const includeJsonSchema = flags['with-types']
+        const appFiles = await writeAppWorkspace({
+          directory,
+          version: pulled.version,
+          includeJsonSchema
+        })
+        const actionFiles = await writeWorkflowActionsWorkspace(
+          directory,
+          pulled.workflowActions,
+          pulled.workflowActions,
+          { includeJsonSchema }
+        )
+        const triggerFiles = await writeWorkflowTriggersWorkspace(
+          directory,
+          pulled.workflowTriggers,
+          pulled.workflowTriggers,
+          { includeJsonSchema }
+        )
+        const billingFiles = await writeBillingWorkspace(
+          directory,
+          pulled.billing.subscriptions,
+          pulled.billing.usage,
+          { subscriptions: pulled.billing.subscriptions, usage: pulled.billing.usage },
+          { includeJsonSchema }
+        )
+        await synchronizeUsageBillingSummary(directory, pulled.billing.usage.meters.length > 0, {
+          includeJsonSchema
+        })
+        const files = buildPullFilesOutput({
           app: appFiles,
           ...(pulled.workflowActions.actions.length > 0 ? { actions: actionFiles } : {}),
           ...(pulled.workflowTriggers.triggers.length > 0 ? { triggers: triggerFiles } : {}),
@@ -142,6 +172,11 @@ export default class AppPull extends GhlCommand {
             ? { billing: billingFiles }
             : {})
         })
+        if (!flags['with-types']) return files
+        return {
+          ...files,
+          declarationFile: await writeTypeDeclarationFile(directory)
+        }
       },
       { quiet: this.jsonEnabled() }
     )
@@ -177,6 +212,10 @@ export default class AppPull extends GhlCommand {
     if (pulled.workflowTriggers.triggers.length > 0) this.log(`  Triggers: ${workspace.triggerDirectory}`)
     if (pulled.billing.subscriptions.plans.length > 0) this.log(`  Plans:    ${workspace.subscriptionFile}`)
     if (pulled.billing.usage.meters.length > 0) this.log(`  Meters:   ${workspace.usageFile}`)
+    if (flags['with-types']) {
+      this.log(`  Types:    ${workspace.declarationFile}`)
+      this.log(`  Schemas:  ${path.join(workspace.directory as string, '.ghl', 'schemas')}`)
+    }
     this.log(`Selected version ${selected.versionId}; subsequent commands will target it.`)
   }
 }

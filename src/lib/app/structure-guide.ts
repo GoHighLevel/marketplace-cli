@@ -14,6 +14,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
 \`\`\`text
 <app-folder>/
 ├── ghl-app.json
+├── ghl-app.d.ts
 ├── AGENTS.md
 ├── CLAUDE.md
 ├── HIGHLEVEL_APP.md
@@ -51,7 +52,9 @@ This directory is the local, code-friendly representation of one HighLevel marke
 \`\`\`
 
 - The \`billing\`, \`webhooks\`, \`actions\`, \`triggers\`, and action \`code\` directories are created only when their corresponding configuration exists.
+- \`ghl-app.d.ts\`, \`.ghl/schemas/\`, and \`.vscode/settings.json\` are optional; generate them with \`ghl app types\` or \`ghl app pull --with-types\`.
 - **\`ghl-app.json\`**: Supported app metadata and the app/version binding used by local commands.
+- **\`ghl-app.d.ts\`**: Readonly TypeScript declarations for code that consumes the workspace configuration.
 - **\`src/webhooks/ghl-webhooks.json\`**: Configured app-level webhook URL and event subscriptions, kept separate from app metadata.
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
 - **\`src/modules/workflows/actions/<action-name>.json\`**: One JSON file per action, including every action-owned version. Its required \`key\` must match the key derived from the filename.
@@ -66,7 +69,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
 - **\`.ghl/workflow-triggers-state.json\`**: Separate last-pull baseline for workflow-trigger conflict detection. It is CLI-managed and must not be edited.
 - **\`.ghl/billing-state.json\`**: Separate app-level subscription and meter baseline. It is CLI-managed and must not be edited.
 - **\`.ghl/schemas/*.schema.json\`**: Offline draft-07 schemas used for autocomplete and structural JSON validation.
-- **\`.vscode/settings.json\`**: Schema associations created only when the file does not already exist; existing editor settings are preserved.
+- **\`.vscode/settings.json\`**: Schema associations created only when type/schema generation is requested and the file does not already exist; existing editor settings are preserved.
 - **\`AGENTS.md\`**: Workspace rules and the complete GHL CLI reference for AI coding agents.
 - **\`CLAUDE.md\`**: The same operational guidance addressed specifically to Claude Code.
 - **\`HIGHLEVEL_APP.md\`**: This structural reference for developers and AI agents.

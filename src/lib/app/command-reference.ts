@@ -53,7 +53,12 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app pull [appId]',
         description:
-          'Refresh generated JSON from the portal. Inside a workspace, app and version IDs come from `ghl-app.json` and no folder prompt is shown. Outside a workspace, provide or select an app and optionally use `--version`, `--directory`, or `--folder`. Pull replaces generated JSON with portal values.'
+          'Refresh generated JSON from the portal. Inside a workspace, app and version IDs come from `ghl-app.json` and no folder prompt is shown. Outside a workspace, provide or select an app and optionally use `--version`, `--directory`, or `--folder`. Add `--with-types` to generate TypeScript declarations, local JSON Schemas, schema references, and editor associations.'
+      },
+      {
+        command: 'ghl app types',
+        description:
+          'Generate `ghl-app.d.ts`, all local JSON Schemas, and VS Code schema associations without authentication or API calls. Use `--directory <app-folder>` for another workspace or `--output <file.d.ts>` for a custom declaration path inside it.'
       },
       {
         command: 'ghl app validate',

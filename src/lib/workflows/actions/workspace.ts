@@ -87,6 +87,10 @@ interface WorkflowActionSourceResult {
   guideFile: string
 }
 
+export interface WriteWorkflowActionsWorkspaceOptions {
+  includeJsonSchema?: boolean
+}
+
 async function stat(target: string): Promise<Awaited<ReturnType<typeof fs.lstat>> | undefined> {
   try {
     return await fs.lstat(target)
@@ -188,7 +192,10 @@ function assertValidManifest(manifest: WorkflowActionsManifest, binding: Workflo
   if (errors.length > 0) throw new Error(`Workflow action configuration is invalid:\n- ${errors.join('\n- ')}`)
 }
 
-function actionSourceFromDefinition(action: WorkflowActionDefinition): {
+function actionSourceFromDefinition(
+  action: WorkflowActionDefinition,
+  includeJsonSchema: boolean
+): {
   file: WorkflowActionFile
   codeSources: Array<{ filename: string; contents: string }>
 } {
@@ -202,16 +209,14 @@ function actionSourceFromDefinition(action: WorkflowActionDefinition): {
     delete sourceExecution.code
     sourceExecution.codeFile = workflowActionCodeReference(action.key, version.version)
   }
+  const file: WorkflowActionFile = {
+    schemaVersion: 1,
+    key: action.key,
+    ...(action.templateId ? { templateId: action.templateId } : {}),
+    versions
+  }
   return {
-    file: withJsonSchemaReference(
-      {
-        schemaVersion: 1,
-        key: action.key,
-        ...(action.templateId ? { templateId: action.templateId } : {}),
-        versions
-      },
-      'workflow-action'
-    ),
+    file: includeJsonSchema ? withJsonSchemaReference(file, 'workflow-action') : file,
     codeSources
   }
 }
@@ -476,11 +481,13 @@ async function sourceDirectories(binding: WorkflowActionsAppBinding): Promise<{
 
 async function writeActionSources(
   binding: WorkflowActionsAppBinding,
-  manifest: WorkflowActionsManifest
+  manifest: WorkflowActionsManifest,
+  options: WriteWorkflowActionsWorkspaceOptions = {}
 ): Promise<WorkflowActionSourceResult> {
   assertValidManifest(manifest, binding)
   await Promise.all([assertWorkspacePathsSafe(binding), assertWorkspaceDocumentationFilesWritable(binding.directory)])
-  await writeJsonSchemaWorkspace(binding.directory)
+  const includeJsonSchema = options.includeJsonSchema !== false
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(binding.directory)
   const legacyFile = path.join(binding.directory, LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH)
   const legacyExists = await requireRegularFile(legacyFile, 'Legacy workflow action file', true)
   const { actionDirectory, codeDirectory } = await sourceDirectories(binding)
@@ -491,7 +498,7 @@ async function writeActionSources(
     .sort((left, right) => left.key.localeCompare(right.key))
     .map(action => ({
       filename: workflowActionFilenameFromKey(action.key),
-      source: actionSourceFromDefinition(action)
+      source: actionSourceFromDefinition(action, includeJsonSchema)
     }))
   const filenames = new Set(desired.map(item => item.filename))
   if (filenames.size !== desired.length) throw new Error('Workflow action keys must map to unique filenames.')
@@ -559,11 +566,12 @@ export async function writeLocalWorkflowActionsManifest(
 export async function writeWorkflowActionsWorkspace(
   directory: string,
   manifest: WorkflowActionsManifest,
-  baseline: WorkflowActionsManifest = manifest
+  baseline: WorkflowActionsManifest = manifest,
+  options: WriteWorkflowActionsWorkspaceOptions = {}
 ): Promise<WorkflowActionsWorkspaceResult> {
   const binding = await appBindingForWorkspace(directory)
   assertValidManifest(baseline, binding)
-  const sources = await writeActionSources(binding, manifest)
+  const sources = await writeActionSources(binding, manifest, options)
   const stateFile = path.join(binding.directory, WORKFLOW_ACTIONS_STATE_RELATIVE_PATH)
   const state: WorkflowActionsState = {
     schemaVersion: 1,

@@ -89,6 +89,46 @@ afterEach(async () => {
 })
 
 describe('billing workspaces', () => {
+  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+    const directory = await createWorkspace()
+    const subscriptionManifest = subscriptions()
+    const usageManifest = usage()
+    const appFile = path.join(directory, 'ghl-app.json')
+    const app = JSON.parse(await fs.readFile(appFile, 'utf8'))
+    await fs.mkdir(path.join(directory, '.ghl'))
+    await fs.writeFile(
+      path.join(directory, '.ghl', 'state.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        appId: 'app-1',
+        versionId: 'version-1',
+        baseline: {
+          app,
+          webhooks: {
+            schemaVersion: 1,
+            appId: 'app-1',
+            versionId: 'version-1',
+            webhookUrl: '',
+            subscribedEvents: []
+          }
+        }
+      })
+    )
+    const result = await writeBillingWorkspace(
+      directory,
+      subscriptionManifest,
+      usageManifest,
+      { subscriptions: subscriptionManifest, usage: usageManifest },
+      { includeJsonSchema: false }
+    )
+    await synchronizeUsageBillingSummary(directory, true, { includeJsonSchema: false })
+
+    await expect(fs.readFile(result.subscriptionFile!, 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.readFile(result.usageFile!, 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.readFile(appFile, 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.stat(path.join(directory, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('writes both manifests, a guide, and a private conflict baseline', async () => {
     const directory = await createWorkspace()
     const result = await writeBillingWorkspace(directory, subscriptions(), usage())

@@ -59,6 +59,10 @@ export interface BillingWorkspaceResult {
   stateFile: string
 }
 
+export interface WriteBillingWorkspaceOptions {
+  includeJsonSchema?: boolean
+}
+
 interface BillingBinding {
   directory: string
   app: BillingWorkspace['app']
@@ -206,12 +210,14 @@ async function writeBillingSources(
   binding: BillingBinding,
   subscriptions: BillingSubscriptionManifest,
   usage: BillingUsageManifest,
-  contextual: boolean
+  contextual: boolean,
+  options: WriteBillingWorkspaceOptions = {}
 ): Promise<Omit<BillingWorkspaceResult, 'stateFile'>> {
   validateManifests(binding, subscriptions, usage, contextual)
   assertManifestAppIds(binding, subscriptions, usage)
   await assertBillingPathsSafe(binding)
-  await writeJsonSchemaWorkspace(binding.directory)
+  const includeJsonSchema = options.includeJsonSchema !== false
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(binding.directory)
   const billingDirectory = path.join(binding.directory, BILLING_DIRECTORY_RELATIVE_PATH)
   const subscriptionPath = path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH)
   const usagePath = path.join(binding.directory, BILLING_USAGE_RELATIVE_PATH)
@@ -219,12 +225,20 @@ async function writeBillingSources(
   const hasSources = subscriptions.plans.length > 0 || usage.meters.length > 0
   if (hasSources) await fs.mkdir(billingDirectory, { recursive: true, mode: 0o755 })
   if (subscriptions.plans.length > 0) {
-    await writeJsonFileAtomic(subscriptionPath, withJsonSchemaReference(subscriptions, 'subscription'), 0o644)
+    await writeJsonFileAtomic(
+      subscriptionPath,
+      includeJsonSchema ? withJsonSchemaReference(subscriptions, 'subscription') : subscriptions,
+      0o644
+    )
   } else {
     await removeRegularFileIfPresent(subscriptionPath, 'Subscription manifest')
   }
   if (usage.meters.length > 0) {
-    await writeJsonFileAtomic(usagePath, withJsonSchemaReference(usage, 'usage-based'), 0o644)
+    await writeJsonFileAtomic(
+      usagePath,
+      includeJsonSchema ? withJsonSchemaReference(usage, 'usage-based') : usage,
+      0o644
+    )
   } else {
     await removeRegularFileIfPresent(usagePath, 'Usage-based manifest')
   }
@@ -244,12 +258,13 @@ export async function writeBillingWorkspace(
   directory: string,
   subscriptions: BillingSubscriptionManifest,
   usage: BillingUsageManifest,
-  baseline: { subscriptions: BillingSubscriptionManifest; usage: BillingUsageManifest } = { subscriptions, usage }
+  baseline: { subscriptions: BillingSubscriptionManifest; usage: BillingUsageManifest } = { subscriptions, usage },
+  options: WriteBillingWorkspaceOptions = {}
 ): Promise<BillingWorkspaceResult> {
   const binding = await loadBinding(directory)
   validateManifests(binding, baseline.subscriptions, baseline.usage, false)
   assertManifestAppIds(binding, baseline.subscriptions, baseline.usage)
-  const sources = await writeBillingSources(binding, subscriptions, usage, false)
+  const sources = await writeBillingSources(binding, subscriptions, usage, false, options)
   const stateFile = path.join(binding.directory, BILLING_STATE_RELATIVE_PATH)
   const state: BillingState = {
     schemaVersion: 1,
@@ -357,15 +372,24 @@ export async function loadBillingWorkspaceIfPresent(directory: string): Promise<
   return loadBillingWorkspace(workspace.directory)
 }
 
-export async function synchronizeUsageBillingSummary(directory: string, hasUsageBasedPrice: boolean): Promise<void> {
+export async function synchronizeUsageBillingSummary(
+  directory: string,
+  hasUsageBasedPrice: boolean,
+  options: WriteBillingWorkspaceOptions = {}
+): Promise<void> {
   const binding = await readPullWorkspaceBinding(directory)
   if (!binding) throw new Error('Cannot synchronize usage billing because no app workspace was found.')
   const workspace = await readLocalAppWorkspace(binding.directory)
   workspace.files.app.billing.hasUsageBasedPrice = hasUsageBasedPrice
   workspace.state.baseline.app.billing.hasUsageBasedPrice = hasUsageBasedPrice
-  await writeJsonSchemaWorkspace(workspace.directory)
+  const includeJsonSchema = options.includeJsonSchema !== false
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(workspace.directory)
   await Promise.all([
-    writeJsonFileAtomic(workspace.appFile, withJsonSchemaReference(workspace.files.app, 'app'), 0o644),
+    writeJsonFileAtomic(
+      workspace.appFile,
+      includeJsonSchema ? withJsonSchemaReference(workspace.files.app, 'app') : workspace.files.app,
+      0o644
+    ),
     writeJsonFileAtomic(workspace.stateFile, workspace.state, 0o600)
   ])
 }

@@ -18,6 +18,7 @@ import AppPush from '../../src/commands/app/push.js'
 import AppSecurityReview from '../../src/commands/app/security-review.js'
 import AppSsoKey from '../../src/commands/app/sso-key.js'
 import AppTriggersValidate from '../../src/commands/app/triggers/validate.js'
+import AppTypes from '../../src/commands/app/types.js'
 import AppValidate from '../../src/commands/app/validate.js'
 import AppWebhookSubscribe from '../../src/commands/app/webhook/subscribe.js'
 import AppWebhookUnsubscribe from '../../src/commands/app/webhook/unsubscribe.js'
@@ -115,10 +116,44 @@ describe('public command contracts', () => {
       expect.objectContaining({
         version: expect.any(Object),
         directory: expect.any(Object),
-        folder: expect.any(Object)
+        folder: expect.any(Object),
+        'with-types': expect.objectContaining({ type: 'boolean' })
       })
     )
     expect(commandIds).toContain('app:pull')
+  })
+
+  it('generates local types and schemas without authentication', async () => {
+    const directory = path.join(configDir, 'types-workspace')
+    await fs.mkdir(directory)
+    await fs.writeFile(
+      path.join(directory, 'ghl-app.json'),
+      JSON.stringify({ schemaVersion: 1, appId: 'app-1', versionId: 'version-1' })
+    )
+
+    expect(AppTypes.flags).toEqual(
+      expect.objectContaining({
+        directory: expect.any(Object),
+        output: expect.any(Object)
+      })
+    )
+    const result = await runCommand(AppTypes, [
+      '--directory',
+      directory,
+      '--output',
+      'generated/ghl-types.d.ts',
+      '--json'
+    ])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      appId: 'app-1',
+      directory,
+      declarationFile: path.join(directory, 'generated', 'ghl-types.d.ts'),
+      schemaFiles: expect.any(Array)
+    })
+    expect(commandIds).toContain('app:types')
   })
 
   it('exposes the local validate, diff, and push workflow without authenticating invalid workspaces', async () => {

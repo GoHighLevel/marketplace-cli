@@ -70,6 +70,21 @@ describe('workflow action filenames', () => {
 })
 
 describe('workflow action workspaces', () => {
+  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+    const directory = await workspace()
+    const manifest: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [action('send_message', 'Send message')]
+    }
+    const result = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      includeJsonSchema: false
+    })
+
+    await expect(fs.readFile(result.actionFiles[0], 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.stat(path.join(directory, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('writes one source file per action and reloads a combined in-memory manifest', async () => {
     const directory = await workspace()
     const manifest: WorkflowActionsManifest = {

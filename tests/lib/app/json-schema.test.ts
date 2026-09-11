@@ -61,7 +61,7 @@ describe('JSON schema registry', () => {
       expect(schema.type).toBe('object')
       expect(schema.additionalProperties).toBe(false)
       expect(schema.properties).toHaveProperty('$schema')
-      expect(schema.$comment).toMatch(/generated.*ghl app pull.*do not edit/i)
+      expect(schema.$comment).toMatch(/generated.*ghl app types.*do not edit/i)
       for (const reference of localReferences(schema)) {
         expect(resolveLocalReference(schema, reference), `${name}: ${reference}`).toBeDefined()
       }
