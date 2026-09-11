@@ -129,7 +129,9 @@ export default class AppValidate extends Command {
       }
 
       if (!validation.success || !validation.mandatoryFields) {
-        this.error(validation.message ?? 'Remote validation could not run; confirm that the selected version is a draft.')
+        this.error(
+          validation.message ?? 'Remote validation could not run; confirm that the selected version is a draft.'
+        )
       }
 
       const entries = Object.entries(validation.mandatoryFields)

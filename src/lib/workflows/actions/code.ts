@@ -10,7 +10,8 @@ const ACTION_VERSION = /^\d+\.\d+$/
 export function workflowActionCodeFilename(key: string, version: string): string {
   const keyErrors = workflowActionKeyValidationErrors(key)
   if (keyErrors.length > 0) throw new Error(`Workflow action key "${key}" ${keyErrors.join(' and ')}.`)
-  if (!ACTION_VERSION.test(version)) throw new Error(`Workflow action version "${version}" must use major.minor format.`)
+  if (!ACTION_VERSION.test(version))
+    throw new Error(`Workflow action version "${version}" must use major.minor format.`)
   return `${key}.${version}.js`
 }
 

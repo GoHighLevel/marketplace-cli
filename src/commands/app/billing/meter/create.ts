@@ -2,14 +2,11 @@ import { Args, Command, Flags } from '@oclif/core'
 
 import { validateLocalBillingIntent } from '../../../../lib/billing/command-context.js'
 import {
-  BillingCustomPriceType,
-  BillingProductType,
+  type BillingCustomPriceType,
+  type BillingProductType,
   createBillingMeterScaffold
 } from '../../../../lib/billing/manifest.js'
-import {
-  loadBillingWorkspace,
-  writeLocalBillingWorkspace
-} from '../../../../lib/billing/workspace.js'
+import { loadBillingWorkspace, writeLocalBillingWorkspace } from '../../../../lib/billing/workspace.js'
 import { input, isPromptCancel, select } from '../../../../lib/shared/prompts.js'
 import { validateHttpsUrl } from '../../../../lib/shared/validation.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../../../../lib/workflows/actions/workspace.js'
@@ -58,7 +55,10 @@ function validateExecutionLimitInput(value: string): true | string {
 }
 
 function customProductId(name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
   if (!slug) throw new Error('Pass --product-id because the product name cannot produce a stable custom id.')
   return `custom_${slug}`
 }
@@ -104,19 +104,22 @@ export default class AppBillingMeterCreate extends Command {
     }
     try {
       const workspace = await loadBillingWorkspace(flags.directory)
-      const name = args.name ?? await input({
-        message: 'Pricing tier name:',
-        validate: value => value.trim() ? true : 'Pricing tier name is required.'
-      })
-      const productType = (flags['product-type'] ?? await select({
-        message: 'Product type:',
-        choices: [
-          { name: 'Workflow action', value: 'workflow_action' as const },
-          { name: 'Workflow trigger', value: 'workflow_trigger' as const },
-          { name: 'Conversation provider', value: 'conversation_provider' as const },
-          { name: 'Custom product', value: 'custom' as const }
-        ]
-      })) as BillingProductType
+      const name =
+        args.name ??
+        (await input({
+          message: 'Pricing tier name:',
+          validate: value => (value.trim() ? true : 'Pricing tier name is required.')
+        }))
+      const productType = (flags['product-type'] ??
+        (await select({
+          message: 'Product type:',
+          choices: [
+            { name: 'Workflow action', value: 'workflow_action' as const },
+            { name: 'Workflow trigger', value: 'workflow_trigger' as const },
+            { name: 'Conversation provider', value: 'conversation_provider' as const },
+            { name: 'Custom product', value: 'custom' as const }
+          ]
+        }))) as BillingProductType
       const [actions, triggers] = await Promise.all([
         loadWorkflowActionsWorkspaceIfPresent(workspace.directory),
         loadWorkflowTriggersWorkspaceIfPresent(workspace.directory)
@@ -160,11 +163,15 @@ export default class AppBillingMeterCreate extends Command {
         productName ??= trigger?.versions[0]?.info.name
       }
       if (!productName && interactive) {
-        productName = await input({ message: 'Product name:', validate: value => value.trim() ? true : 'Product name is required.' })
+        productName = await input({
+          message: 'Product name:',
+          validate: value => (value.trim() ? true : 'Product name is required.')
+        })
       }
       if (productType === 'custom' && !productId && productName) productId = customProductId(productName)
       if (!productId) throw new Error('--product-id is required for this product type.')
-      if (!productName) throw new Error('--product-name is required when it cannot be resolved from local workflow JSON.')
+      if (!productName)
+        throw new Error('--product-name is required when it cannot be resolved from local workflow JSON.')
       let direction = flags.direction as 'inbound' | 'outbound' | undefined
       if (productType === 'conversation_provider' && !direction && interactive) {
         direction = await select({
@@ -184,10 +191,12 @@ export default class AppBillingMeterCreate extends Command {
       }
       let executionLimit = flags['execution-limit']
       if (executionLimit === undefined && interactive) {
-        executionLimit = Number(await input({
-          message: 'Execution limit per billing cycle:',
-          validate: validateExecutionLimitInput
-        }))
+        executionLimit = Number(
+          await input({
+            message: 'Execution limit per billing cycle:',
+            validate: validateExecutionLimitInput
+          })
+        )
       }
       let customPriceType = flags['price-type'] as BillingCustomPriceType | undefined
       if (productType === 'custom' && !customPriceType && interactive) {
@@ -245,7 +254,9 @@ export default class AppBillingMeterCreate extends Command {
         staged: true
       }
       if (this.jsonEnabled()) return result
-      this.log(`Added meter "${meter.productName}" to ${files.usageFile}. Run \`ghl app billing push\` to create it in the portal.`)
+      this.log(
+        `Added meter "${meter.productName}" to ${files.usageFile}. Run \`ghl app billing push\` to create it in the portal.`
+      )
       return
     } catch (error) {
       if (isPromptCancel(error)) {

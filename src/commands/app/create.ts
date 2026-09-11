@@ -4,13 +4,10 @@ import { ApiClient } from '../../lib/api/client.js'
 import { persistSelection, toSelectedApp } from '../../lib/app/context.js'
 import { loadAppVersionForExport } from '../../lib/app/pull.js'
 import { assertAppDirectoryAvailable, writeAppWorkspace } from '../../lib/app/workspace.js'
-import {
-  emptyBillingSubscriptionManifest,
-  emptyBillingUsageManifest
-} from '../../lib/billing/manifest.js'
+import { emptyBillingSubscriptionManifest, emptyBillingUsageManifest } from '../../lib/billing/manifest.js'
 import { writeBillingWorkspace } from '../../lib/billing/workspace.js'
 import { getConfig } from '../../lib/config/environment.js'
-import { buildCreateAppBody, CreateAppAnswers, validateAppName } from '../../lib/app/create.js'
+import { buildCreateAppBody, type CreateAppAnswers, validateAppName } from '../../lib/app/create.js'
 import { input, isPromptCancel, select } from '../../lib/shared/prompts.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { collectWorkspaceDirectory } from '../../lib/shared/workspace-input.js'
@@ -89,14 +86,8 @@ export default class AppCreate extends Command {
               directory,
               version: { ...version, name: version.name ?? selected.name }
             })
-            await writeWorkflowActionsWorkspace(
-              directory,
-              createEmptyWorkflowActionsManifest(selected.appId)
-            )
-            await writeWorkflowTriggersWorkspace(
-              directory,
-              createEmptyWorkflowTriggersManifest(selected.appId)
-            )
+            await writeWorkflowActionsWorkspace(directory, createEmptyWorkflowActionsManifest(selected.appId))
+            await writeWorkflowTriggersWorkspace(directory, createEmptyWorkflowTriggersManifest(selected.appId))
             await writeBillingWorkspace(
               directory,
               emptyBillingSubscriptionManifest(selected.appId),

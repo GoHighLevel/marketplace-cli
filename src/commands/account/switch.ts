@@ -59,16 +59,20 @@ export default class AccountSwitch extends Command {
         this.log(`Current account: ${developerAccountSummary(activeAccount)}`)
       }
 
-      const accountId = args.accountId ?? await select({
-        message: 'Select a developer account:',
-        choices: teams.map(team => ({
-          name: developerAccountChoice(team, activeTeamId),
-          value: team.team
+      const accountId =
+        args.accountId ??
+        (await select({
+          message: 'Select a developer account:',
+          choices: teams.map(team => ({
+            name: developerAccountChoice(team, activeTeamId),
+            value: team.team
+          }))
         }))
-      })
       const selected = teams.find(team => team.team === accountId)
       if (!selected) {
-        throw new Error(`Account ${JSON.stringify(accountId)} is not available. Run \`ghl account\` to list accessible accounts.`)
+        throw new Error(
+          `Account ${JSON.stringify(accountId)} is not available. Run \`ghl account\` to list accessible accounts.`
+        )
       }
 
       const { changed, selectedAppCleared } = await withSpinner(
@@ -86,7 +90,9 @@ export default class AccountSwitch extends Command {
       this.log(`Switched to "${developerAccountName(selected)}" (accountId: ${selected.team}).`)
       if (selectedAppCleared) this.log('The app selected in the previous account was cleared.')
       this.log('Run `ghl app list` to see apps in this account, then `ghl app use` to select one.')
-      this.log('Existing app folders remain bound to their original apps; change directories before using another account.')
+      this.log(
+        'Existing app folders remain bound to their original apps; change directories before using another account.'
+      )
       return
     } catch (error) {
       if (isPromptCancel(error)) {

@@ -53,9 +53,7 @@ describe('requireAuthPrereqs', () => {
   })
 
   it('allows remove commands to intentionally clear OAuth settings', () => {
-    expect(() =>
-      requireAuthPrereqs(version, { scopes: [], redirectUris: [] }, { allowEmpty: true })
-    ).not.toThrow()
+    expect(() => requireAuthPrereqs(version, { scopes: [], redirectUris: [] }, { allowEmpty: true })).not.toThrow()
     expect(() => requireAuthPrereqs(version, { scopes: [], redirectUris: [] })).toThrow(/at least one scope/i)
   })
 
@@ -127,11 +125,9 @@ describe('scopeCatalogEntries', () => {
     expect(scopeCatalogEntries([{ scope: 'contacts.readonly', description: 'Read contacts' }])).toEqual([
       { scope: 'contacts.readonly', description: 'Read contacts' }
     ])
-    expect(() => scopeCatalogEntries([{ scope: 'contacts.readonly', tokenType: 'Location' }])).toThrow(
-      /scope catalog/i
+    expect(() => scopeCatalogEntries([{ scope: 'contacts.readonly', tokenType: 'Location' }])).toThrow(/scope catalog/i)
+    expect(() => scopeCatalogEntries([{ scope: 'contacts.readonly' }, { scope: 'contacts.readonly' }])).toThrow(
+      /duplicate scope/i
     )
-    expect(() =>
-      scopeCatalogEntries([{ scope: 'contacts.readonly' }, { scope: 'contacts.readonly' }])
-    ).toThrow(/duplicate scope/i)
   })
 })

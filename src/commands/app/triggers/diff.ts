@@ -6,7 +6,10 @@ import { withSpinner } from '../../../lib/shared/spinner.js'
 export default class AppTriggersDiff extends Command {
   static description = 'Compare local workflow triggers with the last pull and current portal state'
 
-  static examples = ['<%= config.bin %> app triggers diff', '<%= config.bin %> app triggers diff --directory ./my-app --json']
+  static examples = [
+    '<%= config.bin %> app triggers diff',
+    '<%= config.bin %> app triggers diff --directory ./my-app --json'
+  ]
 
   static enableJsonFlag = true
 
@@ -38,7 +41,9 @@ export default class AppTriggersDiff extends Command {
       this.log(`Conflicts: ${result.conflicts.length}`)
       for (const conflict of result.conflicts) this.log(`  conflict ${conflict}`)
       for (const error of result.errors) this.log(`  invalid  ${error}`)
-      this.log(`API operations: ${result.operations.map(operation => `${operation.type}:${operation.key}`).join(', ') || 'none'}`)
+      this.log(
+        `API operations: ${result.operations.map(operation => `${operation.type}:${operation.key}`).join(', ') || 'none'}`
+      )
     } catch (error) {
       this.error(error instanceof Error ? error.message : 'Failed to compare workflow triggers.')
     }

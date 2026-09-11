@@ -1,4 +1,4 @@
-import { AppVersion, ProfileUpdateResult } from '../api/client.js'
+import { type AppVersion, type ProfileUpdateResult } from '../api/client.js'
 import { BUSINESS_NICHE_VALUES, SUBCATEGORY_VALUES } from './categories.js'
 import {
   validateEmail,
@@ -166,7 +166,8 @@ export function buildListingBody(version: AppVersion, changes: ListingChanges) {
     throw new Error('--installer only applies when the target user is sub-account.')
   }
   const installer = changes.installer ?? currentInstaller(version)
-  const userTypes = target === 'agency' ? ['Company'] : installer === 'agency-only' ? ['Location', 'Company'] : ['Location']
+  const userTypes =
+    target === 'agency' ? ['Company'] : installer === 'agency-only' ? ['Location', 'Company'] : ['Location']
   const whiteLabel =
     changes.listing !== undefined ? changes.listing === 'white-label' : (version.isWhiteLabelFriendly ?? true)
   const bulkInstallEnabled =

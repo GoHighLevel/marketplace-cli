@@ -36,8 +36,21 @@ export default class AppActionsCreate extends Command {
     }
     try {
       const workspace = await loadWorkflowActionsWorkspace(flags.directory)
-      const name = args.name ?? await input({ message: 'Action name:', validate: value => value.trim() ? true : 'Action name is required.' })
-      const key = flags.key ?? await input({ message: 'Action key:', validate: value => /^[a-z][_a-z0-9]*$/.test(value) ? true : 'Use lowercase letters, numbers, and underscores, starting with a letter.' })
+      const name =
+        args.name ??
+        (await input({
+          message: 'Action name:',
+          validate: value => (value.trim() ? true : 'Action name is required.')
+        }))
+      const key =
+        flags.key ??
+        (await input({
+          message: 'Action key:',
+          validate: value =>
+            /^[a-z][_a-z0-9]*$/.test(value)
+              ? true
+              : 'Use lowercase letters, numbers, and underscores, starting with a letter.'
+        }))
       const manifest = structuredClone(workspace.manifest)
       manifest.actions.push(createWorkflowActionScaffold(name.trim(), key.trim()))
       manifest.actions.sort((left, right) => left.key.localeCompare(right.key))

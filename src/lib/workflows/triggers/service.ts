@@ -1,17 +1,17 @@
-import { WorkflowTriggerConfig, WorkflowTriggerSummary } from '../../api/client.js'
+import { type WorkflowTriggerConfig, type WorkflowTriggerSummary } from '../../api/client.js'
 import {
   buildWorkflowTriggersManifest,
-  WorkflowTriggersManifest,
-  WorkflowTriggerVersion,
+  type WorkflowTriggersManifest,
+  type WorkflowTriggerVersion,
   toWorkflowTriggerUpdateBody
 } from './manifest.js'
 import { validateWorkflowTriggersManifest } from './schema.js'
 import { isWorkflowSecretReference } from '../shared/secret-references.js'
 import { canonicalWorkflowConfig } from '../shared/verification.js'
 import {
-  CreateWorkflowTriggerOperation,
-  WorkflowTriggersSyncPlan,
-  WorkflowTriggerSyncOperation
+  type CreateWorkflowTriggerOperation,
+  type WorkflowTriggersSyncPlan,
+  type WorkflowTriggerSyncOperation
 } from './sync.js'
 
 export interface WorkflowTriggersApi {
@@ -95,9 +95,7 @@ export async function fetchWorkflowTriggersSnapshot(
     }
     summaryIds.add(summary.triggerId)
   }
-  const bulkConfigs = summaries.length > 0
-    ? await client.listWorkflowTriggerConfigs(appId)
-    : []
+  const bulkConfigs = summaries.length > 0 ? await client.listWorkflowTriggerConfigs(appId) : []
   const configs = bulkConfigs.filter(config => summaryIds.has(config.templateId))
   const orphanConfigs = bulkConfigs.filter(config => !summaryIds.has(config.templateId))
   if (orphanConfigs.length > 0) {
@@ -156,16 +154,16 @@ export function workflowTriggerPublishCandidates(
   const summariesByTemplate = new Map(summaries.map(summary => [summary.triggerId, summary]))
   const candidates: WorkflowTriggerPublishCandidate[] = []
   for (const trigger of manifest.triggers) {
-    const draft = trigger.versions.find(version =>
-      version.status === 'draft' && (!requestedVersion || version.version === requestedVersion)
+    const draft = trigger.versions.find(
+      version => version.status === 'draft' && (!requestedVersion || version.version === requestedVersion)
     )
     if (draft) {
       candidates.push({ trigger, version: draft, repairRegistry: false })
       continue
     }
     if (!trigger.templateId) continue
-    const published = trigger.versions.find(version =>
-      version.status === 'published' && (!requestedVersion || version.version === requestedVersion)
+    const published = trigger.versions.find(
+      version => version.status === 'published' && (!requestedVersion || version.version === requestedVersion)
     )
     const summary = summariesByTemplate.get(trigger.templateId)
     if (!published || !summary) continue
@@ -185,7 +183,9 @@ export function workflowTriggerOperationLabel(operation: WorkflowTriggerSyncOper
 function assertExecutablePlan(plan: WorkflowTriggersSyncPlan): void {
   if (plan.errors.length > 0) throw new Error(`Workflow trigger push is invalid:\n- ${plan.errors.join('\n- ')}`)
   if (plan.conflicts.length > 0) {
-    throw new Error(`Workflow trigger push has portal conflicts:\n- ${plan.conflicts.join('\n- ')}\nPull and reapply the local changes.`)
+    throw new Error(
+      `Workflow trigger push has portal conflicts:\n- ${plan.conflicts.join('\n- ')}\nPull and reapply the local changes.`
+    )
   }
 }
 
@@ -236,9 +236,15 @@ async function createAvailabilityErrors(
   checks.forEach((check, index) => {
     const operation = creates[index]
     if (check.status === 'rejected') {
-      errors.set(operation, check.reason instanceof Error ? check.reason.message : 'Trigger key availability check failed.')
+      errors.set(
+        operation,
+        check.reason instanceof Error ? check.reason.message : 'Trigger key availability check failed.'
+      )
     } else if (!check.value) {
-      errors.set(operation, `Workflow trigger key "${operation.key}" is no longer available. Pull and choose a different key.`)
+      errors.set(
+        operation,
+        `Workflow trigger key "${operation.key}" is no longer available. Pull and choose a different key.`
+      )
     }
   })
   return errors
@@ -291,7 +297,13 @@ export async function executeWorkflowTriggersSyncPlanIndependently(
     const operationName = workflowTriggerOperationLabel(operation)
     const existingError = unavailable.get(operation)
     if (existingError) {
-      results.push({ operation: operationName, type: operation.type, key: operation.key, success: false, error: existingError })
+      results.push({
+        operation: operationName,
+        type: operation.type,
+        key: operation.key,
+        success: false,
+        error: existingError
+      })
       continue
     }
     try {
@@ -344,7 +356,9 @@ export function reconcileWorkflowTriggersAfterPush(
 
 function sameConfig(left: WorkflowTriggerVersion, right: WorkflowTriggerVersion): boolean {
   const options = { ignoredKeys: ['sampleResponseJson'], isSecretReference: isWorkflowSecretReference }
-  return JSON.stringify(canonicalWorkflowConfig(left, options)) === JSON.stringify(canonicalWorkflowConfig(right, options))
+  return (
+    JSON.stringify(canonicalWorkflowConfig(left, options)) === JSON.stringify(canonicalWorkflowConfig(right, options))
+  )
 }
 
 export function verifyWorkflowTriggersApplied(
@@ -363,9 +377,10 @@ export function verifyWorkflowTriggersApplied(
       mismatches.push(label)
       continue
     }
-    const version = operation.type === 'create'
-      ? trigger.versions.find(item => item.version === createDraft(operation).version)
-      : trigger.versions.find(item => item.version === operation.version)
+    const version =
+      operation.type === 'create'
+        ? trigger.versions.find(item => item.version === createDraft(operation).version)
+        : trigger.versions.find(item => item.version === operation.version)
     if (!version) {
       mismatches.push(label)
       continue

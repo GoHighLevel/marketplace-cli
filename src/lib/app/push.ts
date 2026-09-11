@@ -1,4 +1,4 @@
-import { AppVersion, BillingSettings, ProfileUpdateResult } from '../api/client.js'
+import { type AppVersion, type BillingSettings, type ProfileUpdateResult } from '../api/client.js'
 import { buildAuthSettingsBody } from '../auth/settings.js'
 import { buildBillingSettings } from '../billing/pricing.js'
 import {
@@ -9,7 +9,7 @@ import {
   buildSupportBody,
   extractNewVersion
 } from './profile-sections.js'
-import { AppSyncPlan, appVersionFromFiles, validateSyncPlan } from './sync.js'
+import { type AppSyncPlan, appVersionFromFiles, validateSyncPlan } from './sync.js'
 
 export interface PushClient {
   updateProfileSection(
@@ -90,10 +90,20 @@ export async function executeAppSyncPlan(
         const result = await client.updateProfileSection('basicInfo', appId, versionId, buildBasicInfoBody(version, {}))
         versionId = followResultVersion(appId, versionId, result)
       } else if (section === 'profiles') {
-        const result = await client.updateProfileSection('appProfiles', appId, versionId, buildProfilesBody(version, {}))
+        const result = await client.updateProfileSection(
+          'appProfiles',
+          appId,
+          versionId,
+          buildProfilesBody(version, {})
+        )
         versionId = followResultVersion(appId, versionId, result)
       } else if (section === 'support') {
-        const result = await client.updateProfileSection('supportDetails', appId, versionId, buildSupportBody(version, {}))
+        const result = await client.updateProfileSection(
+          'supportDetails',
+          appId,
+          versionId,
+          buildSupportBody(version, {})
+        )
         versionId = followResultVersion(appId, versionId, result)
       } else if (section === 'authSettings') {
         if (remoteVersion.status?.toLowerCase() === 'live' && requiresDraftAuth && versionId === remoteVersion._id) {

@@ -69,10 +69,7 @@ export default class AppPull extends Command {
       const hasExplicitDestination = flags.directory !== undefined || flags.folder !== undefined
       const workspaceBinding = hasExplicitDestination
         ? undefined
-        : resolvePullWorkspaceBinding(
-            await readPullWorkspaceBinding(process.cwd()),
-            args.appId
-          )
+        : resolvePullWorkspaceBinding(await readPullWorkspaceBinding(process.cwd()), args.appId)
       const pulled = await withSpinner(
         'Loading app...',
         async () => {
@@ -126,11 +123,7 @@ export default class AppPull extends Command {
         await Promise.all([
           assertWorkflowActionsWorkspaceWritable(directory, pulled.workflowActions),
           assertWorkflowTriggersWorkspaceWritable(directory, pulled.workflowTriggers),
-          assertBillingWorkspaceWritable(
-            directory,
-            pulled.billing.subscriptions,
-            pulled.billing.usage
-          )
+          assertBillingWorkspaceWritable(directory, pulled.billing.subscriptions, pulled.billing.usage)
         ])
       }
       const workspace = await withSpinner(
@@ -165,7 +158,9 @@ export default class AppPull extends Command {
         await persistSelection(client, config, selected)
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'Selection update failed.'
-        throw new Error(`App files were written to "${workspace.directory}", but selection could not be saved: ${reason}`)
+        throw new Error(
+          `App files were written to "${workspace.directory}", but selection could not be saved: ${reason}`
+        )
       }
 
       if (this.jsonEnabled()) {

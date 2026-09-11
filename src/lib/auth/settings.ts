@@ -1,4 +1,4 @@
-import { AppVersion, WebhooksCatalog } from '../api/client.js'
+import { type AppVersion, type WebhooksCatalog } from '../api/client.js'
 import { isRecord } from '../api/response.js'
 import { validateHttpUrl, validateHttpsUrl } from '../shared/validation.js'
 
@@ -31,7 +31,9 @@ export function requireAuthPrereqs(
   const scopes = changes.scopes ?? version.allowedScopes ?? []
   const redirectUris = changes.redirectUris ?? version.redirectUris ?? []
   if (scopes.some(scope => !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$/.test(scope))) {
-    throw new Error('OAuth scope names must be 1-200 characters and contain only letters, numbers, dots, slashes, colons, underscores, or hyphens.')
+    throw new Error(
+      'OAuth scope names must be 1-200 characters and contain only letters, numbers, dots, slashes, colons, underscores, or hyphens.'
+    )
   }
   if (new Set(scopes).size !== scopes.length) throw new Error('OAuth settings cannot contain duplicate scopes.')
   if (new Set(redirectUris).size !== redirectUris.length) {

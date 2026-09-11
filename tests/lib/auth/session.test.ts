@@ -3,8 +3,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CliConfig } from '../../../src/lib/config/environment.js'
-import { decodeJwtExp, isExpired, loadActiveSession, NotLoggedInError, refreshSession } from '../../../src/lib/auth/session.js'
+import { type CliConfig } from '../../../src/lib/config/environment.js'
+import {
+  decodeJwtExp,
+  isExpired,
+  loadActiveSession,
+  NotLoggedInError,
+  refreshSession
+} from '../../../src/lib/auth/session.js'
 import { loadCredentials, saveProfile } from '../../../src/lib/auth/token-store.js'
 import { packageVersion } from '../../helpers/package-version.js'
 

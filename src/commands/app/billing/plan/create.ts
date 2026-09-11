@@ -2,10 +2,7 @@ import { Args, Command, Flags } from '@oclif/core'
 
 import { validateLocalBillingIntent } from '../../../../lib/billing/command-context.js'
 import { createBillingPlanScaffold } from '../../../../lib/billing/manifest.js'
-import {
-  loadBillingWorkspace,
-  writeLocalBillingWorkspace
-} from '../../../../lib/billing/workspace.js'
+import { loadBillingWorkspace, writeLocalBillingWorkspace } from '../../../../lib/billing/workspace.js'
 import { parseAmount } from '../../../../lib/billing/pricing.js'
 import { input, isPromptCancel, select } from '../../../../lib/shared/prompts.js'
 
@@ -53,50 +50,59 @@ export default class AppBillingPlanCreate extends Command {
       if (flags['free-for-location'] && flags['location-amount'] !== undefined) {
         throw new Error('Do not pass --location-amount when --free-for-location is enabled.')
       }
-      const name = args.name ?? await input({
-        message: 'Plan name:',
-        validate: value => value.trim() ? true : 'Plan name is required.'
-      })
+      const name =
+        args.name ??
+        (await input({
+          message: 'Plan name:',
+          validate: value => (value.trim() ? true : 'Plan name is required.')
+        }))
       const freePlan = flags.free
       const freeForAgency = freePlan || flags['free-for-agency']
       const freeForLocation = freePlan || flags['free-for-location']
       let interval = flags.interval as 'month' | 'year' | 'life_time' | undefined
       if (!interval) {
-        interval = workspace.app.appType === 'template'
-          ? 'life_time'
-          : interactive
-            ? await select({
-                message: 'Billing interval:',
-                choices: [
-                  { name: 'Monthly', value: 'month' as const },
-                  { name: 'Yearly', value: 'year' as const },
-                  { name: 'One-time', value: 'life_time' as const }
-                ],
-                default: 'month'
-              })
-            : 'month'
+        interval =
+          workspace.app.appType === 'template'
+            ? 'life_time'
+            : interactive
+              ? await select({
+                  message: 'Billing interval:',
+                  choices: [
+                    { name: 'Monthly', value: 'month' as const },
+                    { name: 'Yearly', value: 'year' as const },
+                    { name: 'One-time', value: 'life_time' as const }
+                  ],
+                  default: 'month'
+                })
+              : 'month'
       }
       let amountText = flags.amount
       let locationAmountText = flags['location-amount']
       if (!freeForAgency && amountText === undefined && interactive) {
-        amountText = await input({ message: 'Agency price (USD):', validate: value => {
-          try {
-            return (parseAmount(value, 'Agency amount') ?? 0) >= 0.01 ? true : 'Agency amount must be at least 0.01.'
-          } catch (error) {
-            return (error as Error).message
+        amountText = await input({
+          message: 'Agency price (USD):',
+          validate: value => {
+            try {
+              return (parseAmount(value, 'Agency amount') ?? 0) >= 0.01 ? true : 'Agency amount must be at least 0.01.'
+            } catch (error) {
+              return (error as Error).message
+            }
           }
-        } })
+        })
       }
       if (freeForAgency && !freePlan && locationAmountText === undefined && interactive) {
-        locationAmountText = await input({ message: 'Sub-account price (USD):', validate: value => {
-          try {
-            return (parseAmount(value, 'Sub-account amount') ?? 0) >= 0.01
-              ? true
-              : 'Sub-account amount must be at least 0.01.'
-          } catch (error) {
-            return (error as Error).message
+        locationAmountText = await input({
+          message: 'Sub-account price (USD):',
+          validate: value => {
+            try {
+              return (parseAmount(value, 'Sub-account amount') ?? 0) >= 0.01
+                ? true
+                : 'Sub-account amount must be at least 0.01.'
+            } catch (error) {
+              return (error as Error).message
+            }
           }
-        } })
+        })
       }
       if (!freeForAgency && amountText === undefined) {
         throw new Error('Agency amount is required unless the plan is free for agencies.')
@@ -107,9 +113,11 @@ export default class AppBillingPlanCreate extends Command {
       const plan = createBillingPlanScaffold({
         name,
         amount: freeForAgency ? 0 : (parseAmount(amountText, 'Agency amount') as number),
-        ...(freePlan ? { locationAmount: 0 } : locationAmountText !== undefined
-          ? { locationAmount: parseAmount(locationAmountText, 'Location amount') as number }
-          : {}),
+        ...(freePlan
+          ? { locationAmount: 0 }
+          : locationAmountText !== undefined
+            ? { locationAmount: parseAmount(locationAmountText, 'Location amount') as number }
+            : {}),
         paymentTime: interval,
         features: flags.feature,
         freePlan,
@@ -129,7 +137,9 @@ export default class AppBillingPlanCreate extends Command {
         staged: true
       }
       if (this.jsonEnabled()) return result
-      this.log(`Added "${plan.name}" to ${files.subscriptionFile}. Run \`ghl app billing push\` to create it in the portal.`)
+      this.log(
+        `Added "${plan.name}" to ${files.subscriptionFile}. Run \`ghl app billing push\` to create it in the portal.`
+      )
       return
     } catch (error) {
       if (isPromptCancel(error)) {

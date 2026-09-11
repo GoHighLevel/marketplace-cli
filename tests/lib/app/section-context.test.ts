@@ -3,9 +3,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiClient } from '../../../src/lib/api/client.js'
+import { type ApiClient } from '../../../src/lib/api/client.js'
 import { getSelectedApp } from '../../../src/lib/config/selection-store.js'
-import { AppContext, followVersionChange } from '../../../src/lib/app/section-context.js'
+import { type AppContext, followVersionChange } from '../../../src/lib/app/section-context.js'
 
 let dir: string
 

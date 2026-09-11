@@ -1,9 +1,14 @@
 import { Command, Flags } from '@oclif/core'
 
 import { input, isPromptCancel, select } from '../../lib/shared/prompts.js'
-import { AppVersion } from '../../lib/api/client.js'
+import { type AppVersion } from '../../lib/api/client.js'
 import { normalizeKeywords } from '../../lib/app/categories.js'
-import { buildListingBody, currentInstaller, currentTarget, ListingChanges } from '../../lib/app/profile-sections.js'
+import {
+  buildListingBody,
+  currentInstaller,
+  currentTarget,
+  type ListingChanges
+} from '../../lib/app/profile-sections.js'
 import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 

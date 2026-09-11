@@ -24,10 +24,17 @@ export default class AppBillingMeter extends Command {
         this.log('No local usage meters. Create one with `ghl app billing meter create`.')
         return
       }
-      this.log(renderTable(
-        ['METER ID', 'PRODUCT', 'TYPE', 'TIERS'],
-        result.meters.map(meter => [meter.id ?? '(new)', meter.productName, meter.productType, String(meter.tiers.length)])
-      ))
+      this.log(
+        renderTable(
+          ['METER ID', 'PRODUCT', 'TYPE', 'TIERS'],
+          result.meters.map(meter => [
+            meter.id ?? '(new)',
+            meter.productName,
+            meter.productType,
+            String(meter.tiers.length)
+          ])
+        )
+      )
       return
     } catch (error) {
       this.error(error instanceof Error ? error.message : 'Failed to list local usage meters.')

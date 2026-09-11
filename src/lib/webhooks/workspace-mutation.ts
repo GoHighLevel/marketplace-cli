@@ -2,20 +2,20 @@ import path from 'node:path'
 
 import { Flags } from '@oclif/core'
 
-import { ApiClient, AppVersion } from '../api/client.js'
+import { type ApiClient, type AppVersion } from '../api/client.js'
 import { persistSelection } from '../app/context.js'
-import { buildAppFiles, AppFiles, WebhookManifest } from '../app/manifest.js'
+import { buildAppFiles, type AppFiles, type WebhookManifest } from '../app/manifest.js'
 import { executeAppSyncPlan } from '../app/push.js'
-import { AuthCatalogSnapshot, validateDynamicAuthConfiguration } from '../app/push-preflight.js'
+import { type AuthCatalogSnapshot, validateDynamicAuthConfiguration } from '../app/push-preflight.js'
 import { loadAppVersionForExport, readPullWorkspaceBinding } from '../app/pull.js'
-import { loadRemoteAppSyncContext, RemoteAppSyncContext, validationError } from '../app/sync-context.js'
-import { createAppSyncPlan, AppSyncPlan, validateSyncPlan, verifyAppliedChanges } from '../app/sync.js'
-import { CliConfig } from '../config/environment.js'
+import { loadRemoteAppSyncContext, type RemoteAppSyncContext, validationError } from '../app/sync-context.js'
+import { createAppSyncPlan, type AppSyncPlan, validateSyncPlan, verifyAppliedChanges } from '../app/sync.js'
+import { type CliConfig } from '../config/environment.js'
 import { writeJsonFileAtomic } from '../shared/json-file.js'
 import {
-  AppWorkspaceResult,
+  type AppWorkspaceResult,
   hasWebhookConfiguration,
-  WorkspaceState,
+  type WorkspaceState,
   writeAppWorkspace
 } from '../app/workspace.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../shared/workspace-files.js'
@@ -35,7 +35,11 @@ export interface WebhookWorkspaceMutationResult {
 
 export interface WebhookMutationRuntime {
   validateDynamicConfiguration(client: ApiClient, plan: AppSyncPlan, catalogs?: AuthCatalogSnapshot): Promise<string[]>
-  executePlan(client: ApiClient, remoteVersion: AppVersion, plan: AppSyncPlan): Promise<{
+  executePlan(
+    client: ApiClient,
+    remoteVersion: AppVersion,
+    plan: AppSyncPlan
+  ): Promise<{
     appliedSections: AppSyncPlan['sections']
     versionId: string
   }>
@@ -150,11 +154,7 @@ async function writeDesiredWebhookConfiguration(
 ): Promise<void> {
   if (hasWebhookConfiguration(webhooks)) {
     await writeJsonSchemaWorkspace(context.local.directory)
-    await runtime.writeJson(
-      context.local.webhookFile,
-      withJsonSchemaReference(webhooks, 'webhooks'),
-      0o644
-    )
+    await runtime.writeJson(context.local.webhookFile, withJsonSchemaReference(webhooks, 'webhooks'), 0o644)
     return
   }
   await removeRegularFileIfPresent(context.local.webhookFile, 'Webhook manifest')
@@ -191,7 +191,7 @@ async function recoveryCandidates(
     runtime.loadVersion(context.client, context.plan.appId, context.remoteVersion._id),
     runtime.loadLatestVersion(context.client, context.plan.appId)
   ])
-  const versions = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
+  const versions = results.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
   const unique = new Map(versions.map(version => [version._id, version]))
   return [...unique.values()]
 }
@@ -260,7 +260,9 @@ export async function applyWebhookWorkspaceMutation(
       return await finalizeMutation(context, plan, context.remoteVersion, false, false, runtime)
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Local workspace synchronization failed.'
-      throw new Error(`Remote webhook settings already matched, but the local workspace could not be synchronized: ${reason}`)
+      throw new Error(
+        `Remote webhook settings already matched, but the local workspace could not be synchronized: ${reason}`
+      )
     }
   }
 

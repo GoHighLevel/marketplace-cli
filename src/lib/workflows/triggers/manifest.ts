@@ -168,14 +168,16 @@ export function createEmptyWorkflowTriggersManifest(appId: string): WorkflowTrig
 export function createWorkflowTriggerScaffold(name: string, key: string): WorkflowTriggerDefinition {
   return {
     key,
-    versions: [{
-      version: '1.0',
-      status: 'draft',
-      info: { name },
-      filters: [],
-      customVars: [],
-      customVarsJson: {}
-    }]
+    versions: [
+      {
+        version: '1.0',
+        status: 'draft',
+        info: { name },
+        filters: [],
+        customVars: [],
+        customVarsJson: {}
+      }
+    ]
   }
 }
 

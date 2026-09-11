@@ -2,6 +2,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/* eslint-disable no-control-regex -- ANSI sequences and control characters are stripped on purpose. */
 export function sanitizeTerminalText(value: string, maxLength = 500): string {
   return value
     .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
@@ -10,6 +11,7 @@ export function sanitizeTerminalText(value: string, maxLength = 500): string {
     .trim()
     .slice(0, maxLength)
 }
+/* eslint-enable no-control-regex */
 
 export function extractApiErrorMessage(text: string, statusText = ''): string {
   const trimmed = text.trim()

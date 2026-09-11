@@ -24,15 +24,17 @@ export default class AppBillingPlan extends Command {
         this.log('No local subscription plans. Create one with `ghl app billing plan create`.')
         return
       }
-      this.log(renderTable(
-        ['PLAN ID', 'NAME', 'PRICE', 'INTERVAL'],
-        result.plans.map(plan => [
-          plan.id ?? '(new)',
-          plan.name,
-          plan.freePlan ? 'free' : String(plan.amount),
-          plan.paymentTime
-        ])
-      ))
+      this.log(
+        renderTable(
+          ['PLAN ID', 'NAME', 'PRICE', 'INTERVAL'],
+          result.plans.map(plan => [
+            plan.id ?? '(new)',
+            plan.name,
+            plan.freePlan ? 'free' : String(plan.amount),
+            plan.paymentTime
+          ])
+        )
+      )
       return
     } catch (error) {
       this.error(error instanceof Error ? error.message : 'Failed to list local subscription plans.')

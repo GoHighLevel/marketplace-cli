@@ -55,13 +55,15 @@ export default class AppActionsPublish extends Command {
       if (candidates.length === 0) {
         throw new Error('No workflow action has a matching draft or incomplete registry publication.')
       }
-      const selector = args.action ?? await select({
-        message: 'Workflow action to publish:',
-        choices: candidates.map(candidate => ({
-          name: `${candidate.version.info.name ?? candidate.action.key} (${candidate.action.key})${candidate.repairRegistry ? ' — repair registry' : ''}`,
-          value: candidate.action.key
+      const selector =
+        args.action ??
+        (await select({
+          message: 'Workflow action to publish:',
+          choices: candidates.map(candidate => ({
+            name: `${candidate.version.info.name ?? candidate.action.key} (${candidate.action.key})${candidate.repairRegistry ? ' — repair registry' : ''}`,
+            value: candidate.action.key
+          }))
         }))
-      })
       const candidate = candidates.find(item => item.action.key === selector || item.action.templateId === selector)
       if (!candidate?.action.templateId) throw new Error(`Workflow action "${selector}" has no publishable version.`)
       const { action, version, repairRegistry } = candidate
@@ -69,10 +71,12 @@ export default class AppActionsPublish extends Command {
         const errors = validateWorkflowActionVersionForPublish(context.remote, action.key, version.version)
         if (errors.length > 0) throw new Error(`Workflow action cannot be published:\n- ${errors.join('\n- ')}`)
       }
-      const notes = flags.notes ?? await input({
-        message: 'Release change log:',
-        validate: value => value.trim() ? true : 'Release change log is required.'
-      })
+      const notes =
+        flags.notes ??
+        (await input({
+          message: 'Release change log:',
+          validate: value => (value.trim() ? true : 'Release change log is required.')
+        }))
       if (!notes.trim()) throw new Error('Release change log is required.')
       if (!flags.force) {
         const approved = await confirm({
@@ -98,7 +102,11 @@ export default class AppActionsPublish extends Command {
             })
           }
           try {
-            await context.client.publishWorkflowActionSummary(context.appId, action.templateId as string, version.version)
+            await context.client.publishWorkflowActionSummary(
+              context.appId,
+              action.templateId as string,
+              version.version
+            )
           } catch (error) {
             if (repairRegistry) throw error
             const reason = error instanceof Error ? error.message : 'registry update failed'

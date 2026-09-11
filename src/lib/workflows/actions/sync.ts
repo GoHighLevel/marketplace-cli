@@ -1,17 +1,20 @@
-import { WorkflowActionDefinition, WorkflowActionsManifest, WorkflowActionVersion } from './manifest.js'
+import { type WorkflowActionDefinition, type WorkflowActionsManifest, type WorkflowActionVersion } from './manifest.js'
 import {
-  CreateVersionedWorkflowOperation,
-  DeleteVersionedWorkflowOperation,
+  type CreateVersionedWorkflowOperation,
+  type DeleteVersionedWorkflowOperation,
   planVersionedWorkflowSync,
-  UpdateVersionedWorkflowOperation,
-  VersionedWorkflowSyncOperation,
-  VersionedWorkflowSyncPlan
+  type UpdateVersionedWorkflowOperation,
+  type VersionedWorkflowSyncOperation,
+  type VersionedWorkflowSyncPlan
 } from '../shared/versioned-sync.js'
 
 export type CreateWorkflowActionOperation = CreateVersionedWorkflowOperation<WorkflowActionDefinition>
 export type DeleteWorkflowActionOperation = DeleteVersionedWorkflowOperation
 export type UpdateWorkflowActionOperation = UpdateVersionedWorkflowOperation<WorkflowActionVersion>
-export type WorkflowActionSyncOperation = VersionedWorkflowSyncOperation<WorkflowActionDefinition, WorkflowActionVersion>
+export type WorkflowActionSyncOperation = VersionedWorkflowSyncOperation<
+  WorkflowActionDefinition,
+  WorkflowActionVersion
+>
 export type WorkflowActionsSyncPlan = VersionedWorkflowSyncPlan<WorkflowActionDefinition, WorkflowActionVersion>
 
 function adaptable(manifest: WorkflowActionsManifest) {

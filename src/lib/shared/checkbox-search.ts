@@ -123,14 +123,13 @@ const prompt = createPrompt<unknown[], CheckboxSearchConfig<unknown>>((config, d
   const header = [prefix, message, filterText].filter(Boolean).join(' ')
   const count = selectedIndexes.length > 0 ? styleText('dim', `${selectedIndexes.length} selected`) : ''
   const description = filtered[cursor]?.choice.description
-  const body =
-    filtered.length === 0
-      ? theme.style.error('No matches — press backspace to widen the filter.')
-      : page
+  const body = filtered.length === 0 ? theme.style.error('No matches — press backspace to widen the filter.') : page
   const footer = [
     description ? styleText('cyan', description) : '',
     error ? theme.style.error(error) : '',
-    [count, styleText('dim', 'type to filter · space to select · enter to confirm · esc to cancel')].filter(Boolean).join(styleText('dim', ' · '))
+    [count, styleText('dim', 'type to filter · space to select · enter to confirm · esc to cancel')]
+      .filter(Boolean)
+      .join(styleText('dim', ' · '))
   ]
     .filter(Boolean)
     .join('\n')

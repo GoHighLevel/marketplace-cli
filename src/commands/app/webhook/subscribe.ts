@@ -46,9 +46,8 @@ export default class AppWebhookSubscribe extends Command {
     }
 
     try {
-      const context = await withSpinner(
-        'Loading webhook workspace...',
-        () => loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
+      const context = await withSpinner('Loading webhook workspace...', () =>
+        loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
       )
 
       const catalog = await context.client.getWebhooksCatalog()
@@ -89,10 +88,12 @@ export default class AppWebhookSubscribe extends Command {
         if (!interactive) {
           this.error('Set a default webhook URL first with `ghl app webhook url <url>`.')
         }
-        webhookUrl = (await input({
-          message: 'This app has no default webhook URL yet — enter one (https):',
-          validate: value => validateHttpsUrl(value, 'Webhook URL', { publicOnly: true })
-        })).trim()
+        webhookUrl = (
+          await input({
+            message: 'This app has no default webhook URL yet — enter one (https):',
+            validate: value => validateHttpsUrl(value, 'Webhook URL', { publicOnly: true })
+          })
+        ).trim()
       }
 
       const merged = mergeEventSubscriptions(current, names, overrideUrl)

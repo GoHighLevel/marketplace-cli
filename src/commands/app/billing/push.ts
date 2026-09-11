@@ -9,10 +9,7 @@ import {
   reconcileBillingAfterPush,
   verifyBillingOperations
 } from '../../../lib/billing/service.js'
-import {
-  synchronizeUsageBillingSummary,
-  writeBillingWorkspace
-} from '../../../lib/billing/workspace.js'
+import { synchronizeUsageBillingSummary, writeBillingWorkspace } from '../../../lib/billing/workspace.js'
 import { confirm, isPromptCancel } from '../../../lib/shared/prompts.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
@@ -74,9 +71,7 @@ export default class AppBillingPush extends Command {
         { quiet: this.jsonEnabled() }
       )
       try {
-        const remote = execution.total > 0
-          ? await fetchBillingSnapshot(context.client, context.appId)
-          : context.remote
+        const remote = execution.total > 0 ? await fetchBillingSnapshot(context.client, context.appId) : context.remote
         const succeeded = new Set(execution.results.filter(result => result.success).map(result => result.operation))
         const verificationSubscriptions = {
           ...context.subscriptionPlan,
@@ -108,12 +103,7 @@ export default class AppBillingPush extends Command {
           context.usagePlan,
           failed
         )
-        const files = await writeBillingWorkspace(
-          context.directory,
-          local.subscriptions,
-          local.usage,
-          remote
-        )
+        const files = await writeBillingWorkspace(context.directory, local.subscriptions, local.usage, remote)
         await synchronizeUsageBillingSummary(context.directory, remote.usage.meters.length > 0)
         const result = { appId: context.appId, ...execution, files }
         if (execution.failed > 0) process.exitCode = 1
@@ -124,7 +114,9 @@ export default class AppBillingPush extends Command {
         }
         this.log(`Billing push complete: ${execution.succeeded} succeeded, ${execution.failed} failed.`)
         for (const item of execution.results) {
-          this.log(`  ${item.success ? 'succeeded' : 'failed'}  ${item.operation}${item.error ? ` — ${item.error}` : ''}`)
+          this.log(
+            `  ${item.success ? 'succeeded' : 'failed'}  ${item.operation}${item.error ? ` — ${item.error}` : ''}`
+          )
         }
         return
       } catch (error) {

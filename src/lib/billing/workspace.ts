@@ -5,29 +5,25 @@ import { isRecord } from '../api/response.js'
 import { writeTextFileAtomic } from '../shared/atomic-file.js'
 import { writeWorkspaceDocumentation } from '../app/instructions.js'
 import { readLocalAppWorkspace } from '../app/local-workspace.js'
-import { AppManifest } from '../app/manifest.js'
+import { type AppManifest } from '../app/manifest.js'
 import { readPullWorkspaceBinding } from '../app/pull.js'
 import { APP_MANIFEST_FILENAME } from '../app/workspace.js'
 import { BILLING_GUIDE_FILENAME, buildBillingGuide } from './guide.js'
 import {
-  BillingSubscriptionManifest,
-  BillingUsageManifest,
+  type BillingSubscriptionManifest,
+  type BillingUsageManifest,
   emptyBillingSubscriptionManifest,
   emptyBillingUsageManifest
 } from './manifest.js'
 import {
-  BillingSubscriptionValidationOptions,
-  BillingUsageValidationOptions,
+  type BillingSubscriptionValidationOptions,
+  type BillingUsageValidationOptions,
   validateBillingSubscriptionManifest,
   validateBillingUsageManifest
 } from './schema.js'
 import { readJsonFile, writeJsonFileAtomic } from '../shared/json-file.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../shared/workspace-files.js'
-import {
-  withJsonSchemaReference,
-  withoutJsonSchemaReference,
-  writeJsonSchemaWorkspace
-} from '../app/json-schema.js'
+import { withJsonSchemaReference, withoutJsonSchemaReference, writeJsonSchemaWorkspace } from '../app/json-schema.js'
 
 export { BILLING_GUIDE_FILENAME }
 export const BILLING_DIRECTORY_RELATIVE_PATH = path.join('src', 'billing')
@@ -121,7 +117,8 @@ async function loadBinding(inputDirectory: string): Promise<BillingBinding> {
     errors.push('listing.userTypes')
   }
   if (!listing || typeof listing.isWhiteLabelFriendly !== 'boolean') errors.push('listing.isWhiteLabelFriendly')
-  if (!billing || !['free', 'paid', 'freemium'].includes(String(billing.billingType))) errors.push('billing.billingType')
+  if (!billing || !['free', 'paid', 'freemium'].includes(String(billing.billingType)))
+    errors.push('billing.billingType')
   if (!billing || typeof billing.externalBilling !== 'boolean') errors.push('billing.externalBilling')
   if (errors.length > 0) {
     throw new Error(`App manifest is missing billing prerequisites: ${errors.join(', ')}. Run \`ghl app pull\` again.`)
@@ -167,12 +164,7 @@ function assertManifestAppIds(
   if (errors.length > 0) throw new Error(`Billing configuration is invalid:\n- ${errors.join('\n- ')}`)
 }
 
-function validateManifests(
-  binding: BillingBinding,
-  subscriptions: unknown,
-  usage: unknown,
-  contextual = true
-): void {
+function validateManifests(binding: BillingBinding, subscriptions: unknown, usage: unknown, contextual = true): void {
   const errors = [
     ...validateBillingSubscriptionManifest(subscriptions, {
       ...binding.subscriptionOptions,
@@ -200,7 +192,11 @@ async function assertBillingPathsSafe(binding: BillingBinding): Promise<void> {
     }
   }
   await Promise.all([
-    requireSafeRegularFile(path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH), 'Subscription manifest', true),
+    requireSafeRegularFile(
+      path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH),
+      'Subscription manifest',
+      true
+    ),
     requireSafeRegularFile(path.join(binding.directory, BILLING_USAGE_RELATIVE_PATH), 'Usage-based manifest', true),
     requireSafeRegularFile(path.join(binding.directory, BILLING_STATE_RELATIVE_PATH), 'Billing state', true)
   ])
@@ -300,13 +296,11 @@ function validateState(binding: BillingBinding, value: unknown): asserts value i
     ...validateBillingSubscriptionManifest(value.subscriptionBaseline, {
       ...binding.subscriptionOptions,
       contextual: false
-    })
-      .map(error => error.replace('subscription.json', '.ghl/billing-state.json.subscriptionBaseline')),
+    }).map(error => error.replace('subscription.json', '.ghl/billing-state.json.subscriptionBaseline')),
     ...validateBillingUsageManifest(value.usageBaseline, {
       ...binding.usageOptions,
       contextual: false
-    })
-      .map(error => error.replace('usage-based.json', '.ghl/billing-state.json.usageBaseline'))
+    }).map(error => error.replace('usage-based.json', '.ghl/billing-state.json.usageBaseline'))
   )
   if (errors.length > 0) throw new Error(`Billing state is invalid:\n- ${errors.join('\n- ')}`)
 }
@@ -318,7 +312,7 @@ export async function loadBillingWorkspace(directory: string): Promise<BillingWo
   const subscriptionPath = path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH)
   const usagePath = path.join(binding.directory, BILLING_USAGE_RELATIVE_PATH)
   const stateFile = path.join(binding.directory, BILLING_STATE_RELATIVE_PATH)
-  if (!await lstatIfPresent(stateFile)) {
+  if (!(await lstatIfPresent(stateFile))) {
     throw new Error('Billing conflict state is missing. Run `ghl app billing pull` before editing billing resources.')
   }
   await requireSafeRegularFile(stateFile, 'Billing state')
@@ -356,7 +350,9 @@ export async function loadBillingWorkspaceIfPresent(directory: string): Promise<
   const workspace = await readPullWorkspaceBinding(directory)
   if (!workspace) return undefined
   const paths = [BILLING_SUBSCRIPTION_RELATIVE_PATH, BILLING_USAGE_RELATIVE_PATH, BILLING_STATE_RELATIVE_PATH]
-  const stats = await Promise.all(paths.map(relativePath => lstatIfPresent(path.join(workspace.directory, relativePath))))
+  const stats = await Promise.all(
+    paths.map(relativePath => lstatIfPresent(path.join(workspace.directory, relativePath)))
+  )
   if (stats.every(value => !value)) return undefined
   return loadBillingWorkspace(workspace.directory)
 }

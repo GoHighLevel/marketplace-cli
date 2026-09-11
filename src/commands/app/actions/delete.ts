@@ -33,14 +33,18 @@ export default class AppActionsDelete extends Command {
     try {
       const workspace = await loadWorkflowActionsWorkspace(flags.directory)
       if (workspace.manifest.actions.length === 0) throw new Error('This app has no workflow actions to delete.')
-      const selector = args.action ?? await select({
-        message: 'Workflow action to remove:',
-        choices: workspace.manifest.actions.map(action => ({
-          name: `${action.versions[0]?.info.name ?? action.key} (${action.key})`,
-          value: action.key
+      const selector =
+        args.action ??
+        (await select({
+          message: 'Workflow action to remove:',
+          choices: workspace.manifest.actions.map(action => ({
+            name: `${action.versions[0]?.info.name ?? action.key} (${action.key})`,
+            value: action.key
+          }))
         }))
-      })
-      const index = workspace.manifest.actions.findIndex(action => action.key === selector || action.templateId === selector)
+      const index = workspace.manifest.actions.findIndex(
+        action => action.key === selector || action.templateId === selector
+      )
       if (index < 0) throw new Error(`Workflow action "${selector}" was not found in local JSON.`)
       const action = workspace.manifest.actions[index]
       if (!flags.force) {
@@ -59,9 +63,16 @@ export default class AppActionsDelete extends Command {
       const manifest = structuredClone(workspace.manifest)
       manifest.actions.splice(index, 1)
       const files = await writeLocalWorkflowActionsManifest(workspace.directory, manifest)
-      const result = { appId: manifest.appId, key: action.key, actionDirectory: files.actionDirectory, stagedDeletion: true }
+      const result = {
+        appId: manifest.appId,
+        key: action.key,
+        actionDirectory: files.actionDirectory,
+        stagedDeletion: true
+      }
       if (this.jsonEnabled()) return result
-      this.log(`Removed "${action.key}" from ${files.actionDirectory}. Run \`ghl app actions push --force\` to apply the deletion.`)
+      this.log(
+        `Removed "${action.key}" from ${files.actionDirectory}. Run \`ghl app actions push --force\` to apply the deletion.`
+      )
       return
     } catch (error) {
       if (isPromptCancel(error)) {

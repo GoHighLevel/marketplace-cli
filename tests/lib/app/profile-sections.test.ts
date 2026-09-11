@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { AppVersion } from '../../../src/lib/api/client.js'
+import { type AppVersion } from '../../../src/lib/api/client.js'
 import {
   buildBasicInfoBody,
   buildListingBody,
@@ -57,17 +57,17 @@ describe('buildBasicInfoBody', () => {
       /dangerous/i
     )
     expect(
-      validateBasicInfoBody(buildBasicInfoBody(version, { tagline: 'A useful scheduling tagline', companyName: 'Acme' }))
+      validateBasicInfoBody(
+        buildBasicInfoBody(version, { tagline: 'A useful scheduling tagline', companyName: 'Acme' })
+      )
     ).toBe(true)
-    expect(
-      validateBasicInfoBody(buildBasicInfoBody(version, { companyName: 'HighLevel Partner' }), true)
-    ).toMatch(/white-label/i)
-    expect(
-      validateBasicInfoBody(buildBasicInfoBody(version, { website: 'https://ghl.example.com' }), true)
-    ).toMatch(/white-label/i)
-    expect(
-      validateBasicInfoBody(buildBasicInfoBody(version, { companyName: 'HighLevel Partner' }), false)
-    ).toBe(true)
+    expect(validateBasicInfoBody(buildBasicInfoBody(version, { companyName: 'HighLevel Partner' }), true)).toMatch(
+      /white-label/i
+    )
+    expect(validateBasicInfoBody(buildBasicInfoBody(version, { website: 'https://ghl.example.com' }), true)).toMatch(
+      /white-label/i
+    )
+    expect(validateBasicInfoBody(buildBasicInfoBody(version, { companyName: 'HighLevel Partner' }), false)).toBe(true)
   })
 
   it('uses the portal template payload and skips standard-only requirements', () => {
@@ -112,9 +112,9 @@ describe('buildListingBody', () => {
   })
 
   it('preserves the bulk-install choice for sub-account apps open to everyone', () => {
-    expect(
-      buildListingBody({ ...version, isAgencyBulkInstallEnabled: false }, {}).isAgencyBulkInstallEnabled
-    ).toBe(false)
+    expect(buildListingBody({ ...version, isAgencyBulkInstallEnabled: false }, {}).isAgencyBulkInstallEnabled).toBe(
+      false
+    )
   })
 
   it('rejects installer changes on agency-target apps', () => {
@@ -237,9 +237,7 @@ describe('buildSupportBody', () => {
   it('validates the final merged support contact and URLs', () => {
     expect(validateSupportBody(buildSupportBody(version, { supportEmail: 'bad' }))).toMatch(/valid email/i)
     expect(
-      validateSupportBody(
-        buildSupportBody({ ...version, supportConfig: {} }, { supportEmail: '', supportPhone: '' })
-      )
+      validateSupportBody(buildSupportBody({ ...version, supportConfig: {} }, { supportEmail: '', supportPhone: '' }))
     ).toMatch(/email or support phone/i)
     const normalized = buildSupportBody(version, { documentationUrl: 'docs.example.com' })
     expect(validateSupportBody(normalized)).toBe(true)
@@ -250,18 +248,22 @@ describe('buildSupportBody', () => {
     expect(validateSupportBody(buildSupportBody(version, { supportedServices: [] }), true)).toMatch(
       /supported service/i
     )
+    expect(validateSupportBody(buildSupportBody(version, { supportedServices: ['unknown'] }), true)).toMatch(
+      /unknown supported service/i
+    )
     expect(
-      validateSupportBody(buildSupportBody(version, { supportedServices: ['unknown'] }), true)
-    ).toMatch(/unknown supported service/i)
-    expect(
-      validateSupportBody(buildSupportBody(version, { documentationUrl: `https://docs.example.com/${'x'.repeat(2_100)}` }))
+      validateSupportBody(
+        buildSupportBody(version, { documentationUrl: `https://docs.example.com/${'x'.repeat(2_100)}` })
+      )
     ).toMatch(/at most 2,048 characters/i)
   })
 })
 
 describe('validateReviewDetailsBody', () => {
   it('requires both HTTPS demo URLs and a reason for private apps', () => {
-    expect(validateReviewDetailsBody(buildReviewDetailsBody(version, {}), false)).toMatch(/End-to-end demo URL is required/i)
+    expect(validateReviewDetailsBody(buildReviewDetailsBody(version, {}), false)).toMatch(
+      /End-to-end demo URL is required/i
+    )
     const publicBody = buildReviewDetailsBody(version, {
       demoUrl: 'https://example.com/demo',
       scopesDemoUrl: 'https://example.com/scopes'
@@ -281,12 +283,8 @@ describe('validateReviewDetailsBody', () => {
       }
     )
     expect(validateReviewDetailsChanges({ testCredentials: body.testCredentials })).toMatch(/credentials.*200/i)
-    expect(validateReviewDetailsChanges({ notes: 'x'.repeat(501) })).toMatch(
-      /additional details.*500/i
-    )
-    expect(validateReviewDetailsChanges({ privateReason: 'x'.repeat(501) })).toMatch(
-      /reason.*500/i
-    )
+    expect(validateReviewDetailsChanges({ notes: 'x'.repeat(501) })).toMatch(/additional details.*500/i)
+    expect(validateReviewDetailsChanges({ privateReason: 'x'.repeat(501) })).toMatch(/reason.*500/i)
     expect(validateReviewDetailsBody(body, true)).toBe(true)
   })
 

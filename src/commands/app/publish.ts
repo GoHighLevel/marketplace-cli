@@ -38,7 +38,9 @@ export default class AppPublish extends Command {
     const interactive = process.stdin.isTTY
 
     if (!flags.force && !interactive) {
-      this.error('Publishing changes app availability or submits a review — pass --force when running non-interactively.')
+      this.error(
+        'Publishing changes app availability or submits a review — pass --force when running non-interactively.'
+      )
     }
 
     try {
@@ -111,7 +113,9 @@ export default class AppPublish extends Command {
           newVersion = flags.version
         } else {
           if (!interactive) {
-            this.error('Pass --version and --agency-notes when running non-interactively, e.g. `ghl app publish --version 1.1.0 --agency-notes "..."`.')
+            this.error(
+              'Pass --version and --agency-notes when running non-interactively, e.g. `ghl app publish --version 1.1.0 --agency-notes "..."`.'
+            )
           }
           newVersion = await select({
             message: `New version (current: ${baseVersion}):`,

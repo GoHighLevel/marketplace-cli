@@ -35,9 +35,8 @@ export default class AppWebhookUnsubscribe extends Command {
     }
 
     try {
-      const context = await withSpinner(
-        'Loading webhook workspace...',
-        () => loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
+      const context = await withSpinner('Loading webhook workspace...', () =>
+        loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
       )
       const current = context.remoteFiles.webhooks.subscribedEvents
 

@@ -1,8 +1,8 @@
-import { AppVersion } from '../api/client.js'
+import { type AppVersion } from '../api/client.js'
 import { isRecord } from '../api/response.js'
-import { AppFiles } from './manifest.js'
+import { type AppFiles } from './manifest.js'
 import { isAppResourceIdentifier, validateAppWorkspaceSchema } from './schema.js'
-import { WorkspaceState } from './workspace.js'
+import { type WorkspaceState } from './workspace.js'
 import { requireVersionStatus } from './rules.js'
 import { requireAuthPrereqs } from '../auth/settings.js'
 import { buildBillingSettings, requirePricingEditable } from '../billing/pricing.js'
@@ -129,7 +129,10 @@ const READ_ONLY_FIELDS: Array<{ path: string; label?: string }> = [
   { path: 'billing.hasUsageBasedPrice', label: 'billing.hasUsageBasedPrice (managed by `ghl app billing`)' },
   { path: 'billing.paymentType', label: 'billing.paymentType (managed by subscription plans)' },
   { path: 'billing.oneTimePrice', label: 'billing.oneTimePrice (managed by subscription plans)' },
-  { path: 'billing.additionalInfoForBilling', label: 'billing.additionalInfoForBilling (managed by subscription plans)' }
+  {
+    path: 'billing.additionalInfoForBilling',
+    label: 'billing.additionalInfoForBilling (managed by subscription plans)'
+  }
 ]
 
 function canonical(value: unknown, setLike = false): unknown {
@@ -179,10 +182,7 @@ function setPath(files: AppFiles, pathValue: string, value: unknown): void {
 
 function eventMap(files: AppFiles): Map<string, { subscribed: boolean; url: null | string }> {
   return new Map(
-    files.webhooks.subscribedEvents.map(event => [
-      event.name,
-      { subscribed: true, url: event.url?.trim() || null }
-    ])
+    files.webhooks.subscribedEvents.map(event => [event.name, { subscribed: true, url: event.url?.trim() || null }])
   )
 }
 
@@ -326,7 +326,10 @@ function duplicateValues(values: string[]): string[] {
   return [...duplicates]
 }
 
-function validatedIdentity(value: { appId: unknown; versionId: unknown }): { appId: string; versionId: string } | undefined {
+function validatedIdentity(value: {
+  appId: unknown
+  versionId: unknown
+}): { appId: string; versionId: string } | undefined {
   if (!isAppResourceIdentifier(value.appId) || !isAppResourceIdentifier(value.versionId)) return undefined
   return { appId: value.appId, versionId: value.versionId }
 }
@@ -595,7 +598,8 @@ export function validateLocalAppWorkspace(files: AppFiles, state: WorkspaceState
 
 export function validateSyncPlan(plan: AppSyncPlan, remoteVersion: AppVersion): AppWorkspaceValidation {
   const errors = plan.conflicts.map(
-    conflict => `Conflict at ${conflict.path}: both the local workspace and developer portal changed after the last pull.`
+    conflict =>
+      `Conflict at ${conflict.path}: both the local workspace and developer portal changed after the last pull.`
   )
   errors.push(...validateDesiredSections(plan.desired, plan.sections, remoteVersion))
   errors.push(...validatePlanLifecycle(plan))

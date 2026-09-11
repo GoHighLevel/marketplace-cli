@@ -6,11 +6,31 @@ describe('workflow trigger guide', () => {
   it('documents every supported key, filter source, callback event, and CLI command', () => {
     const guide = buildWorkflowTriggersGuide()
     for (const value of [
-      'schemaVersion', 'templateId', 'versions', 'customVarsJson', 'subscriptionConfig',
-      'fieldType', 'options', 'mappedTo', 'fetchOptions', 'dynamicFieldsConfig', 'altersDynamicField',
-      'CREATED', 'UPDATED', 'DELETED', 'targetUrl', '${env:VARIABLE_NAME}', '${remote}',
-      'triggers create', 'triggers pull', 'triggers validate', 'triggers diff', 'triggers push',
-      'triggers new-version', 'triggers publish', 'triggers delete'
+      'schemaVersion',
+      'templateId',
+      'versions',
+      'customVarsJson',
+      'subscriptionConfig',
+      'fieldType',
+      'options',
+      'mappedTo',
+      'fetchOptions',
+      'dynamicFieldsConfig',
+      'altersDynamicField',
+      'CREATED',
+      'UPDATED',
+      'DELETED',
+      'targetUrl',
+      '${env:VARIABLE_NAME}',
+      '${remote}',
+      'triggers create',
+      'triggers pull',
+      'triggers validate',
+      'triggers diff',
+      'triggers push',
+      'triggers new-version',
+      'triggers publish',
+      'triggers delete'
     ]) {
       expect(guide).toContain(value)
     }

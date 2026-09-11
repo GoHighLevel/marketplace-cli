@@ -1,8 +1,8 @@
-import { CliConfig } from '../config/environment.js'
+import { type CliConfig } from '../config/environment.js'
 import { isRecord, readApiResponse } from './response.js'
 import { CLI_VERSION_HEADERS } from './version-header.js'
 import { isExpired, loadActiveSession, refreshSession } from '../auth/session.js'
-import { saveProfile, StoredProfile } from '../auth/token-store.js'
+import { saveProfile, type StoredProfile } from '../auth/token-store.js'
 import { isDeveloperTeamId } from '../shared/validation.js'
 
 export { isDeveloperTeamId } from '../shared/validation.js'
@@ -287,21 +287,13 @@ function hasOptionalStringFields(value: Record<string, unknown>, fields: string[
   )
 }
 
-function hasOptionalBooleanFields(
-  value: Record<string, unknown>,
-  fields: string[],
-  allowNull = false
-): boolean {
+function hasOptionalBooleanFields(value: Record<string, unknown>, fields: string[], allowNull = false): boolean {
   return fields.every(
     field => value[field] === undefined || (allowNull && value[field] === null) || typeof value[field] === 'boolean'
   )
 }
 
-function hasOptionalFiniteNumberFields(
-  value: Record<string, unknown>,
-  fields: string[],
-  allowNull = false
-): boolean {
+function hasOptionalFiniteNumberFields(value: Record<string, unknown>, fields: string[], allowNull = false): boolean {
   return fields.every(field => {
     const fieldValue = value[field]
     return (
@@ -316,11 +308,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string')
 }
 
-function hasOptionalStringArrayFields(
-  value: Record<string, unknown>,
-  fields: string[],
-  allowNull = false
-): boolean {
+function hasOptionalStringArrayFields(value: Record<string, unknown>, fields: string[], allowNull = false): boolean {
   return fields.every(
     field => value[field] === undefined || (allowNull && value[field] === null) || isStringArray(value[field])
   )
@@ -363,55 +351,67 @@ function normalizeDefaults(value: unknown): AppVersion['defaults'] | undefined {
 function isAppVersion(value: unknown): value is AppVersion {
   if (!isRecord(value) || typeof value._id !== 'string' || value._id.length === 0) return false
   if (
-    !hasOptionalStringFields(value, [
-      'appId',
-      'createdAt',
-      'name',
-      'version',
-      'status',
-      'appType',
-      'externalBillingUrl',
-      'paymentType',
-      'additionalInfoForBilling',
-      'tagline',
-      'companyName',
-      'website',
-      'category',
-      'logoUrl',
-      'description',
-      'previewVideoUrl',
-      'subAccountDescription',
-      'subAccountPreviewVideoUrl',
-      'webhookUrl',
-      'endToEndDemoUrl',
-      'scopesDemoUrl',
-      'testCredentials',
-      'additionalDetails',
-      'privateReason'
-    ], true) ||
-    !hasOptionalBooleanFields(value, [
-      'private',
-      'externalBilling',
-      'isPaidApp',
-      'isFreemium',
-      'hasFreeTrial',
-      'hasUsageBasedPrice',
-      'hasExternalAuth',
-      'isWhiteLabelFriendly',
-      'isAgencyBulkInstallEnabled',
-      'hasSubAccountProfile'
-    ], true) ||
+    !hasOptionalStringFields(
+      value,
+      [
+        'appId',
+        'createdAt',
+        'name',
+        'version',
+        'status',
+        'appType',
+        'externalBillingUrl',
+        'paymentType',
+        'additionalInfoForBilling',
+        'tagline',
+        'companyName',
+        'website',
+        'category',
+        'logoUrl',
+        'description',
+        'previewVideoUrl',
+        'subAccountDescription',
+        'subAccountPreviewVideoUrl',
+        'webhookUrl',
+        'endToEndDemoUrl',
+        'scopesDemoUrl',
+        'testCredentials',
+        'additionalDetails',
+        'privateReason'
+      ],
+      true
+    ) ||
+    !hasOptionalBooleanFields(
+      value,
+      [
+        'private',
+        'externalBilling',
+        'isPaidApp',
+        'isFreemium',
+        'hasFreeTrial',
+        'hasUsageBasedPrice',
+        'hasExternalAuth',
+        'isWhiteLabelFriendly',
+        'isAgencyBulkInstallEnabled',
+        'hasSubAccountProfile'
+      ],
+      true
+    ) ||
     !hasOptionalFiniteNumberFields(value, ['freeTrialDuration', 'oneTimePrice'], true) ||
-    !hasOptionalStringArrayFields(value, [
-      'subcategory',
-      'businessNiche',
-      'userTypes',
-      'searchKeywords',
-      'previewImageUrls',
-      'subAccountPreviewImageUrls',
-      'allowedScopes',
-      'redirectUris'
-    ], true) ||
+    !hasOptionalStringArrayFields(
+      value,
+      [
+        'subcategory',
+        'businessNiche',
+        'userTypes',
+        'searchKeywords',
+        'previewImageUrls',
+        'subAccountPreviewImageUrls',
+        'allowedScopes',
+        'redirectUris'
+      ],
+      true
+    ) ||
     (value.billingType !== undefined &&
       value.billingType !== null &&
       !['free', 'paid', 'freemium'].includes(String(value.billingType)))
@@ -449,8 +449,7 @@ function isAppVersion(value: unknown): value is AppVersion {
         'termsAndConditionsUrl',
         'privacyPolicyUrl'
       ]) ||
-      (value.supportConfig.supportedServices !== undefined &&
-        !isStringArray(value.supportConfig.supportedServices))
+      (value.supportConfig.supportedServices !== undefined && !isStringArray(value.supportConfig.supportedServices))
     ) {
       return false
     }
@@ -495,9 +494,7 @@ function isAppVersion(value: unknown): value is AppVersion {
 
 function normalizeAppVersion(value: unknown): AppVersion | undefined {
   const normalizedValue =
-    isRecord(value) && typeof value.subcategory === 'string'
-      ? { ...value, subcategory: [value.subcategory] }
-      : value
+    isRecord(value) && typeof value.subcategory === 'string' ? { ...value, subcategory: [value.subcategory] } : value
   if (!isAppVersion(normalizedValue)) return undefined
   const record = normalizedValue as AppVersion & Record<string, unknown>
   const nestedValue = record.oAuthClient
@@ -566,12 +563,7 @@ function isBillingPlan(value: unknown): value is BillingPlan {
     Number.isFinite(amount) &&
     hasOptionalStringFields(value, ['_id', 'id', 'name', 'paymentType', 'paymentTime']) &&
     hasOptionalFiniteNumberFields(value, ['price', 'locationPrice', 'amount', 'locationAmount'], true) &&
-    hasOptionalBooleanFields(value, [
-      'isFreemiumPlan',
-      'freeForAgency',
-      'freeForLocation',
-      'freePlan'
-    ])
+    hasOptionalBooleanFields(value, ['isFreemiumPlan', 'freeForAgency', 'freeForLocation', 'freePlan'])
   )
 }
 
@@ -584,7 +576,8 @@ function isBillingUsageTier(value: unknown): value is BillingUsageTier {
     value.name.trim().length > 0 &&
     typeof value.minVolume === 'number' &&
     Number.isFinite(value.minVolume) &&
-    (value.maxVolume === undefined || value.maxVolume === null ||
+    (value.maxVolume === undefined ||
+      value.maxVolume === null ||
       (typeof value.maxVolume === 'number' && Number.isFinite(value.maxVolume))) &&
     typeof value.pricePerUnit === 'number' &&
     Number.isFinite(value.pricePerUnit) &&
@@ -778,7 +771,7 @@ export class ApiClient {
   /* Concurrent requests share token rotation so a single-use refresh token
      is never submitted more than once by the same client. */
   private async refreshProfile(): Promise<void> {
-    const operation = this.refreshPromise ??= refreshSession(this.config, this.profileName, this.profile)
+    const operation = (this.refreshPromise ??= refreshSession(this.config, this.profileName, this.profile))
     try {
       this.profile = await operation
     } finally {
@@ -824,11 +817,12 @@ export class ApiClient {
         return await fetch(url, init())
       } catch {
         const target = options.baseUrl ?? this.config.apiUrl
-        const override = target === this.config.oauthUrl
-          ? 'GHL_OAUTH_URL'
-          : target === this.config.workflowsUrl
-            ? 'GHL_WORKFLOWS_URL'
-            : 'GHL_API_URL'
+        const override =
+          target === this.config.oauthUrl
+            ? 'GHL_OAUTH_URL'
+            : target === this.config.workflowsUrl
+              ? 'GHL_WORKFLOWS_URL'
+              : 'GHL_API_URL'
         throw new Error(`Cannot reach ${url.origin}. Check your network connection or the ${override} setting.`)
       }
     }
@@ -849,12 +843,15 @@ export class ApiClient {
   async listDeveloperTeams(): Promise<DeveloperTeam[]> {
     const response = await this.request<unknown>('/users/teams')
     if (!Array.isArray(response)) throw new Error('Developer teams API returned an unexpected response.')
-    if (!response.every(team =>
-      isRecord(team) &&
-      isDeveloperTeamId(team.team) &&
-      (team.name === undefined || typeof team.name === 'string') &&
-      (team.role === undefined || (typeof team.role === 'string' && DEVELOPER_TEAM_ROLE.test(team.role)))
-    )) {
+    if (
+      !response.every(
+        team =>
+          isRecord(team) &&
+          isDeveloperTeamId(team.team) &&
+          (team.name === undefined || typeof team.name === 'string') &&
+          (team.role === undefined || (typeof team.role === 'string' && DEVELOPER_TEAM_ROLE.test(team.role)))
+      )
+    ) {
       throw new Error('Developer teams API returned an unexpected response.')
     }
     return response as DeveloperTeam[]
@@ -864,10 +861,12 @@ export class ApiClient {
     if (!isDeveloperTeamId(teamId)) {
       throw new Error('Account id must contain 1-128 letters, numbers, underscores, or hyphens.')
     }
-    const teams = memberships ?? await this.listDeveloperTeams()
+    const teams = memberships ?? (await this.listDeveloperTeams())
     const selected = teams.find(membership => membership.team === teamId)
     if (!selected) {
-      throw new Error(`Account ${JSON.stringify(teamId)} is not available to this developer. Run \`ghl account\` to list accessible accounts.`)
+      throw new Error(
+        `Account ${JSON.stringify(teamId)} is not available to this developer. Run \`ghl account\` to list accessible accounts.`
+      )
     }
     const nextProfile = { ...this.profile, teamId: selected.team }
     if (selected.name) nextProfile.teamName = selected.name
@@ -881,7 +880,7 @@ export class ApiClient {
      header is resolved once and cached in the profile. */
   async ensureTeam(memberships?: DeveloperTeam[]): Promise<void> {
     if (this.profile.teamId && (!memberships || memberships.some(team => team.team === this.profile.teamId))) return
-    const teams = memberships ?? await this.listDeveloperTeams()
+    const teams = memberships ?? (await this.listDeveloperTeams())
     if (teams.length === 0) {
       throw new Error('No developer account is available. Ask an account owner to add you, then retry.')
     }
@@ -933,7 +932,9 @@ export class ApiClient {
       !response.name.trim() ||
       (response.appId !== undefined && (typeof response.appId !== 'string' || !response.appId))
     ) {
-      throw new Error('Create app API returned an unexpected response. The app may still have been created; run `ghl app list`.')
+      throw new Error(
+        'Create app API returned an unexpected response. The app may still have been created; run `ghl app list`.'
+      )
     }
     return response as unknown as CreatedApp
   }
@@ -1144,7 +1145,9 @@ export class ApiClient {
       headers: { appid: appId }
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Workflow action update API returned an unexpected response. Run `ghl app actions pull` before retrying.')
+      throw new Error(
+        'Workflow action update API returned an unexpected response. Run `ghl app actions pull` before retrying.'
+      )
     }
   }
 
@@ -1160,7 +1163,9 @@ export class ApiClient {
       baseUrl: this.config.oauthUrl
     })
     if (!isRecord(response) || response.success !== true || !isWorkflowActionSummary(response.action)) {
-      throw new Error('Workflow action registry update API returned an unexpected response. Run `ghl app actions pull`.')
+      throw new Error(
+        'Workflow action registry update API returned an unexpected response. Run `ghl app actions pull`.'
+      )
     }
     return response.action
   }
@@ -1172,7 +1177,9 @@ export class ApiClient {
       baseUrl: this.config.oauthUrl
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Delete workflow action API returned an unexpected response. Run `ghl app actions pull` to verify its state.')
+      throw new Error(
+        'Delete workflow action API returned an unexpected response. Run `ghl app actions pull` to verify its state.'
+      )
     }
   }
 
@@ -1188,7 +1195,9 @@ export class ApiClient {
       headers: { appid: appId }
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Workflow action review API returned an unexpected response. Run `ghl app actions pull` to verify its state.')
+      throw new Error(
+        'Workflow action review API returned an unexpected response. Run `ghl app actions pull` to verify its state.'
+      )
     }
   }
 
@@ -1200,14 +1209,13 @@ export class ApiClient {
       baseUrl: this.config.oauthUrl
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Workflow action publish registry API returned an unexpected response. Run `ghl app actions pull`.')
+      throw new Error(
+        'Workflow action publish registry API returned an unexpected response. Run `ghl app actions pull`.'
+      )
     }
   }
 
-  async testWorkflowAction(
-    appId: string,
-    body: WorkflowActionTestRequest
-  ): Promise<WorkflowActionTestResponse> {
+  async testWorkflowAction(appId: string, body: WorkflowActionTestRequest): Promise<WorkflowActionTestResponse> {
     await this.ensureTeam()
     const response = await this.request<unknown>('/run-code-test', {
       method: 'POST',
@@ -1221,7 +1229,11 @@ export class ApiClient {
   async listWorkflowTriggerSummaries(appId: string): Promise<WorkflowTriggerSummary[]> {
     await this.ensureTeam()
     const response = await this.request<unknown>(`/clients/${appId}/triggers`, { baseUrl: this.config.oauthUrl })
-    if (!isRecord(response) || !Array.isArray(response.triggers) || !response.triggers.every(isWorkflowTriggerSummary)) {
+    if (
+      !isRecord(response) ||
+      !Array.isArray(response.triggers) ||
+      !response.triggers.every(isWorkflowTriggerSummary)
+    ) {
       throw new Error('Workflow trigger registry API returned an unexpected response.')
     }
     return response.triggers as WorkflowTriggerSummary[]
@@ -1236,7 +1248,11 @@ export class ApiClient {
     return workflowTriggerConfigs(response, 'Workflow trigger list')
   }
 
-  async getWorkflowTriggerConfigs(appId: string, templateId: string, version?: string): Promise<WorkflowTriggerConfig[]> {
+  async getWorkflowTriggerConfigs(
+    appId: string,
+    templateId: string,
+    version?: string
+  ): Promise<WorkflowTriggerConfig[]> {
     await this.ensureTeam()
     const response = await this.request<unknown>(`/triggers/${templateId}`, {
       baseUrl: this.config.workflowsUrl,
@@ -1268,7 +1284,12 @@ export class ApiClient {
       body,
       baseUrl: this.config.oauthUrl
     })
-    if (!isRecord(response) || response.success !== true || !isRecord(response.trigger) || !isWorkflowTriggerSummary(response.trigger)) {
+    if (
+      !isRecord(response) ||
+      response.success !== true ||
+      !isRecord(response.trigger) ||
+      !isWorkflowTriggerSummary(response.trigger)
+    ) {
       throw new Error(
         'Create workflow trigger API returned an unexpected response. The trigger may still have been created; run `ghl app triggers pull`.'
       )
@@ -1283,7 +1304,12 @@ export class ApiClient {
       body: {},
       baseUrl: this.config.oauthUrl
     })
-    if (isRecord(response) && response.success === true && isRecord(response.trigger) && isWorkflowTriggerSummary(response.trigger)) {
+    if (
+      isRecord(response) &&
+      response.success === true &&
+      isRecord(response.trigger) &&
+      isWorkflowTriggerSummary(response.trigger)
+    ) {
       return response.trigger
     }
     const recovered = await recoverCreatedWorkflowVersion(
@@ -1313,7 +1339,9 @@ export class ApiClient {
       headers: { appid: appId }
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Workflow trigger update API returned an unexpected response. Run `ghl app triggers pull` before retrying.')
+      throw new Error(
+        'Workflow trigger update API returned an unexpected response. Run `ghl app triggers pull` before retrying.'
+      )
     }
   }
 
@@ -1328,8 +1356,15 @@ export class ApiClient {
       body,
       baseUrl: this.config.oauthUrl
     })
-    if (!isRecord(response) || response.success !== true || !isRecord(response.trigger) || !isWorkflowTriggerSummary(response.trigger)) {
-      throw new Error('Workflow trigger registry update API returned an unexpected response. Run `ghl app triggers pull`.')
+    if (
+      !isRecord(response) ||
+      response.success !== true ||
+      !isRecord(response.trigger) ||
+      !isWorkflowTriggerSummary(response.trigger)
+    ) {
+      throw new Error(
+        'Workflow trigger registry update API returned an unexpected response. Run `ghl app triggers pull`.'
+      )
     }
     return response.trigger
   }
@@ -1341,7 +1376,9 @@ export class ApiClient {
       baseUrl: this.config.oauthUrl
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Delete workflow trigger API returned an unexpected response. Run `ghl app triggers pull` to verify its state.')
+      throw new Error(
+        'Delete workflow trigger API returned an unexpected response. Run `ghl app triggers pull` to verify its state.'
+      )
     }
   }
 
@@ -1357,7 +1394,9 @@ export class ApiClient {
       headers: { appid: appId }
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Workflow trigger review API returned an unexpected response. Run `ghl app triggers pull` to verify its state.')
+      throw new Error(
+        'Workflow trigger review API returned an unexpected response. Run `ghl app triggers pull` to verify its state.'
+      )
     }
   }
 
@@ -1369,7 +1408,9 @@ export class ApiClient {
       baseUrl: this.config.oauthUrl
     })
     if (!isRecord(response) || response.success !== true) {
-      throw new Error('Workflow trigger publish registry API returned an unexpected response. Run `ghl app triggers pull`.')
+      throw new Error(
+        'Workflow trigger publish registry API returned an unexpected response. Run `ghl app triggers pull`.'
+      )
     }
   }
 
@@ -1400,7 +1441,13 @@ export class ApiClient {
 
     /* The secret is only ever returned here — if the response shape changed,
        fail loudly: a key without a captured secret is unusable. */
-    if (!isRecord(created) || typeof created.id !== 'string' || !created.id || typeof created.secret !== 'string' || !created.secret) {
+    if (
+      !isRecord(created) ||
+      typeof created.id !== 'string' ||
+      !created.id ||
+      typeof created.secret !== 'string' ||
+      !created.secret
+    ) {
       throw new Error(
         'Client key response did not include an id/secret. The key may still have been created — ' +
           'check `ghl app keys` and delete it, then retry.'
@@ -1423,7 +1470,9 @@ export class ApiClient {
     await this.ensureTeam()
     const response = await this.request<unknown>(`/app/secrets/${appId}/ssokey`, { method: 'POST', body: {} })
     if (!isRecord(response) || typeof response.ssoKey !== 'string' || !response.ssoKey) {
-      throw new Error('SSO key API returned an unexpected response. The key may have rotated; verify in the developer portal.')
+      throw new Error(
+        'SSO key API returned an unexpected response. The key may have rotated; verify in the developer portal.'
+      )
     }
     return { ssoKey: response.ssoKey }
   }

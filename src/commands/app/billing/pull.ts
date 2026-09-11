@@ -3,10 +3,7 @@ import { Command, Flags } from '@oclif/core'
 import { readPullWorkspaceBinding } from '../../../lib/app/pull.js'
 import { loadBillingRemoteContext } from '../../../lib/billing/command-context.js'
 import { fetchBillingSnapshot } from '../../../lib/billing/service.js'
-import {
-  synchronizeUsageBillingSummary,
-  writeBillingWorkspace
-} from '../../../lib/billing/workspace.js'
+import { synchronizeUsageBillingSummary, writeBillingWorkspace } from '../../../lib/billing/workspace.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
 export default class AppBillingPull extends Command {
@@ -28,7 +25,8 @@ export default class AppBillingPull extends Command {
     const { flags } = await this.parse(AppBillingPull)
     try {
       const binding = await readPullWorkspaceBinding(flags.directory)
-      if (!binding) throw new Error('No ghl-app.json was found. Run this command inside an app workspace or pass --directory.')
+      if (!binding)
+        throw new Error('No ghl-app.json was found. Run this command inside an app workspace or pass --directory.')
       const context = await loadBillingRemoteContext({
         appId: flags.app,
         directory: binding.directory,
@@ -39,11 +37,7 @@ export default class AppBillingPull extends Command {
         () => fetchBillingSnapshot(context.client, context.appId),
         { quiet: this.jsonEnabled() }
       )
-      const files = await writeBillingWorkspace(
-        binding.directory,
-        snapshot.subscriptions,
-        snapshot.usage
-      )
+      const files = await writeBillingWorkspace(binding.directory, snapshot.subscriptions, snapshot.usage)
       await synchronizeUsageBillingSummary(binding.directory, snapshot.usage.meters.length > 0)
       const result = {
         appId: context.appId,

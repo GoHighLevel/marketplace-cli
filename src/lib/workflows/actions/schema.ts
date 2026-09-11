@@ -10,21 +10,15 @@ import {
   WORKFLOW_ACTION_ENV_REFERENCE,
   WORKFLOW_ACTION_REMOTE_REFERENCE
 } from './secrets.js'
-import {
-  workflowActionCodeSyntaxError,
-  WORKFLOW_ACTION_CODE_MAX_BYTES
-} from './code.js'
+import { workflowActionCodeSyntaxError, WORKFLOW_ACTION_CODE_MAX_BYTES } from './code.js'
 import { workflowActionKeyValidationErrors } from './key.js'
 import {
-  WorkflowActionDefinition,
-  WorkflowActionInput,
-  WorkflowActionsManifest,
-  WorkflowActionVersion
+  type WorkflowActionDefinition,
+  type WorkflowActionInput,
+  type WorkflowActionsManifest,
+  type WorkflowActionVersion
 } from './manifest.js'
-import {
-  WORKFLOW_ACTION_FIELD_TYPES,
-  WORKFLOW_ACTION_INTERNAL_REFERENCES
-} from './contract.js'
+import { WORKFLOW_ACTION_FIELD_TYPES, WORKFLOW_ACTION_INTERNAL_REFERENCES } from './contract.js'
 import {
   containsWhitespace,
   isWorkflowFieldKey,
@@ -46,7 +40,16 @@ const STATUSES = new Set(['draft', 'in_review', 'published'])
 const METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT'])
 const FIELD_TYPES = new Set<string>(WORKFLOW_ACTION_FIELD_TYPES)
 const INTERNAL_REFERENCES = new Set<string>(WORKFLOW_ACTION_INTERNAL_REFERENCES)
-const BRANCH_FIELD_TYPES = new Set(['dynamic', 'multiselect', 'numerical', 'phone', 'select', 'string', 'textarea', 'toggle'])
+const BRANCH_FIELD_TYPES = new Set([
+  'dynamic',
+  'multiselect',
+  'numerical',
+  'phone',
+  'select',
+  'string',
+  'textarea',
+  'toggle'
+])
 const CUSTOM_VARIABLE_TYPES = new Set(['array', 'boolean', 'date', 'numerical', 'string'])
 const RICH_TEXT_EDITOR_TYPES = new Set(['html', 'plain-text'])
 const VALIDATION_REGEX_MAX_CHARACTERS = 1_000
@@ -93,9 +96,7 @@ const INPUT_PROPERTIES = new Set([
 ])
 
 function propertyPath(path: string, property: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$-]*$/.test(property)
-    ? `${path}.${property}`
-    : `${path}[${JSON.stringify(property)}]`
+  return /^[A-Za-z_$][A-Za-z0-9_$-]*$/.test(property) ? `${path}.${property}` : `${path}[${JSON.stringify(property)}]`
 }
 
 function unknownProperties(value: unknown, allowed: Set<string>, path: string, errors: string[]): void {
@@ -131,12 +132,7 @@ function optionalBoolean(value: unknown, path: string, errors: string[]): void {
   if (value !== undefined && typeof value !== 'boolean') errors.push(`${path} must be a boolean.`)
 }
 
-function optionalInteger(
-  value: unknown,
-  path: string,
-  errors: string[],
-  range?: { min: number; max: number }
-): void {
+function optionalInteger(value: unknown, path: string, errors: string[], range?: { min: number; max: number }): void {
   if (value === undefined) return
   if (!Number.isInteger(value)) {
     errors.push(`${path} must be an integer${range ? ` between ${range.min} and ${range.max}` : ''}.`)
@@ -235,7 +231,7 @@ function validateHeaders(value: unknown, path: string, errors: string[]): void {
     }
     const looksLikeReference = headerValue.startsWith('${') || headerValue.endsWith('}')
     if (looksLikeReference && !isWorkflowActionSecretReference(headerValue)) {
-      errors.push(`${headerPath} must use \"\${remote}\" or \"\${env:VARIABLE_NAME}\" reference syntax.`)
+      errors.push(`${headerPath} must use "\${remote}" or "\${env:VARIABLE_NAME}" reference syntax.`)
     }
     if (
       workflowActionHeaderRequiresReference(name) &&
@@ -253,10 +249,15 @@ function validateOptions(value: unknown, path: string, errors: string[]): void {
   value.forEach((option, index) => {
     const optionPath = `${path}[${index}]`
     if (!requireRecord(option, optionPath, errors)) return
-    unknownProperties(option, new Set(['label', 'value', 'description', 'disabled', 'icon', 'iconUrl']), optionPath, errors)
+    unknownProperties(
+      option,
+      new Set(['label', 'value', 'description', 'disabled', 'icon', 'iconUrl']),
+      optionPath,
+      errors
+    )
     requiredString(option.label, `${optionPath}.label`, errors)
     if (requiredString(option.value, `${optionPath}.value`, errors)) {
-      if (optionValues.has(option.value)) errors.push(`${optionPath}.value duplicates option value \"${option.value}\".`)
+      if (optionValues.has(option.value)) errors.push(`${optionPath}.value duplicates option value "${option.value}".`)
       optionValues.add(option.value)
     }
     optionalString(option.description, `${optionPath}.description`, errors)
@@ -290,7 +291,8 @@ function validateFetchOptions(value: unknown, path: string, errors: string[]): v
   )
   validatePublicHttpsUrl(value.url, `${path}.url`, errors)
   if (value.headers !== undefined) validateHeaders(value.headers, `${path}.headers`, errors)
-  if (value.queryParams !== undefined && !isRecord(value.queryParams)) errors.push(`${path}.queryParams must be an object.`)
+  if (value.queryParams !== undefined && !isRecord(value.queryParams))
+    errors.push(`${path}.queryParams must be an object.`)
   if (value.body !== undefined && !isRecord(value.body)) errors.push(`${path}.body must be an object.`)
   for (const field of ['route', 'serviceName', 'version', 'source', 'sourceId']) {
     optionalString(value[field], `${path}.${field}`, errors)
@@ -326,16 +328,42 @@ function validateBranchFetchOptions(value: unknown, path: string, errors: string
 function validateDynamicFieldsConfig(value: unknown, path: string, errors: string[]): void {
   if (!requireRecord(value, path, errors)) return
   const allowed = new Set([
-    'url', 'headers', 'route', 'serviceName', 'customGenerator', 'method', 'labelField', 'valueField',
-    'path', 'dependsOn', 'postProcessor', 'queryParams', 'version', 'source', 'sourceId', 'body'
+    'url',
+    'headers',
+    'route',
+    'serviceName',
+    'customGenerator',
+    'method',
+    'labelField',
+    'valueField',
+    'path',
+    'dependsOn',
+    'postProcessor',
+    'queryParams',
+    'version',
+    'source',
+    'sourceId',
+    'body'
   ])
   unknownProperties(value, allowed, path, errors)
   validatePublicHttpsUrl(value.url, `${path}.url`, errors)
   if (value.headers !== undefined) validateHeaders(value.headers, `${path}.headers`, errors)
-  for (const field of ['route', 'serviceName', 'customGenerator', 'labelField', 'valueField', 'path', 'postProcessor', 'version', 'source', 'sourceId']) {
+  for (const field of [
+    'route',
+    'serviceName',
+    'customGenerator',
+    'labelField',
+    'valueField',
+    'path',
+    'postProcessor',
+    'version',
+    'source',
+    'sourceId'
+  ]) {
     optionalString(value[field], `${path}.${field}`, errors)
   }
-  if (value.queryParams !== undefined && !isRecord(value.queryParams)) errors.push(`${path}.queryParams must be an object.`)
+  if (value.queryParams !== undefined && !isRecord(value.queryParams))
+    errors.push(`${path}.queryParams must be an object.`)
   if (value.body !== undefined && !isRecord(value.body)) errors.push(`${path}.body must be an object.`)
   if (value.method !== undefined && !METHODS.has(String(value.method))) {
     errors.push(`${path}.method must be one of: ${[...METHODS].join(', ')}.`)
@@ -361,8 +389,16 @@ function validateDynamicFieldsConfig(value: unknown, path: string, errors: strin
 function validatePagination(value: unknown, path: string, errors: string[]): void {
   if (!requireRecord(value, path, errors)) return
   const stringFields = [
-    'strategy', 'pageParam', 'perPageParam', 'limitParam', 'offsetParam', 'cursorParam', 'nextCursorField',
-    'syncTokenField', 'syncTokenParam', 'searchParam'
+    'strategy',
+    'pageParam',
+    'perPageParam',
+    'limitParam',
+    'offsetParam',
+    'cursorParam',
+    'nextCursorField',
+    'syncTokenField',
+    'syncTokenParam',
+    'searchParam'
   ]
   const allowed = new Set([
     ...stringFields,
@@ -384,7 +420,10 @@ function validatePagination(value: unknown, path: string, errors: string[]): voi
   optionalBoolean(value.enabled, `${path}.enabled`, errors)
   optionalBoolean(value.supportsSearch, `${path}.supportsSearch`, errors)
   optionalBoolean(value.fetchAllPages, `${path}.fetchAllPages`, errors)
-  if (value.strategy !== undefined && !['limit_offset', 'page', 'last_page', 'cursor', 'next_url'].includes(String(value.strategy))) {
+  if (
+    value.strategy !== undefined &&
+    !['limit_offset', 'page', 'last_page', 'cursor', 'next_url'].includes(String(value.strategy))
+  ) {
     errors.push(`${path}.strategy must be limit_offset, page, last_page, cursor, or next_url.`)
   }
   if (value.order !== undefined && !['asc', 'desc'].includes(String(value.order))) {
@@ -395,15 +434,19 @@ function validatePagination(value: unknown, path: string, errors: string[]): voi
   }
 }
 
-function validateDynamicSource(
-  value: unknown,
-  path: string,
-  errors: string[],
-  allowPagination = true
-): void {
+function validateDynamicSource(value: unknown, path: string, errors: string[], allowPagination = true): void {
   if (!requireRecord(value, path, errors)) return
   const allowed = new Set([
-    'executionType', 'code', 'url', 'method', 'headers', 'labelField', 'valueField', 'path', 'body', 'postProcessor',
+    'executionType',
+    'code',
+    'url',
+    'method',
+    'headers',
+    'labelField',
+    'valueField',
+    'path',
+    'body',
+    'postProcessor',
     ...(allowPagination ? ['pagination'] : [])
   ])
   unknownProperties(value, allowed, path, errors)
@@ -432,7 +475,8 @@ function validateDynamicSource(
     optionalString(value[field], `${path}.${field}`, errors)
   }
   if (value.body !== undefined && !isRecord(value.body)) errors.push(`${path}.body must be an object.`)
-  if (allowPagination && value.pagination !== undefined) validatePagination(value.pagination, `${path}.pagination`, errors)
+  if (allowPagination && value.pagination !== undefined)
+    validatePagination(value.pagination, `${path}.pagination`, errors)
 }
 
 function validateInputPresentation(input: Record<string, unknown>, path: string, errors: string[]): void {
@@ -450,7 +494,8 @@ function validateInputPresentation(input: Record<string, unknown>, path: string,
         configPath,
         errors
       )
-      if (input.config.innerFields === undefined) errors.push(`${configPath}.innerFields is required for a fieldSet input.`)
+      if (input.config.innerFields === undefined)
+        errors.push(`${configPath}.innerFields is required for a fieldSet input.`)
       else stringArray(input.config.innerFields, `${configPath}.innerFields`, errors)
       optionalString(input.config.addItemLabel, `${configPath}.addItemLabel`, errors)
       optionalString(input.config.itemLabel, `${configPath}.itemLabel`, errors)
@@ -462,28 +507,43 @@ function validateInputPresentation(input: Record<string, unknown>, path: string,
     } else {
       unknownProperties(input.config, new Set(['richTextEditorType']), configPath, errors)
       const richTextEditorType = input.config.richTextEditorType
-      if (richTextEditorType !== undefined && (
-        typeof richTextEditorType !== 'string' || !RICH_TEXT_EDITOR_TYPES.has(richTextEditorType)
-      )) {
+      if (
+        richTextEditorType !== undefined &&
+        (typeof richTextEditorType !== 'string' || !RICH_TEXT_EDITOR_TYPES.has(richTextEditorType))
+      ) {
         errors.push(`${configPath}.richTextEditorType must be "html" or "plain-text".`)
       }
     }
   }
   if (input.fieldOptions !== undefined && requireRecord(input.fieldOptions, `${path}.fieldOptions`, errors)) {
     const optionsPath = `${path}.fieldOptions`
-    unknownProperties(input.fieldOptions, new Set(['allowedFileTypes', 'showTextFiles', 'showUrlFiles', 'isClearable']), optionsPath, errors)
-    if (input.fieldOptions.allowedFileTypes !== undefined) stringArray(input.fieldOptions.allowedFileTypes, `${optionsPath}.allowedFileTypes`, errors)
+    unknownProperties(
+      input.fieldOptions,
+      new Set(['allowedFileTypes', 'showTextFiles', 'showUrlFiles', 'isClearable']),
+      optionsPath,
+      errors
+    )
+    if (input.fieldOptions.allowedFileTypes !== undefined)
+      stringArray(input.fieldOptions.allowedFileTypes, `${optionsPath}.allowedFileTypes`, errors)
     for (const field of ['showTextFiles', 'showUrlFiles', 'isClearable']) {
       optionalBoolean(input.fieldOptions[field], `${optionsPath}.${field}`, errors)
     }
   }
   if (input.variantConfig !== undefined && requireRecord(input.variantConfig, `${path}.variantConfig`, errors)) {
     const configPath = `${path}.variantConfig`
-    unknownProperties(input.variantConfig, new Set(['columns', 'allowDeselect', 'tileSize', 'showDescription']), configPath, errors)
+    unknownProperties(
+      input.variantConfig,
+      new Set(['columns', 'allowDeselect', 'tileSize', 'showDescription']),
+      configPath,
+      errors
+    )
     optionalInteger(input.variantConfig.columns, `${configPath}.columns`, errors, { min: 2, max: 5 })
     optionalBoolean(input.variantConfig.allowDeselect, `${configPath}.allowDeselect`, errors)
     optionalBoolean(input.variantConfig.showDescription, `${configPath}.showDescription`, errors)
-    if (input.variantConfig.tileSize !== undefined && !['sm', 'md', 'lg'].includes(String(input.variantConfig.tileSize))) {
+    if (
+      input.variantConfig.tileSize !== undefined &&
+      !['sm', 'md', 'lg'].includes(String(input.variantConfig.tileSize))
+    ) {
       errors.push(`${configPath}.tileSize must be "sm", "md", or "lg".`)
     }
   }
@@ -526,7 +586,7 @@ function validateInput(
         errors.push(`${path}.field must start with a letter and contain only letters, numbers, and underscores.`)
       }
       if (validateUniqueField && seen.has(input.field)) {
-        errors.push(`${path}.field duplicates input field \"${input.field}\".`)
+        errors.push(`${path}.field duplicates input field "${input.field}".`)
       }
       seen.add(input.field)
     }
@@ -536,14 +596,19 @@ function validateInput(
     if (typeof input.fieldType === 'string') errors.push(`${path}.fieldType is not supported.`)
   }
   optionalBoolean(input.required, `${path}.required`, errors)
-  for (const field of ['helpText', 'placeholder', 'mappedTo', 'customInputHelperText', 'postProcessor', 'timezoneSourceField', 'group', 'translationKey']) {
+  for (const field of [
+    'helpText',
+    'placeholder',
+    'mappedTo',
+    'customInputHelperText',
+    'postProcessor',
+    'timezoneSourceField',
+    'group',
+    'translationKey'
+  ]) {
     optionalString(input[field], `${path}.${field}`, errors)
   }
-  if (
-    typeof input.mappedTo === 'string' &&
-    input.mappedTo &&
-    !INTERNAL_REFERENCES.has(input.mappedTo)
-  ) {
+  if (typeof input.mappedTo === 'string' && input.mappedTo && !INTERNAL_REFERENCES.has(input.mappedTo)) {
     errors.push(`${path}.mappedTo must be one of: ${WORKFLOW_ACTION_INTERNAL_REFERENCES.join(', ')}.`)
   }
   for (const field of [
@@ -577,7 +642,8 @@ function validateInput(
   if (input.validations !== undefined) validateRules(input.validations, `${path}.validations`, errors)
   if (input.fetchOptions !== undefined) validateFetchOptions(input.fetchOptions, `${path}.fetchOptions`, errors)
   if (input.dynamicSource !== undefined) validateDynamicSource(input.dynamicSource, `${path}.dynamicSource`, errors)
-  if (input.dynamicFieldsConfig !== undefined) validateDynamicFieldsConfig(input.dynamicFieldsConfig, `${path}.dynamicFieldsConfig`, errors)
+  if (input.dynamicFieldsConfig !== undefined)
+    validateDynamicFieldsConfig(input.dynamicFieldsConfig, `${path}.dynamicFieldsConfig`, errors)
   if (input.value !== undefined) {
     if (['attachment', 'DYNAMIC'].includes(String(input.fieldType))) {
       errors.push(`${path}.value is not supported for ${input.fieldType} inputs.`)
@@ -608,13 +674,13 @@ function validateInput(
   }
   validateInputPresentation(input, path, errors)
   if (input.variant !== undefined && !['standard', 'tile-picker'].includes(String(input.variant))) {
-    errors.push(`${path}.variant must be \"standard\" or \"tile-picker\".`)
+    errors.push(`${path}.variant must be "standard" or "tile-picker".`)
   }
   if (input.variant === 'tile-picker' && !['select', 'multiselect', 'radio'].includes(String(input.fieldType))) {
-    errors.push(`${path}.variant \"tile-picker\" is supported only for select, multiselect, and radio fields.`)
+    errors.push(`${path}.variant "tile-picker" is supported only for select, multiselect, and radio fields.`)
   }
   if (input.variantConfig !== undefined && input.variant !== 'tile-picker') {
-    errors.push(`${path}.variantConfig requires variant \"tile-picker\".`)
+    errors.push(`${path}.variantConfig requires variant "tile-picker".`)
   }
   if (selectTypes.includes(String(input.fieldType))) {
     const optionSources = [
@@ -624,7 +690,9 @@ function validateInput(
       input.dynamicSource !== undefined ? 'dynamicSource' : undefined
     ].filter((source): source is string => source !== undefined)
     if (optionSources.length === 0) {
-      errors.push(`${path} must define options, mappedTo, fetchOptions, or dynamicSource for ${input.fieldType} fields.`)
+      errors.push(
+        `${path} must define options, mappedTo, fetchOptions, or dynamicSource for ${input.fieldType} fields.`
+      )
     } else if (optionSources.length > 1) {
       errors.push(`${path} must define exactly one option source; found ${optionSources.join(', ')}.`)
     }
@@ -639,7 +707,7 @@ function validateInput(
     errors.push(`${path}.dynamicSource is required for paginated select fields.`)
   }
   if (input.fieldType === 'DYNAMIC') {
-    if (input.field !== 'DYNAMIC') errors.push(`${path}.field must be \"DYNAMIC\" for a dynamic input.`)
+    if (input.field !== 'DYNAMIC') errors.push(`${path}.field must be "DYNAMIC" for a dynamic input.`)
     if (input.required === true) errors.push(`${path}.required must be false for a dynamic input.`)
     if (!isRecord(input.dynamicFieldsConfig)) {
       errors.push(`${path}.dynamicFieldsConfig is required for a dynamic input.`)
@@ -684,40 +752,57 @@ function validateCustomVariables(
   value.forEach((variable, index) => {
     const variablePath = `${path}[${index}]`
     if (!requireRecord(variable, variablePath, errors)) return
-    unknownProperties(variable, new Set(['name', 'reference', 'fieldType', 'options', 'fetchOptions']), variablePath, errors)
+    unknownProperties(
+      variable,
+      new Set(['name', 'reference', 'fieldType', 'options', 'fetchOptions']),
+      variablePath,
+      errors
+    )
     requiredString(variable.name, `${variablePath}.name`, errors)
     if (requiredString(variable.reference, `${variablePath}.reference`, errors)) {
       if (variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH) {
-        errors.push(`${variablePath}.reference must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`)
+        errors.push(
+          `${variablePath}.reference must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`
+        )
       } else {
         if (containsWhitespace(variable.reference)) {
           errors.push(`${variablePath}.reference must not contain whitespace.`)
         }
-        if (references.has(variable.reference)) errors.push(`${variablePath}.reference duplicates \"${variable.reference}\".`)
+        if (references.has(variable.reference))
+          errors.push(`${variablePath}.reference duplicates "${variable.reference}".`)
         references.add(variable.reference)
       }
     }
-    if (requiredString(variable.fieldType, `${variablePath}.fieldType`, errors) && !CUSTOM_VARIABLE_TYPES.has(variable.fieldType)) {
+    if (
+      requiredString(variable.fieldType, `${variablePath}.fieldType`, errors) &&
+      !CUSTOM_VARIABLE_TYPES.has(variable.fieldType)
+    ) {
       errors.push(`${variablePath}.fieldType is not supported.`)
     }
     if (variable.options !== undefined) validateOptions(variable.options, `${variablePath}.options`, errors)
-    if (variable.fetchOptions !== undefined) validateFetchOptions(variable.fetchOptions, `${variablePath}.fetchOptions`, errors)
+    if (variable.fetchOptions !== undefined)
+      validateFetchOptions(variable.fetchOptions, `${variablePath}.fetchOptions`, errors)
     if (
       !hasResponseData ||
       typeof variable.reference !== 'string' ||
       !variable.reference.trim() ||
       variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH
-    ) return
+    )
+      return
     const resolved = resolveResponseReference(responseData, variable.reference)
     if (!resolved.found) return
     if (!resolved.type) {
-      errors.push(`${variablePath}.reference "${variable.reference}" must select a primitive value or a non-empty array.`)
+      errors.push(
+        `${variablePath}.reference "${variable.reference}" must select a primitive value or a non-empty array.`
+      )
     } else if (
       typeof variable.fieldType === 'string' &&
       variable.fieldType !== resolved.type &&
       !(variable.fieldType === 'date' && resolved.type === 'string')
     ) {
-      errors.push(`${variablePath}.fieldType must be "${resolved.type}" for response reference "${variable.reference}".`)
+      errors.push(
+        `${variablePath}.fieldType must be "${resolved.type}" for response reference "${variable.reference}".`
+      )
     }
   })
 }
@@ -732,10 +817,10 @@ function validateExecution(
   if (!requireRecord(value, path, errors)) return
   unknownProperties(value, new Set(['type', 'url', 'method', 'headers', 'code', 'pauseExecution']), path, errors)
   const type = value.type
-  if (type !== 'API' && type !== 'CODE') errors.push(`${path}.type must be \"API\" or \"CODE\".`)
+  if (type !== 'API' && type !== 'CODE') errors.push(`${path}.type must be "API" or "CODE".`)
   optionalBoolean(value.pauseExecution, `${path}.pauseExecution`, errors)
   if (type === 'API') {
-    if (value.code !== undefined) errors.push(`${path}.code is only supported when type is \"CODE\".`)
+    if (value.code !== undefined) errors.push(`${path}.code is only supported when type is "CODE".`)
     if (value.url !== undefined && typeof value.url !== 'string') errors.push(`${path}.url must be a string.`)
     if (typeof value.url === 'string' && value.url) {
       const result = validateHttpUrl(value.url, `${path}.url`, { publicOnly: true })
@@ -756,7 +841,7 @@ function validateExecution(
   }
   if (type === 'CODE') {
     for (const field of ['url', 'method', 'headers']) {
-      if (value[field] !== undefined) errors.push(`${path}.${field} is only supported when type is \"API\".`)
+      if (value[field] !== undefined) errors.push(`${path}.${field} is only supported when type is "API".`)
     }
     if (value.code !== undefined && typeof value.code !== 'string') errors.push(`${path}.code must be a string.`)
     if (typeof value.code === 'string' && value.code.trim()) {
@@ -779,13 +864,31 @@ function validateBranchField(
   errors: string[]
 ): Record<string, unknown> | undefined {
   if (!requireRecord(value, path, errors)) return undefined
-  unknownProperties(value, new Set(['field', 'title', 'required', 'fieldType', 'options', 'mappedTo', 'altersDynamicField', 'disabled', 'placeholder', 'helpText', 'value', 'sortOptions']), path, errors)
+  unknownProperties(
+    value,
+    new Set([
+      'field',
+      'title',
+      'required',
+      'fieldType',
+      'options',
+      'mappedTo',
+      'altersDynamicField',
+      'disabled',
+      'placeholder',
+      'helpText',
+      'value',
+      'sortOptions'
+    ]),
+    path,
+    errors
+  )
   if (requiredString(value.field, `${path}.field`, errors)) {
     if (value.field.length > WORKFLOW_REFERENCE_MAX_LENGTH) {
       errors.push(`${path}.field must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`)
     } else {
       if (containsWhitespace(value.field)) errors.push(`${path}.field must not contain whitespace.`)
-      if (seen.has(value.field)) errors.push(`${path}.field duplicates branch field \"${value.field}\".`)
+      if (seen.has(value.field)) errors.push(`${path}.field duplicates branch field "${value.field}".`)
       seen.add(value.field)
     }
   }
@@ -796,9 +899,13 @@ function validateBranchField(
   for (const field of ['required', 'altersDynamicField', 'disabled', 'sortOptions']) {
     optionalBoolean(value[field], `${path}.${field}`, errors)
   }
-  for (const field of ['mappedTo', 'placeholder', 'helpText', 'value']) optionalString(value[field], `${path}.${field}`, errors)
+  for (const field of ['mappedTo', 'placeholder', 'helpText', 'value'])
+    optionalString(value[field], `${path}.${field}`, errors)
   if (value.options !== undefined) validateOptions(value.options, `${path}.options`, errors)
-  if (['select', 'multiselect'].includes(String(value.fieldType)) && (!Array.isArray(value.options) || value.options.length === 0)) {
+  if (
+    ['select', 'multiselect'].includes(String(value.fieldType)) &&
+    (!Array.isArray(value.options) || value.options.length === 0)
+  ) {
     errors.push(`${path}.options must contain at least one option for ${value.fieldType} branch fields.`)
   }
   return value
@@ -811,17 +918,10 @@ function branchValuePresent(value: unknown): boolean {
 
 function branchOptionValues(field: Record<string, unknown>): string[] {
   if (!Array.isArray(field.options)) return []
-  return field.options.flatMap(option => (
-    isRecord(option) && typeof option.value === 'string' ? [option.value] : []
-  ))
+  return field.options.flatMap(option => (isRecord(option) && typeof option.value === 'string' ? [option.value] : []))
 }
 
-function validateBranchValue(
-  value: unknown,
-  field: Record<string, unknown>,
-  path: string,
-  errors: string[]
-): void {
+function validateBranchValue(value: unknown, field: Record<string, unknown>, path: string, errors: string[]): void {
   const fieldType = field.fieldType
   if (['string', 'textarea', 'phone'].includes(String(fieldType))) {
     if (typeof value !== 'string') errors.push(`${path} must be a string for a ${fieldType} branch field.`)
@@ -900,10 +1000,23 @@ function validateBranches(value: unknown, path: string, errors: string[]): void 
   if (value.info !== undefined) {
     const infoPath = `${path}.info`
     if (requireRecord(value.info, infoPath, errors)) {
-      const allowed = new Set(['branchNameLabel', 'branchNameHelpText', 'branchNamePlaceholder', 'sectionTitle', 'sectionDescription', 'deleteAlertTitle', 'deleteAlertDescription', 'addButtonLabel', 'allowNewCondition', 'isDefaultBranchEditable', 'showBranchSection'])
+      const allowed = new Set([
+        'branchNameLabel',
+        'branchNameHelpText',
+        'branchNamePlaceholder',
+        'sectionTitle',
+        'sectionDescription',
+        'deleteAlertTitle',
+        'deleteAlertDescription',
+        'addButtonLabel',
+        'allowNewCondition',
+        'isDefaultBranchEditable',
+        'showBranchSection'
+      ])
       unknownProperties(value.info, allowed, infoPath, errors)
       for (const field of allowed) {
-        if (['allowNewCondition', 'isDefaultBranchEditable', 'showBranchSection'].includes(field)) optionalBoolean(value.info[field], `${infoPath}.${field}`, errors)
+        if (['allowNewCondition', 'isDefaultBranchEditable', 'showBranchSection'].includes(field))
+          optionalBoolean(value.info[field], `${infoPath}.${field}`, errors)
         else optionalString(value.info[field], `${infoPath}.${field}`, errors)
       }
     }
@@ -944,20 +1057,30 @@ function validateBranches(value: unknown, path: string, errors: string[]): void 
           )
         }
       }
-      if (value.predefinedBranches.branches !== undefined && requireArray(value.predefinedBranches.branches, `${predefinedPath}.branches`, errors)) {
+      if (
+        value.predefinedBranches.branches !== undefined &&
+        requireArray(value.predefinedBranches.branches, `${predefinedPath}.branches`, errors)
+      ) {
         const branchIds = new Set<string>()
         value.predefinedBranches.branches.forEach((branch, index) => {
           const branchPath = `${predefinedPath}.branches[${index}]`
           if (!requireRecord(branch, branchPath, errors)) return
-          unknownProperties(branch, new Set(['branchName', 'fields', 'meta', 'conditionType', 'id']), branchPath, errors)
+          unknownProperties(
+            branch,
+            new Set(['branchName', 'fields', 'meta', 'conditionType', 'id']),
+            branchPath,
+            errors
+          )
           requiredString(branch.branchName, `${branchPath}.branchName`, errors)
           if (requiredString(branch.id, `${branchPath}.id`, errors)) {
-            if (branchIds.has(branch.id)) errors.push(`${branchPath}.id duplicates branch ID \"${branch.id}\".`)
+            if (branchIds.has(branch.id)) errors.push(`${branchPath}.id duplicates branch ID "${branch.id}".`)
             branchIds.add(branch.id)
           }
-          if (requiredString(branch.conditionType, `${branchPath}.conditionType`, errors) &&
-            !['default', 'user-defined'].includes(branch.conditionType)) {
-            errors.push(`${branchPath}.conditionType must be \"default\" or \"user-defined\".`)
+          if (
+            requiredString(branch.conditionType, `${branchPath}.conditionType`, errors) &&
+            !['default', 'user-defined'].includes(branch.conditionType)
+          ) {
+            errors.push(`${branchPath}.conditionType must be "default" or "user-defined".`)
           }
           if (branch.meta !== undefined && !isRecord(branch.meta)) {
             errors.push(`${branchPath}.meta must be an object.`)
@@ -994,9 +1117,15 @@ function validateSectionGrouping(value: Record<string, unknown>, path: string, e
 
 function validateInfo(value: unknown, path: string, errors: string[], whiteLabel: boolean): void {
   if (!requireRecord(value, path, errors)) return
-  unknownProperties(value, new Set(['name', 'description', 'summary', 'groupName', 'keywords', 'icon', 'screenshots']), path, errors)
+  unknownProperties(
+    value,
+    new Set(['name', 'description', 'summary', 'groupName', 'keywords', 'icon', 'screenshots']),
+    path,
+    errors
+  )
   requiredString(value.name, `${path}.name`, errors)
-  for (const field of ['description', 'summary', 'groupName', 'icon']) optionalString(value[field], `${path}.${field}`, errors)
+  for (const field of ['description', 'summary', 'groupName', 'icon'])
+    optionalString(value[field], `${path}.${field}`, errors)
   if (whiteLabel) {
     for (const field of ['name', 'description', 'summary']) {
       if (typeof value[field] !== 'string' || !value[field]) continue
@@ -1023,7 +1152,9 @@ function rejectRemoteSecretReferences(value: unknown, path: string, errors: stri
     if (key === 'headers' && isRecord(child)) {
       for (const [header, headerValue] of Object.entries(child)) {
         if (headerValue === WORKFLOW_ACTION_REMOTE_REFERENCE) {
-          errors.push(`${childPath}.${header} cannot use "\${remote}" on a new local action because no remote value exists.`)
+          errors.push(
+            `${childPath}.${header} cannot use "\${remote}" on a new local action because no remote value exists.`
+          )
         }
       }
     } else {
@@ -1032,7 +1163,11 @@ function rejectRemoteSecretReferences(value: unknown, path: string, errors: stri
   }
 }
 
-function isPublishTarget(version: Record<string, unknown>, action: WorkflowActionDefinition, options: WorkflowActionValidationOptions): boolean {
+function isPublishTarget(
+  version: Record<string, unknown>,
+  action: WorkflowActionDefinition,
+  options: WorkflowActionValidationOptions
+): boolean {
   if (!options.publishable) return false
   if (options.actionKey && action.key !== options.actionKey) return false
   if (options.version && version.version !== options.version) return false
@@ -1047,12 +1182,30 @@ function validateVersion(
   errors: string[]
 ): void {
   if (!requireRecord(value, path, errors)) return
-  unknownProperties(value, new Set(['version', 'status', 'info', 'inputs', 'customVars', 'customVarsJson', 'executionConfig', 'payloadCustomizationType', 'customizedPayload', 'branchesConfig', 'sectionOrder', 'groupConfigs']), path, errors)
+  unknownProperties(
+    value,
+    new Set([
+      'version',
+      'status',
+      'info',
+      'inputs',
+      'customVars',
+      'customVarsJson',
+      'executionConfig',
+      'payloadCustomizationType',
+      'customizedPayload',
+      'branchesConfig',
+      'sectionOrder',
+      'groupConfigs'
+    ]),
+    path,
+    errors
+  )
   if (requiredString(value.version, `${path}.version`, errors)) {
     if (value.version.length > WORKFLOW_VERSION_MAX_LENGTH) {
       errors.push(`${path}.version must be at most ${WORKFLOW_VERSION_MAX_LENGTH} characters.`)
     } else if (!isWorkflowVersion(value.version)) {
-      errors.push(`${path}.version must use action version format x.y, for example \"1.0\".`)
+      errors.push(`${path}.version must use action version format x.y, for example "1.0".`)
     }
   }
   if (requiredString(value.status, `${path}.status`, errors) && !STATUSES.has(value.status)) {
@@ -1064,9 +1217,7 @@ function validateVersion(
   if (value.inputs !== undefined) {
     if (requireArray(value.inputs, `${path}.inputs`, errors)) {
       const seen = new Set<string>()
-      value.inputs.forEach((input, index) =>
-        validateInput(input, `${path}.inputs[${index}]`, seen, errors, !immutable)
-      )
+      value.inputs.forEach((input, index) => validateInput(input, `${path}.inputs[${index}]`, seen, errors, !immutable))
       const dynamicCount = value.inputs.filter(input => isRecord(input) && input.fieldType === 'DYNAMIC').length
       if (dynamicCount > 1) errors.push(`${path}.inputs may contain at most one DYNAMIC field.`)
       if (publishable && value.inputs.length === 0) {
@@ -1085,48 +1236,62 @@ function validateVersion(
       errors
     )
   }
-  if (value.customVarsJson !== undefined && !isRecord(value.customVarsJson)) errors.push(`${path}.customVarsJson must be an object.`)
+  if (value.customVarsJson !== undefined && !isRecord(value.customVarsJson))
+    errors.push(`${path}.customVarsJson must be an object.`)
   if (value.executionConfig !== undefined) {
     validateExecution(value.executionConfig, `${path}.executionConfig`, errors, publishable, !immutable)
+  } else if (publishable) errors.push(`${path}.executionConfig is required before submission for review.`)
+  if (
+    value.payloadCustomizationType !== undefined &&
+    !['custom', 'default'].includes(String(value.payloadCustomizationType))
+  ) {
+    errors.push(`${path}.payloadCustomizationType must be "custom" or "default".`)
   }
-  else if (publishable) errors.push(`${path}.executionConfig is required before submission for review.`)
-  if (value.payloadCustomizationType !== undefined && !['custom', 'default'].includes(String(value.payloadCustomizationType))) {
-    errors.push(`${path}.payloadCustomizationType must be \"custom\" or \"default\".`)
-  }
-  if (value.customizedPayload !== undefined && !isRecord(value.customizedPayload)) errors.push(`${path}.customizedPayload must be an object.`)
-  if (value.payloadCustomizationType === 'custom' && (!isRecord(value.customizedPayload) || Object.keys(value.customizedPayload).length === 0)) {
-    errors.push(`${path}.customizedPayload must not be empty when payloadCustomizationType is \"custom\".`)
+  if (value.customizedPayload !== undefined && !isRecord(value.customizedPayload))
+    errors.push(`${path}.customizedPayload must be an object.`)
+  if (
+    value.payloadCustomizationType === 'custom' &&
+    (!isRecord(value.customizedPayload) || Object.keys(value.customizedPayload).length === 0)
+  ) {
+    errors.push(`${path}.customizedPayload must not be empty when payloadCustomizationType is "custom".`)
   }
   if (
     value.payloadCustomizationType === 'default' &&
     isRecord(value.customizedPayload) &&
     Object.keys(value.customizedPayload).length > 0
   ) {
-    errors.push(`${path}.customizedPayload must be empty when payloadCustomizationType is \"default\".`)
+    errors.push(`${path}.customizedPayload must be empty when payloadCustomizationType is "default".`)
   }
   if (
     value.payloadCustomizationType === 'custom' &&
     isRecord(value.executionConfig) &&
     value.executionConfig.type !== 'API'
   ) {
-    errors.push(`${path}.payloadCustomizationType can be \"custom\" only for API execution.`)
+    errors.push(`${path}.payloadCustomizationType can be "custom" only for API execution.`)
   }
   if (value.branchesConfig !== undefined) validateBranches(value.branchesConfig, `${path}.branchesConfig`, errors)
   validateSectionGrouping(value, path, errors)
 }
 
-function validateAction(value: unknown, path: string, keys: Set<string>, templates: Set<string>, options: WorkflowActionValidationOptions, errors: string[]): void {
+function validateAction(
+  value: unknown,
+  path: string,
+  keys: Set<string>,
+  templates: Set<string>,
+  options: WorkflowActionValidationOptions,
+  errors: string[]
+): void {
   if (!requireRecord(value, path, errors)) return
   unknownProperties(value, new Set(['templateId', 'key', 'versions']), path, errors)
   optionalString(value.templateId, `${path}.templateId`, errors)
   if (typeof value.templateId === 'string' && value.templateId) {
-    if (templates.has(value.templateId)) errors.push(`${path}.templateId duplicates \"${value.templateId}\".`)
+    if (templates.has(value.templateId)) errors.push(`${path}.templateId duplicates "${value.templateId}".`)
     templates.add(value.templateId)
   }
   if (requiredString(value.key, `${path}.key`, errors)) {
     errors.push(...workflowActionKeyValidationErrors(value.key).map(error => `${path}.key ${error}.`))
     const lower = value.key.toLowerCase()
-    if (keys.has(lower)) errors.push(`${path}.key duplicates action key \"${value.key}\".`)
+    if (keys.has(lower)) errors.push(`${path}.key duplicates action key "${value.key}".`)
     keys.add(lower)
   }
   if (!requireArray(value.versions, `${path}.versions`, errors)) return
@@ -1136,23 +1301,38 @@ function validateAction(value: unknown, path: string, keys: Set<string>, templat
   value.versions.forEach((version, index) => {
     if (isRecord(version)) {
       if (typeof version.version === 'string') {
-        if (versions.has(version.version)) errors.push(`${path}.versions[${index}].version duplicates \"${version.version}\".`)
+        if (versions.has(version.version))
+          errors.push(`${path}.versions[${index}].version duplicates "${version.version}".`)
         versions.add(version.version)
       }
       if (version.status === 'draft') draftCount += 1
     }
-    validateVersion(version, `${path}.versions[${index}]`, value as unknown as WorkflowActionDefinition, options, errors)
+    validateVersion(
+      version,
+      `${path}.versions[${index}]`,
+      value as unknown as WorkflowActionDefinition,
+      options,
+      errors
+    )
   })
   if (draftCount > 1) errors.push(`${path}.versions may contain only one draft version.`)
   if (!value.templateId) {
-    if (value.versions.length !== 1 || !isRecord(value.versions[0]) || value.versions[0].version !== '1.0' || value.versions[0].status !== 'draft') {
+    if (
+      value.versions.length !== 1 ||
+      !isRecord(value.versions[0]) ||
+      value.versions[0].version !== '1.0' ||
+      value.versions[0].status !== 'draft'
+    ) {
       errors.push(`${path} without a templateId must contain only a local draft at version 1.0.`)
     }
     rejectRemoteSecretReferences(value, path, errors)
   }
 }
 
-export function validateWorkflowActionsManifest(value: unknown, options: WorkflowActionValidationOptions = {}): string[] {
+export function validateWorkflowActionsManifest(
+  value: unknown,
+  options: WorkflowActionValidationOptions = {}
+): string[] {
   const errors: string[] = []
   const path = 'workflow-actions.json'
   if (!requireRecord(value, path, errors)) return errors
@@ -1163,12 +1343,12 @@ export function validateWorkflowActionsManifest(value: unknown, options: Workflo
   if (value.actions.length > 30) errors.push(`${path}.actions supports at most 30 actions per app.`)
   const keys = new Set<string>()
   const templates = new Set<string>()
-  value.actions.forEach((action, index) => validateAction(action, `${path}.actions[${index}]`, keys, templates, options, errors))
+  value.actions.forEach((action, index) =>
+    validateAction(action, `${path}.actions[${index}]`, keys, templates, options, errors)
+  )
   if (options.publishable) {
     const actions = value.actions.filter(isRecord)
-    const target = options.actionKey
-      ? actions.find(action => action.key === options.actionKey)
-      : undefined
+    const target = options.actionKey ? actions.find(action => action.key === options.actionKey) : undefined
     if (options.actionKey && !target) {
       errors.push(`${path} action "${options.actionKey}" was not found.`)
     } else if (target) {
@@ -1182,7 +1362,13 @@ export function validateWorkflowActionsManifest(value: unknown, options: Workflo
       } else if (version.status !== 'draft') {
         errors.push(`${path} action "${options.actionKey}" version ${version.version} is not an editable draft.`)
       }
-    } else if (!actions.some(action => Array.isArray(action.versions) && action.versions.some(version => isRecord(version) && version.status === 'draft'))) {
+    } else if (
+      !actions.some(
+        action =>
+          Array.isArray(action.versions) &&
+          action.versions.some(version => isRecord(version) && version.status === 'draft')
+      )
+    ) {
       errors.push(`${path} contains no draft workflow action to validate for publication.`)
     }
   }

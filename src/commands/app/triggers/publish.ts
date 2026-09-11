@@ -56,13 +56,15 @@ export default class AppTriggersPublish extends Command {
       if (candidates.length === 0) {
         throw new Error('No workflow trigger has a matching draft or incomplete registry publication.')
       }
-      const selector = args.trigger ?? await select({
-        message: 'Workflow trigger to publish:',
-        choices: candidates.map(candidate => ({
-          name: `${candidate.version.info.name ?? candidate.trigger.key} (${candidate.trigger.key})${candidate.repairRegistry ? ' — repair registry' : ''}`,
-          value: candidate.trigger.key
+      const selector =
+        args.trigger ??
+        (await select({
+          message: 'Workflow trigger to publish:',
+          choices: candidates.map(candidate => ({
+            name: `${candidate.version.info.name ?? candidate.trigger.key} (${candidate.trigger.key})${candidate.repairRegistry ? ' — repair registry' : ''}`,
+            value: candidate.trigger.key
+          }))
         }))
-      })
       const candidate = candidates.find(item => item.trigger.key === selector || item.trigger.templateId === selector)
       if (!candidate?.trigger.templateId) throw new Error(`Workflow trigger "${selector}" has no publishable version.`)
       const { trigger, version, repairRegistry } = candidate
@@ -74,10 +76,12 @@ export default class AppTriggersPublish extends Command {
         })
         if (errors.length > 0) throw new Error(`Workflow trigger cannot be published:\n- ${errors.join('\n- ')}`)
       }
-      const notes = flags.notes ?? await input({
-        message: 'Release change log:',
-        validate: value => value.trim() ? true : 'Release change log is required.'
-      })
+      const notes =
+        flags.notes ??
+        (await input({
+          message: 'Release change log:',
+          validate: value => (value.trim() ? true : 'Release change log is required.')
+        }))
       if (!flags.force) {
         const approved = await confirm({
           message: repairRegistry
@@ -101,13 +105,24 @@ export default class AppTriggersPublish extends Command {
               releaseNotes: { user: notes.trim(), reviewer: notes.trim() }
             })
           }
-          await context.client.publishWorkflowTriggerSummary(context.appId, trigger.templateId as string, version.version)
+          await context.client.publishWorkflowTriggerSummary(
+            context.appId,
+            trigger.templateId as string,
+            version.version
+          )
         },
         { quiet: this.jsonEnabled() }
       )
       const remote = await fetchWorkflowTriggersManifest(context.client, context.appId)
       const files = await writeWorkflowTriggersWorkspace(context.directory, remote)
-      const result = { appId: context.appId, key: trigger.key, version: version.version, status: 'published', repairedRegistry: repairRegistry, files }
+      const result = {
+        appId: context.appId,
+        key: trigger.key,
+        version: version.version,
+        status: 'published',
+        repairedRegistry: repairRegistry,
+        files
+      }
       if (this.jsonEnabled()) return result
       this.log(
         repairRegistry

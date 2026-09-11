@@ -54,9 +54,9 @@ describe('workflow action manifest validation', () => {
     const invalid = structuredClone(validManifest) as any
     delete invalid.actions[0].versions[0].customVarsJson
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/customVarsJson.*required when customVars contains variables/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/customVarsJson.*required when customVars contains variables/)])
+    )
   })
 
   it('type-checks sampled custom variables without requiring the response sample to be exhaustive', () => {
@@ -77,14 +77,18 @@ describe('workflow action manifest validation', () => {
     invalid.actions[0].versions[0].customVarsJson.emptyTags = []
 
     const errors = validateWorkflowActionsManifest(invalid)
-    expect(errors).toEqual(expect.arrayContaining([
-      expect.stringMatching(/customVars\[1\]\.fieldType must be "numerical"/),
-      expect.stringMatching(/customVars\[2\]\.reference "result" must select a primitive value or a non-empty array/),
-      expect.stringMatching(/customVars\[3\]\.reference "emptyTags" must select a primitive value or a non-empty array/)
-    ]))
-    expect(errors).not.toEqual(expect.arrayContaining([
-      expect.stringMatching(/customVars\[0\]\.reference "result\.missing" does not resolve/)
-    ]))
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/customVars\[1\]\.fieldType must be "numerical"/),
+        expect.stringMatching(/customVars\[2\]\.reference "result" must select a primitive value or a non-empty array/),
+        expect.stringMatching(
+          /customVars\[3\]\.reference "emptyTags" must select a primitive value or a non-empty array/
+        )
+      ])
+    )
+    expect(errors).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/customVars\[0\]\.reference "result\.missing" does not resolve/)])
+    )
   })
 
   it('accepts nested primitive and non-empty array response references', () => {
@@ -110,9 +114,7 @@ describe('workflow action manifest validation', () => {
   it('accepts date custom variables backed by JSON string samples', () => {
     const valid = structuredClone(validManifest) as any
     valid.actions[0].versions[0].customVarsJson = { completed_at: '2026-08-19T10:30:00.000Z' }
-    valid.actions[0].versions[0].customVars = [
-      { name: 'Completed at', reference: 'completed_at', fieldType: 'date' }
-    ]
+    valid.actions[0].versions[0].customVars = [{ name: 'Completed at', reference: 'completed_at', fieldType: 'date' }]
 
     expect(validateWorkflowActionsManifest(valid)).toEqual([])
   })
@@ -149,9 +151,9 @@ describe('workflow action manifest validation', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].key = 'Send_Message'
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/key must start with a lowercase letter/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/key must start with a lowercase letter/)])
+    )
   })
 
   it('rejects action keys that cannot be represented by a portable source filename', () => {
@@ -160,12 +162,12 @@ describe('workflow action manifest validation', () => {
     const oversized = structuredClone(validManifest) as any
     oversized.actions[0].key = 'a'.repeat(251)
 
-    expect(validateWorkflowActionsManifest(reserved)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/key "con" is reserved by the operating system/i)
-    ]))
-    expect(validateWorkflowActionsManifest(oversized)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/key must be at most 250 characters/i)
-    ]))
+    expect(validateWorkflowActionsManifest(reserved)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/key "con" is reserved by the operating system/i)])
+    )
+    expect(validateWorkflowActionsManifest(oversized)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/key must be at most 250 characters/i)])
+    )
   })
 
   it('bounds workflow values before applying validation regexes', () => {
@@ -178,12 +180,14 @@ describe('workflow action manifest validation', () => {
       fields: [{ field: 'a'.repeat(1_001), title: 'Oversized', fieldType: 'string' }]
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/version must be at most 21 characters/i),
-      expect.stringMatching(/inputs\[0\]\.field must be at most 250 characters/i),
-      expect.stringMatching(/customVars\[0\]\.reference must be at most 1,000 characters/i),
-      expect.stringMatching(/branchesConfig\.fields\[0\]\.field must be at most 1,000 characters/i)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/version must be at most 21 characters/i),
+        expect.stringMatching(/inputs\[0\]\.field must be at most 250 characters/i),
+        expect.stringMatching(/customVars\[0\]\.reference must be at most 1,000 characters/i),
+        expect.stringMatching(/branchesConfig\.fields\[0\]\.field must be at most 1,000 characters/i)
+      ])
+    )
   })
 
   it('validates API/code exclusivity, URLs, custom payloads, and secret references', () => {
@@ -196,30 +200,32 @@ describe('workflow action manifest validation', () => {
     version.customizedPayload = {}
 
     const errors = validateWorkflowActionsManifest(invalid)
-    expect(errors).toEqual(expect.arrayContaining([
-      expect.stringMatching(/executionConfig\.url must use a public internet host/),
-      expect.stringMatching(/executionConfig\.code is only supported when type is "CODE"/),
-      expect.stringMatching(/headers\.Authorization must use/),
-      expect.stringMatching(/customizedPayload must not be empty/)
-    ]))
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/executionConfig\.url must use a public internet host/),
+        expect.stringMatching(/executionConfig\.code is only supported when type is "CODE"/),
+        expect.stringMatching(/headers\.Authorization must use/),
+        expect.stringMatching(/customizedPayload must not be empty/)
+      ])
+    )
   })
 
   it('requires an HTTP method for API execution and limits custom payloads to API actions', () => {
     const invalidApi = structuredClone(validManifest) as any
     delete invalidApi.actions[0].versions[0].executionConfig.method
 
-    expect(validateWorkflowActionsManifest(invalidApi)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/executionConfig\.method is required/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalidApi)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/executionConfig\.method is required/)])
+    )
 
     const invalidCode = structuredClone(validManifest) as any
     invalidCode.actions[0].versions[0].executionConfig = { type: 'CODE', code: 'return {}' }
     invalidCode.actions[0].versions[0].payloadCustomizationType = 'custom'
     invalidCode.actions[0].versions[0].customizedPayload = { message: '{{message}}' }
 
-    expect(validateWorkflowActionsManifest(invalidCode)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/payloadCustomizationType can be "custom" only for API execution/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalidCode)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/payloadCustomizationType can be "custom" only for API execution/)])
+    )
   })
 
   it('rejects stale custom payload data when default payload mode is selected', () => {
@@ -227,9 +233,11 @@ describe('workflow action manifest validation', () => {
     invalid.actions[0].versions[0].payloadCustomizationType = 'default'
     invalid.actions[0].versions[0].customizedPayload = { stale: true }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/customizedPayload must be empty when payloadCustomizationType is "default"/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/customizedPayload must be empty when payloadCustomizationType is "default"/)
+      ])
+    )
   })
 
   it('requires references for custom headers so credentials cannot be committed accidentally', () => {
@@ -237,12 +245,14 @@ describe('workflow action manifest validation', () => {
     invalid.actions[0].versions[0].executionConfig.headers['X-Credential'] = 'plain-text-value'
     invalid.actions[0].versions[0].executionConfig.headers.Accept = 'application/json'
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/headers\.X-Credential.*environment or remote-preservation reference/)
-    ]))
-    expect(validateWorkflowActionsManifest(invalid)).not.toEqual(expect.arrayContaining([
-      expect.stringMatching(/headers\.Accept/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/headers\.X-Credential.*environment or remote-preservation reference/)
+      ])
+    )
+    expect(validateWorkflowActionsManifest(invalid)).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/headers\.Accept/)])
+    )
   })
 
   it('rejects invalid HTTP header names without emitting raw control characters', () => {
@@ -259,25 +269,35 @@ describe('workflow action manifest validation', () => {
     draft.inputs = []
     draft.executionConfig.url = ''
 
-    expect(validateWorkflowActionsManifest({ ...validManifest, actions: [{ ...validManifest.actions[0], versions: [draft] }] }, { publishable: true }))
-      .toEqual(expect.arrayContaining([
+    expect(
+      validateWorkflowActionsManifest(
+        { ...validManifest, actions: [{ ...validManifest.actions[0], versions: [draft] }] },
+        { publishable: true }
+      )
+    ).toEqual(
+      expect.arrayContaining([
         expect.stringMatching(/inputs must contain at least one field/),
         expect.stringMatching(/executionConfig\.url is required/)
-      ]))
+      ])
+    )
   })
 
   it('rejects a publishability target that does not identify an existing draft', () => {
-    expect(validateWorkflowActionsManifest(validManifest, {
-      publishable: true,
-      actionKey: 'missing_action',
-      version: '1.0'
-    })).toEqual(expect.arrayContaining([expect.stringMatching(/missing_action.*not found/i)]))
+    expect(
+      validateWorkflowActionsManifest(validManifest, {
+        publishable: true,
+        actionKey: 'missing_action',
+        version: '1.0'
+      })
+    ).toEqual(expect.arrayContaining([expect.stringMatching(/missing_action.*not found/i)]))
 
-    expect(validateWorkflowActionsManifest(validManifest, {
-      publishable: true,
-      actionKey: 'send_message',
-      version: '9.9'
-    })).toEqual(expect.arrayContaining([expect.stringMatching(/send_message.*version 9.9.*not found/i)]))
+    expect(
+      validateWorkflowActionsManifest(validManifest, {
+        publishable: true,
+        actionKey: 'send_message',
+        version: '9.9'
+      })
+    ).toEqual(expect.arrayContaining([expect.stringMatching(/send_message.*version 9.9.*not found/i)]))
   })
 
   it('enforces conditional option sources for action and branch select fields', () => {
@@ -292,10 +312,12 @@ describe('workflow action manifest validation', () => {
       fields: [{ field: 'result', title: 'Result', fieldType: 'select' }]
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/inputs\[0\]\.fetchOptions must define exactly one source/),
-      expect.stringMatching(/branchesConfig\.fields\[0\]\.options must contain at least one option/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/inputs\[0\]\.fetchOptions must define exactly one source/),
+        expect.stringMatching(/branchesConfig\.fields\[0\]\.options must contain at least one option/)
+      ])
+    )
   })
 
   it('requires one unambiguous option source and a supported internal reference', () => {
@@ -316,10 +338,12 @@ describe('workflow action manifest validation', () => {
       }
     ]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/inputs\[0\].*exactly one option source.*options.*fetchOptions/i),
-      expect.stringMatching(/inputs\[1\]\.mappedTo must be one of:.*USERS/i)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/inputs\[0\].*exactly one option source.*options.*fetchOptions/i),
+        expect.stringMatching(/inputs\[1\]\.mappedTo must be one of:.*USERS/i)
+      ])
+    )
   })
 
   it('enforces option-source modes and their field-type boundaries', () => {
@@ -355,12 +379,14 @@ describe('workflow action manifest validation', () => {
       }
     ]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/inputs\[0\]\.mappedTo is not supported for radio/i),
-      expect.stringMatching(/inputs\[1\]\.fetchOptions must define exactly one source/i),
-      expect.stringMatching(/inputs\[2\]\.options is supported only for select, multiselect, or radio/i),
-      expect.stringMatching(/inputs\[3\]\.dynamicFieldsConfig is supported only for DYNAMIC/i)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/inputs\[0\]\.mappedTo is not supported for radio/i),
+        expect.stringMatching(/inputs\[1\]\.fetchOptions must define exactly one source/i),
+        expect.stringMatching(/inputs\[2\]\.options is supported only for select, multiselect, or radio/i),
+        expect.stringMatching(/inputs\[3\]\.dynamicFieldsConfig is supported only for DYNAMIC/i)
+      ])
+    )
   })
 
   it('allows only one dynamic input and one dynamic-field source per action version', () => {
@@ -385,10 +411,12 @@ describe('workflow action manifest validation', () => {
       }
     ]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/dynamicFieldsConfig must define exactly one source/i),
-      expect.stringMatching(/inputs may contain at most one DYNAMIC field/i)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/dynamicFieldsConfig must define exactly one source/i),
+        expect.stringMatching(/inputs may contain at most one DYNAMIC field/i)
+      ])
+    )
   })
 
   it('validates input default values and field-specific validation support', () => {
@@ -415,11 +443,13 @@ describe('workflow action manifest validation', () => {
       }
     ]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/inputs\[0\]\.value must be a string/),
-      expect.stringMatching(/inputs\[1\]\.value is not supported for attachment/i),
-      expect.stringMatching(/inputs\[2\]\.validations are not supported for DYNAMIC/i)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/inputs\[0\]\.value must be a string/),
+        expect.stringMatching(/inputs\[1\]\.value is not supported for attachment/i),
+        expect.stringMatching(/inputs\[2\]\.validations are not supported for DYNAMIC/i)
+      ])
+    )
   })
 
   it('accepts the static branch configuration produced by the marketplace UI', () => {
@@ -503,30 +533,34 @@ describe('workflow action manifest validation', () => {
       }
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/branches\[0\]\.id must be a non-empty string/),
-      expect.stringMatching(/branches\[0\]\.conditionType must be a non-empty string/),
-      expect.stringMatching(/branches\[2\]\.id duplicates branch ID "duplicate"/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/branches\[0\]\.id must be a non-empty string/),
+        expect.stringMatching(/branches\[0\]\.conditionType must be a non-empty string/),
+        expect.stringMatching(/branches\[2\]\.id duplicates branch ID "duplicate"/)
+      ])
+    )
   })
 
   it('requires predefined branch metadata to be an object', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].branchesConfig = {
       predefinedBranches: {
-        branches: [{
-          id: 'delivered-branch',
-          branchName: 'Delivered',
-          conditionType: 'default',
-          fields: {},
-          meta: []
-        }]
+        branches: [
+          {
+            id: 'delivered-branch',
+            branchName: 'Delivered',
+            conditionType: 'default',
+            fields: {},
+            meta: []
+          }
+        ]
       }
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/branches\[0\]\.meta must be an object/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/branches\[0\]\.meta must be an object/)])
+    )
   })
 
   it('validates branch field references and dynamic fetch configuration', () => {
@@ -536,11 +570,13 @@ describe('workflow action manifest validation', () => {
       predefinedBranches: { fetchBranches: { route: '' } }
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/fields\[0\]\.field must not contain whitespace/),
-      expect.stringMatching(/fetchBranches\.serviceName must be a non-empty string/),
-      expect.stringMatching(/fetchBranches\.route must be a non-empty string/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/fields\[0\]\.field must not contain whitespace/),
+        expect.stringMatching(/fetchBranches\.serviceName must be a non-empty string/),
+        expect.stringMatching(/fetchBranches\.route must be a non-empty string/)
+      ])
+    )
   })
 
   it('validates predefined branch values that are present against their field definitions', () => {
@@ -583,13 +619,15 @@ describe('workflow action manifest validation', () => {
       }
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/fields\.unsupported does not match a configured branch field/),
-      expect.stringMatching(/fields\.delivery_status must be one of: delivered/),
-      expect.stringMatching(/fields\.labels\[1\] must be one of: priority/),
-      expect.stringMatching(/fields\.attempts must be a finite number/),
-      expect.stringMatching(/fields\.billable must be a boolean/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/fields\.unsupported does not match a configured branch field/),
+        expect.stringMatching(/fields\.delivery_status must be one of: delivered/),
+        expect.stringMatching(/fields\.labels\[1\] must be one of: priority/),
+        expect.stringMatching(/fields\.attempts must be a finite number/),
+        expect.stringMatching(/fields\.billable must be a boolean/)
+      ])
+    )
   })
 
   it('validates nested input presentation and dynamic-source configuration', () => {
@@ -606,14 +644,16 @@ describe('workflow action manifest validation', () => {
       dynamicSource: { url: 'https://example.com/options', method: 'TRACE' }
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/config\.richTextEditorType/),
-      expect.stringMatching(/fieldOptions\.allowedFileTypes must be an array/),
-      expect.stringMatching(/variantConfig\.columns must be an integer between 2 and 5/),
-      expect.stringMatching(/variantConfig\.tileSize/),
-      expect.stringMatching(/variantConfig\.allowDeselect must be a boolean/),
-      expect.stringMatching(/dynamicSource\.method must be one of/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/config\.richTextEditorType/),
+        expect.stringMatching(/fieldOptions\.allowedFileTypes must be an array/),
+        expect.stringMatching(/variantConfig\.columns must be an integer between 2 and 5/),
+        expect.stringMatching(/variantConfig\.tileSize/),
+        expect.stringMatching(/variantConfig\.allowDeselect must be a boolean/),
+        expect.stringMatching(/dynamicSource\.method must be one of/)
+      ])
+    )
   })
 
   it('does not coerce untrusted rich-text editor modes before allowlist validation', () => {
@@ -622,9 +662,9 @@ describe('workflow action manifest validation', () => {
       richTextEditorType: { toString: () => 'html' }
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/config\.richTextEditorType must be "html" or "plain-text"/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/config\.richTextEditorType must be "html" or "plain-text"/)])
+    )
   })
 
   it('enforces field-type-specific presentation and pagination rules', () => {
@@ -644,10 +684,12 @@ describe('workflow action manifest validation', () => {
       }
     ]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/variant "tile-picker" is supported only/),
-      expect.stringMatching(/dynamicSource is required for paginated select fields/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/variant "tile-picker" is supported only/),
+        expect.stringMatching(/dynamicSource is required for paginated select fields/)
+      ])
+    )
   })
 
   it('accepts the current backend action-input and code-backed dynamic-source fields', () => {
@@ -715,17 +757,17 @@ describe('workflow action manifest validation', () => {
     }
 
     const invalidErrors = validateWorkflowActionsManifest(invalid)
-    expect(invalidErrors).toEqual(expect.arrayContaining([
-      expect.stringMatching(/config\.minSets must be a non-negative integer/)
-    ]))
-    expect(invalidErrors).not.toEqual(expect.arrayContaining([
-      expect.stringMatching(/config\.minSets must not exceed maxSets/)
-    ]))
+    expect(invalidErrors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/config\.minSets must be a non-negative integer/)])
+    )
+    expect(invalidErrors).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/config\.minSets must not exceed maxSets/)])
+    )
 
     invalid.actions[0].versions[0].inputs[0].config.minSets = 2
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/config\.minSets must not exceed maxSets/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/config\.minSets must not exceed maxSets/)])
+    )
   })
 
   it('does not allow a new local action to preserve a remote secret that cannot exist yet', () => {
@@ -733,9 +775,11 @@ describe('workflow action manifest validation', () => {
     delete invalid.actions[0].templateId
     invalid.actions[0].versions[0].executionConfig.headers.Authorization = '${remote}'
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/headers\.Authorization cannot use "\$\{remote\}".*new local action/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/headers\.Authorization cannot use "\$\{remote\}".*new local action/)
+      ])
+    )
   })
 
   it('checks custom code and arrow-function validation syntax without executing either', () => {
@@ -744,10 +788,12 @@ describe('workflow action manifest validation', () => {
     version.executionConfig = { type: 'CODE', code: 'if (' }
     version.inputs[0].validations = [{ rule: '(value) => {', errorMessage: 'Invalid' }]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/validations\[0\]\.rule contains invalid arrow-function syntax/),
-      expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/validations\[0\]\.rule contains invalid arrow-function syntax/),
+        expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
+      ])
+    )
   })
 
   it('preserves malformed code from immutable published versions while validating drafts', () => {
@@ -759,9 +805,9 @@ describe('workflow action manifest validation', () => {
     const published = structuredClone(draft) as any
     published.actions[0].versions[0].status = 'published'
 
-    expect(validateWorkflowActionsManifest(draft)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)
-    ]))
+    expect(validateWorkflowActionsManifest(draft)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/executionConfig\.code contains invalid JavaScript/)])
+    )
     expect(validateWorkflowActionsManifest(published)).toEqual([])
   })
 
@@ -774,9 +820,9 @@ describe('workflow action manifest validation', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].inputs[0].disableDatesFunction = expression
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/disableDatesFunction contains invalid function syntax/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/disableDatesFunction contains invalid function syntax/)])
+    )
   })
 
   it('accepts named function expressions without executing them', () => {
@@ -789,37 +835,47 @@ describe('workflow action manifest validation', () => {
 
   it('bounds regular-expression validation rules', () => {
     const invalid = structuredClone(validManifest) as any
-    invalid.actions[0].versions[0].inputs[0].validations = [{
-      rule: 'a'.repeat(1_001),
-      errorMessage: 'Invalid'
-    }]
+    invalid.actions[0].versions[0].inputs[0].validations = [
+      {
+        rule: 'a'.repeat(1_001),
+        errorMessage: 'Invalid'
+      }
+    ]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/validations\[0\]\.rule must be at most 1,000 characters/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/validations\[0\]\.rule must be at most 1,000 characters/)])
+    )
   })
 
   it('accepts valid regex rules and rejects malformed patterns', () => {
     const valid = structuredClone(validManifest) as any
-    valid.actions[0].versions[0].inputs[0].validations = [{
-      rule: '^[a-z0-9_-]+$',
-      errorMessage: 'Invalid'
-    }]
+    valid.actions[0].versions[0].inputs[0].validations = [
+      {
+        rule: '^[a-z0-9_-]+$',
+        errorMessage: 'Invalid'
+      }
+    ]
     const invalid = structuredClone(valid) as any
     invalid.actions[0].versions[0].inputs[0].validations[0].rule = '[unterminated'
 
     expect(validateWorkflowActionsManifest(valid)).toEqual([])
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/validations\[0\]\.rule must be a predefined validation, a valid regular expression, or an arrow function/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /validations\[0\]\.rule must be a predefined validation, a valid regular expression, or an arrow function/
+        )
+      ])
+    )
   })
 
   it('does not let wall-clock scheduling change regex safety results', () => {
     const valid = structuredClone(validManifest) as any
-    valid.actions[0].versions[0].inputs[0].validations = [{
-      rule: '^[a-z0-9_-]+$',
-      errorMessage: 'Invalid'
-    }]
+    valid.actions[0].versions[0].inputs[0].validations = [
+      {
+        rule: '^[a-z0-9_-]+$',
+        errorMessage: 'Invalid'
+      }
+    ]
     const now = vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(1_000)
 
     try {
@@ -839,9 +895,9 @@ describe('workflow action manifest validation', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].inputs[0].validations = [{ rule, errorMessage: 'Invalid' }]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/validations\[0\]\.rule must not allow ambiguous backtracking/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/validations\[0\]\.rule must not allow ambiguous backtracking/)])
+    )
   })
 
   it.each([
@@ -852,9 +908,11 @@ describe('workflow action manifest validation', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].inputs[0].validations = [{ rule, errorMessage: 'Invalid' }]
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/validations\[0\]\.rule may contain only printable ASCII characters/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/validations\[0\]\.rule may contain only printable ASCII characters/)
+      ])
+    )
   })
 
   it('limits custom code by UTF-8 payload size', () => {
@@ -864,18 +922,18 @@ describe('workflow action manifest validation', () => {
       code: `return "${'é'.repeat(Math.floor(WORKFLOW_ACTION_CODE_MAX_BYTES / 2) + 1)}"`
     }
 
-    expect(validateWorkflowActionsManifest(invalid)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/executionConfig\.code must be at most 1 MiB/)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/executionConfig\.code must be at most 1 MiB/)])
+    )
   })
 
   it('enforces the app white-label setting for customer-visible action text', () => {
     const invalid = structuredClone(validManifest) as any
     invalid.actions[0].versions[0].info.name = 'GHL message sender'
 
-    expect(validateWorkflowActionsManifest(invalid, { whiteLabel: true })).toEqual(expect.arrayContaining([
-      expect.stringMatching(/info\.name.*white-label/i)
-    ]))
+    expect(validateWorkflowActionsManifest(invalid, { whiteLabel: true })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/info\.name.*white-label/i)])
+    )
     expect(validateWorkflowActionsManifest(invalid, { whiteLabel: false })).toEqual([])
   })
 })

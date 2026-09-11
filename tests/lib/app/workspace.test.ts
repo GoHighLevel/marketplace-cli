@@ -59,7 +59,9 @@ describe('app workspace paths', () => {
 
     const fileParent = path.join(directory, 'not-a-directory')
     await fs.writeFile(fileParent, 'x')
-    await expect(assertAppDirectoryAvailable(resolveAppDirectory(fileParent, 'app'))).rejects.toThrow(/not a directory/i)
+    await expect(assertAppDirectoryAvailable(resolveAppDirectory(fileParent, 'app'))).rejects.toThrow(
+      /not a directory/i
+    )
   })
 
   it('fails before mutation when an unrelated non-empty folder would be overwritten', async () => {
@@ -164,13 +166,20 @@ describe('writeAppWorkspace', () => {
     expect(appGuide).toMatch(
       /HighLevel marketplace app[\s\S]*Workspace structure[\s\S]*ghl-app\.json[\s\S]*src\/webhooks\/ghl-webhooks\.json[\s\S]*App configuration sections[\s\S]*Version model[\s\S]*Local workflow/i
     )
-    expect(appGuide).toMatch(
-      /customVarsJson[\s\S]*customVars[\s\S]*branchesConfig[\s\S]*conditionType[\s\S]*branchId/i
-    )
+    expect(appGuide).toMatch(/customVarsJson[\s\S]*customVars[\s\S]*branchesConfig[\s\S]*conditionType[\s\S]*branchId/i)
     expect(appGuide).toMatch(
       /src\/modules\/workflows\/actions[\s\S]*one JSON file per action[\s\S]*required[\s\S]*key[\s\S]*filename/i
     )
-    for (const section of ['Basic information', 'Listing', 'Profiles', 'OAuth', 'Support', 'Billing', 'Review', 'Webhooks']) {
+    for (const section of [
+      'Basic information',
+      'Listing',
+      'Profiles',
+      'OAuth',
+      'Support',
+      'Billing',
+      'Review',
+      'Webhooks'
+    ]) {
       expect(appGuide).toContain(section)
     }
     expect(appGuide).toMatch(/external authentication[\s\S]*MCP configuration[\s\S]*custom pages/i)
@@ -202,7 +211,9 @@ describe('writeAppWorkspace', () => {
     await expect(fs.readFile(path.join(target, 'developer-file.ts'), 'utf8')).resolves.toBe('preserve me')
     const customInstructions = await fs.readFile(path.join(target, AGENTS_FILENAME), 'utf8')
     expect(customInstructions).toMatch(/^custom agent instructions[\s\S]*complete command reference/i)
-    await expect(fs.readFile(path.join(target, CLAUDE_FILENAME), 'utf8')).resolves.toMatch(/complete command reference/i)
+    await expect(fs.readFile(path.join(target, CLAUDE_FILENAME), 'utf8')).resolves.toMatch(
+      /complete command reference/i
+    )
     expect((await fs.stat(target)).mode & 0o777).toBe(0o700)
 
     await expect(

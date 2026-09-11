@@ -48,7 +48,7 @@ export default class Secrets extends Command {
         this.log('Select an app with `ghl app use` (or pass --app) to see its captured secrets.\n')
       } else if (appEntries.length === 0) {
         this.log(`No captured secrets for app ${appId}.`)
-        this.log('One-time values are only recorded when created by this CLI. If this app\'s')
+        this.log("One-time values are only recorded when created by this CLI. If this app's")
         this.log('credentials were created elsewhere, rotate them (e.g. `ghl app keys create`).\n')
       }
 

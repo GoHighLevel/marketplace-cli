@@ -18,9 +18,13 @@ export default class AppPricing extends Command {
     const { flags } = await this.parse(AppPricing)
     try {
       const context = await loadAppContext(flags.app, this.jsonEnabled())
-      const plans = await withSpinner('Loading plans...', () => context.client.getBillingPlans(context.selected.appId), {
-        quiet: this.jsonEnabled()
-      })
+      const plans = await withSpinner(
+        'Loading plans...',
+        () => context.client.getBillingPlans(context.selected.appId),
+        {
+          quiet: this.jsonEnabled()
+        }
+      )
       const settings = {
         billingType: context.version.billingType ?? null,
         externalBilling: context.version.externalBilling ?? false,

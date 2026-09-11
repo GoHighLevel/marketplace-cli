@@ -28,13 +28,14 @@ describe('exchangeCodeForTokens', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => JSON.stringify({
-          accessToken: 'jwt',
-          refreshToken: 'mrt',
-          teamId: 'team-selected',
-          teamName: 'Selected account',
-          developer: { id: 'developer-1', email: 'dev@example.com' }
-        })
+        text: async () =>
+          JSON.stringify({
+            accessToken: 'jwt',
+            refreshToken: 'mrt',
+            teamId: 'team-selected',
+            teamName: 'Selected account',
+            developer: { id: 'developer-1', email: 'dev@example.com' }
+          })
       })
     )
 

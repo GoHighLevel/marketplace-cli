@@ -3,24 +3,15 @@ import path from 'node:path'
 
 import { isRecord } from '../../api/response.js'
 import { writeTextFileAtomic } from '../../shared/atomic-file.js'
-import {
-  assertWorkspaceDocumentationFilesWritable,
-  writeWorkspaceDocumentation
-} from '../../app/instructions.js'
+import { assertWorkspaceDocumentationFilesWritable, writeWorkspaceDocumentation } from '../../app/instructions.js'
 import { requireRegularFile } from '../../app/local-workspace.js'
 import { readPullWorkspaceBinding } from '../../app/pull.js'
 import { APP_MANIFEST_FILENAME } from '../../app/workspace.js'
 import { readJsonFile, writeJsonFileAtomic } from '../../shared/json-file.js'
-import {
-  buildWorkflowTriggersGuide,
-  WORKFLOW_TRIGGERS_GUIDE_FILENAME
-} from './guide.js'
-import { WorkflowTriggerDefinition, WorkflowTriggersManifest } from './manifest.js'
+import { buildWorkflowTriggersGuide, WORKFLOW_TRIGGERS_GUIDE_FILENAME } from './guide.js'
+import { type WorkflowTriggerDefinition, type WorkflowTriggersManifest } from './manifest.js'
 import { validateWorkflowTriggersManifest } from './schema.js'
-import {
-  workflowActionKeyValidationErrors,
-  WORKFLOW_ACTION_KEY_MAX_LENGTH
-} from '../actions/key.js'
+import { workflowActionKeyValidationErrors, WORKFLOW_ACTION_KEY_MAX_LENGTH } from '../actions/key.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
 import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
 
@@ -147,7 +138,9 @@ export function workflowTriggerKeyFromFilename(filename: string): string {
   if (!TRIGGER_FILENAME_PATTERN.test(filename)) throw triggerFilenameError(filename)
   const key = filename.slice(0, -'.json'.length).replaceAll('-', '_')
   if (key.length > WORKFLOW_ACTION_KEY_MAX_LENGTH) {
-    throw new Error(`Workflow trigger filenames may represent keys of at most ${WORKFLOW_ACTION_KEY_MAX_LENGTH} characters.`)
+    throw new Error(
+      `Workflow trigger filenames may represent keys of at most ${WORKFLOW_ACTION_KEY_MAX_LENGTH} characters.`
+    )
   }
   const portabilityError = workflowActionKeyValidationErrors(key).find(error => error.includes('operating system'))
   if (portabilityError) throw new Error(`Workflow trigger filename "${filename}" is reserved by the operating system.`)
@@ -188,7 +181,8 @@ function assertValidManifest(manifest: WorkflowTriggersManifest, binding: Workfl
 async function triggerJsonEntries(triggerDirectory: string): Promise<string[]> {
   const directoryStat = await stat(triggerDirectory)
   if (!directoryStat) return []
-  if (directoryStat.isSymbolicLink()) throw new Error(`Workflow trigger directory "${triggerDirectory}" cannot be a symbolic link.`)
+  if (directoryStat.isSymbolicLink())
+    throw new Error(`Workflow trigger directory "${triggerDirectory}" cannot be a symbolic link.`)
   if (!directoryStat.isDirectory()) throw new Error(`Workflow trigger path "${triggerDirectory}" is not a directory.`)
   const entries = await fs.readdir(triggerDirectory, { withFileTypes: true })
   return entries
@@ -308,12 +302,15 @@ async function writeTriggerSources(
     const filename = workflowTriggerFilenameFromKey(trigger.key)
     expectedFiles.add(filename)
     const filePath = path.join(triggerDirectory, filename)
-    const payload: WorkflowTriggerFile = withJsonSchemaReference({
-      schemaVersion: 1,
-      key: trigger.key,
-      ...(trigger.templateId ? { templateId: trigger.templateId } : {}),
-      versions: structuredClone(trigger.versions)
-    }, 'workflow-trigger')
+    const payload: WorkflowTriggerFile = withJsonSchemaReference(
+      {
+        schemaVersion: 1,
+        key: trigger.key,
+        ...(trigger.templateId ? { templateId: trigger.templateId } : {}),
+        versions: structuredClone(trigger.versions)
+      },
+      'workflow-trigger'
+    )
     await writeJsonFileAtomic(filePath, payload, 0o644)
   }
   const existing = await triggerJsonEntries(triggerDirectory)
@@ -344,7 +341,9 @@ export async function loadWorkflowTriggersWorkspace(directory: string): Promise<
   await assertWorkspacePathsSafe(binding)
   const legacyFile = path.join(binding.directory, LEGACY_WORKFLOW_TRIGGERS_RELATIVE_PATH)
   if (await requireRegularFile(legacyFile, 'Legacy workflow trigger file', true)) {
-    throw new Error(`Legacy workflow trigger file "${legacyFile}" is not supported. Run \`ghl app triggers pull\` to migrate it.`)
+    throw new Error(
+      `Legacy workflow trigger file "${legacyFile}" is not supported. Run \`ghl app triggers pull\` to migrate it.`
+    )
   }
   const triggerDirectory = path.join(binding.directory, WORKFLOW_TRIGGERS_DIRECTORY_RELATIVE_PATH)
   const stateFile = path.join(binding.directory, WORKFLOW_TRIGGERS_STATE_RELATIVE_PATH)
@@ -359,7 +358,9 @@ export async function loadWorkflowTriggersWorkspace(directory: string): Promise<
   }
   const state = stateValue as WorkflowTriggersState
   if (state.appId !== binding.appId || state.baseline.appId !== binding.appId) {
-    throw new Error('Workflow trigger state does not match this app. Run `ghl app triggers pull` before making more changes.')
+    throw new Error(
+      'Workflow trigger state does not match this app. Run `ghl app triggers pull` before making more changes.'
+    )
   }
   return {
     directory: binding.directory,
@@ -384,11 +385,15 @@ export async function writeWorkflowTriggersWorkspace(
   const binding = await appBindingForWorkspace(directory)
   assertValidManifest(baseline, binding)
   const result = await writeTriggerSources(binding, manifest)
-  await writeJsonFileAtomic(result.triggerStateFile, {
-    schemaVersion: 1,
-    appId: manifest.appId,
-    baseline
-  } satisfies WorkflowTriggersState, 0o600)
+  await writeJsonFileAtomic(
+    result.triggerStateFile,
+    {
+      schemaVersion: 1,
+      appId: manifest.appId,
+      baseline
+    } satisfies WorkflowTriggersState,
+    0o600
+  )
   return result
 }
 
@@ -397,10 +402,7 @@ export async function assertWorkflowTriggersWorkspaceWritable(
   manifest?: WorkflowTriggersManifest
 ): Promise<void> {
   const binding = await appBindingForWorkspace(directory)
-  await Promise.all([
-    assertWorkspacePathsSafe(binding),
-    assertWorkspaceDocumentationFilesWritable(binding.directory)
-  ])
+  await Promise.all([assertWorkspacePathsSafe(binding), assertWorkspaceDocumentationFilesWritable(binding.directory)])
   const filenames = await triggerJsonEntries(path.join(binding.directory, WORKFLOW_TRIGGERS_DIRECTORY_RELATIVE_PATH))
   for (const filename of filenames) workflowTriggerKeyFromFilename(filename)
   if (manifest) assertValidManifest(manifest, binding)

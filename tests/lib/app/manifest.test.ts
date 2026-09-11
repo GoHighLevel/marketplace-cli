@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { AppVersion } from '../../../src/lib/api/client.js'
+import { type AppVersion } from '../../../src/lib/api/client.js'
 import { buildAppFiles } from '../../../src/lib/app/manifest.js'
 
 const omittedCredential = ['must-never', 'be-exported'].join('-')
@@ -51,9 +51,7 @@ const version: AppVersion = {
   ],
   defaults: { clientKey: 'client-id', redirectUrl: 'https://acme.test/oauth/callback' },
   webhookUrl: 'https://acme.test/webhooks',
-  subscribedEvents: [
-    { name: 'ContactCreate', url: 'https://acme.test/contact-created', warningFlag: true }
-  ],
+  subscribedEvents: [{ name: 'ContactCreate', url: 'https://acme.test/contact-created', warningFlag: true }],
   hasExternalAuth: true,
   externalAuthConfig: {
     type: 'oauth2',
@@ -83,7 +81,11 @@ const version: AppVersion = {
     mcpUrl: 'https://acme.test/mcp',
     publicMCP: true,
     developerPreviewTools: [
-      { name: 'find_contact', enabled: true, inputSchema: { type: 'object', properties: { password: { type: 'string' } } } }
+      {
+        name: 'find_contact',
+        enabled: true,
+        inputSchema: { type: 'object', properties: { password: { type: 'string' } } }
+      }
     ]
   },
   customPages: [

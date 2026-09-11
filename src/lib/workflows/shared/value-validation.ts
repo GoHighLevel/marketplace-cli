@@ -45,7 +45,8 @@ export function containsWhitespace(value: string): boolean {
       code === 8287 ||
       code === 12_288 ||
       code === 65_279
-    ) return true
+    )
+      return true
   }
   return false
 }

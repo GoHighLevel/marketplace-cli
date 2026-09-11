@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { refreshAppWorkspaceLifecycle } from '../../../src/lib/app/lifecycle.js'
 import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
 import { readJsonFile } from '../../../src/lib/shared/json-file.js'
-import { AppManifest, WebhookManifest } from '../../../src/lib/app/manifest.js'
-import { WorkspaceState, writeAppWorkspace } from '../../../src/lib/app/workspace.js'
+import { type AppManifest, type WebhookManifest } from '../../../src/lib/app/manifest.js'
+import { type WorkspaceState, writeAppWorkspace } from '../../../src/lib/app/workspace.js'
 import { completeAppVersion } from '../../helpers/app-files.js'
 
 let root: string
@@ -30,21 +30,15 @@ describe('refreshAppWorkspaceLifecycle', () => {
     const nestedDirectory = path.join(directory, 'src', 'custom')
     await fs.mkdir(nestedDirectory, { recursive: true })
     const client = {
-      listVersions: vi.fn().mockResolvedValue([
-        { _id: 'version-1', appId: 'app-1', version: '1.1.0', status: 'review' }
-      ]),
-      getVersion: vi.fn().mockResolvedValue(
-        completeAppVersion({ version: '1.1.0', status: 'review', tagline: 'Remote tagline' })
-      )
+      listVersions: vi
+        .fn()
+        .mockResolvedValue([{ _id: 'version-1', appId: 'app-1', version: '1.1.0', status: 'review' }]),
+      getVersion: vi
+        .fn()
+        .mockResolvedValue(completeAppVersion({ version: '1.1.0', status: 'review', tagline: 'Remote tagline' }))
     }
 
-    const refreshed = await refreshAppWorkspaceLifecycle(
-      nestedDirectory,
-      client,
-      'app-1',
-      'version-1',
-      '1.1.0'
-    )
+    const refreshed = await refreshAppWorkspaceLifecycle(nestedDirectory, client, 'app-1', 'version-1', '1.1.0')
 
     expect(refreshed).toMatchObject({ directory, version: { _id: 'version-1', status: 'review' } })
     expect(client.listVersions).toHaveBeenCalledWith('app-1')
@@ -88,9 +82,9 @@ describe('refreshAppWorkspaceLifecycle', () => {
     local.basicInfo.tagline = 'Pending local tagline'
     await fs.writeFile(workspace.appFile, JSON.stringify(local, null, 2) + '\n')
     const client = {
-      listVersions: vi.fn().mockResolvedValue([
-        { _id: 'live-version', appId: 'app-1', version: '1.0.1', status: 'live' }
-      ]),
+      listVersions: vi
+        .fn()
+        .mockResolvedValue([{ _id: 'live-version', appId: 'app-1', version: '1.0.1', status: 'live' }]),
       getVersion: vi.fn().mockResolvedValue(
         completeAppVersion({
           _id: 'live-version',
@@ -128,17 +122,17 @@ describe('refreshAppWorkspaceLifecycle', () => {
     const directory = path.join(root, 'acme')
     const workspace = await writeAppWorkspace({ directory, version: completeAppVersion() })
     const client = {
-      listVersions: vi.fn().mockResolvedValue([
-        { _id: 'version-1', appId: 'app-1', version: '1.1.0', status: 'review' }
-      ]),
-      getVersion: vi.fn().mockResolvedValue(
-        completeAppVersion({ appId: 'other-app', version: '1.1.0', status: 'review' })
-      )
+      listVersions: vi
+        .fn()
+        .mockResolvedValue([{ _id: 'version-1', appId: 'app-1', version: '1.1.0', status: 'review' }]),
+      getVersion: vi
+        .fn()
+        .mockResolvedValue(completeAppVersion({ appId: 'other-app', version: '1.1.0', status: 'review' }))
     }
 
-    await expect(
-      refreshAppWorkspaceLifecycle(directory, client, 'app-1', 'version-1', '1.1.0')
-    ).rejects.toThrow(/other-app.*app-1/i)
+    await expect(refreshAppWorkspaceLifecycle(directory, client, 'app-1', 'version-1', '1.1.0')).rejects.toThrow(
+      /other-app.*app-1/i
+    )
     await expect(readJsonFile<AppManifest>(workspace.appFile)).resolves.toMatchObject({
       versionId: 'version-1',
       version: '1.0.0',
@@ -150,15 +144,15 @@ describe('refreshAppWorkspaceLifecycle', () => {
     const directory = path.join(root, 'acme')
     const workspace = await writeAppWorkspace({ directory, version: completeAppVersion() })
     const client = {
-      listVersions: vi.fn().mockResolvedValue([
-        { _id: 'version-1', appId: 'app-1', version: 'draft', status: 'draft' }
-      ]),
+      listVersions: vi
+        .fn()
+        .mockResolvedValue([{ _id: 'version-1', appId: 'app-1', version: 'draft', status: 'draft' }]),
       getVersion: vi.fn()
     }
 
-    await expect(
-      refreshAppWorkspaceLifecycle(directory, client, 'app-1', 'version-1', '1.1.0')
-    ).rejects.toThrow(/version "1\.1\.0".*not found/i)
+    await expect(refreshAppWorkspaceLifecycle(directory, client, 'app-1', 'version-1', '1.1.0')).rejects.toThrow(
+      /version "1\.1\.0".*not found/i
+    )
     expect(client.getVersion).not.toHaveBeenCalled()
     await expect(readJsonFile<AppManifest>(workspace.appFile)).resolves.toMatchObject({
       versionId: 'version-1',

@@ -1,13 +1,6 @@
-import type {
-  WorkflowActionTestRequest,
-  WorkflowActionTestResponse
-} from '../../api/client.js'
+import type { WorkflowActionTestRequest, WorkflowActionTestResponse } from '../../api/client.js'
 import { isRecord } from '../../api/response.js'
-import {
-  toWorkflowActionUpdateBody,
-  WorkflowActionExecutionType,
-  WorkflowActionVersion
-} from './manifest.js'
+import { toWorkflowActionUpdateBody, type WorkflowActionExecutionType, type WorkflowActionVersion } from './manifest.js'
 
 export interface PrepareWorkflowActionTestOptions {
   appId: string
@@ -29,17 +22,11 @@ function errorDetails(value: unknown): string {
   }
 }
 
-export function prepareWorkflowActionTestRequest(
-  options: PrepareWorkflowActionTestOptions
-): WorkflowActionTestRequest {
+export function prepareWorkflowActionTestRequest(options: PrepareWorkflowActionTestOptions): WorkflowActionTestRequest {
   if (!options.version.executionConfig) {
     throw new Error(`Workflow action version ${options.version.version} has no executionConfig to test.`)
   }
-  const body = toWorkflowActionUpdateBody(
-    options.version,
-    options.remoteVersion,
-    options.environment
-  )
+  const body = toWorkflowActionUpdateBody(options.version, options.remoteVersion, options.environment)
   const execution = body.executionConfig
   if (!execution) throw new Error(`Workflow action version ${options.version.version} has no executionConfig to test.`)
   const headers = Object.entries(execution.headers ?? {}).map(([label, key]) => ({ label, key }))

@@ -17,16 +17,18 @@ describe('workflow action manifests', () => {
         version: '1.1',
         status: 'draft',
         info: { name: 'Send message', description: 'Sends a message' },
-        inputs: [{
-          field: 'message',
-          title: 'Message',
-          fieldType: 'textarea',
-          required: true,
-          order: 2,
-          hasDynamicOptions: false,
-          showHelpTextAsInfoToolTip: true,
-          disableDatesFunction: '(params) => false'
-        }],
+        inputs: [
+          {
+            field: 'message',
+            title: 'Message',
+            fieldType: 'textarea',
+            required: true,
+            order: 2,
+            hasDynamicOptions: false,
+            showHelpTextAsInfoToolTip: true,
+            disableDatesFunction: '(params) => false'
+          }
+        ],
         sectionOrder: ['message'],
         groupConfigs: { delivery: { dividerPosition: 'above' } },
         executionConfig: {
@@ -65,16 +67,18 @@ describe('workflow action manifests', () => {
               version: '1.1',
               status: 'draft',
               info: { name: 'Send message', description: 'Sends a message' },
-              inputs: [{
-                field: 'message',
-                title: 'Message',
-                fieldType: 'textarea',
-                required: true,
-                order: 2,
-                hasDynamicOptions: false,
-                showHelpTextAsInfoToolTip: true,
-                disableDatesFunction: '(params) => false'
-              }],
+              inputs: [
+                {
+                  field: 'message',
+                  title: 'Message',
+                  fieldType: 'textarea',
+                  required: true,
+                  order: 2,
+                  hasDynamicOptions: false,
+                  showHelpTextAsInfoToolTip: true,
+                  disableDatesFunction: '(params) => false'
+                }
+              ],
               sectionOrder: ['message'],
               groupConfigs: { delivery: { dividerPosition: 'above' } },
               executionConfig: {
@@ -98,17 +102,19 @@ describe('workflow action manifests', () => {
   it('creates a UI-oriented local draft without pretending that a server template id exists', () => {
     expect(createWorkflowActionScaffold('Send message', 'send_message')).toEqual({
       key: 'send_message',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: { name: 'Send message' },
-        inputs: [],
-        customVars: [],
-        customVarsJson: {},
-        payloadCustomizationType: 'default',
-        customizedPayload: {},
-        branchesConfig: {}
-      }]
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Send message' },
+          inputs: [],
+          customVars: [],
+          customVarsJson: {},
+          payloadCustomizationType: 'default',
+          customizedPayload: {},
+          branchesConfig: {}
+        }
+      ]
     })
   })
 
@@ -240,15 +246,17 @@ describe('workflow action manifests', () => {
       version: '1.0',
       status: 'draft',
       info: { name: 'Send message' },
-      customVars: [{
-        name: 'Result',
-        reference: 'result',
-        fieldType: 'string',
-        fetchOptions: {
-          url: 'https://example.com/results',
-          headers: { Authorization: 'Bearer result' }
+      customVars: [
+        {
+          name: 'Result',
+          reference: 'result',
+          fieldType: 'string',
+          fetchOptions: {
+            url: 'https://example.com/results',
+            headers: { Authorization: 'Bearer result' }
+          }
         }
-      }],
+      ],
       customVarsJson: {
         headers: { 'X-Response-Source': 'workflow-action' },
         result: 'delivered'
@@ -295,7 +303,8 @@ describe('workflow action manifests', () => {
       ]
     }
     const localVersion = buildWorkflowActionsManifest('app-1', [remote]).actions[0].versions[0]
-    const runtimeVersion = buildWorkflowActionsManifest('app-1', [remote], { redactSecrets: false }).actions[0].versions[0]
+    const runtimeVersion = buildWorkflowActionsManifest('app-1', [remote], { redactSecrets: false }).actions[0]
+      .versions[0]
     localVersion.inputs?.reverse()
 
     expect(localVersion.inputs?.[0].dynamicSource).toMatchObject({

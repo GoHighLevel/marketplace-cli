@@ -33,15 +33,22 @@ export default class AppTriggersValidate extends Command {
         triggerKey: flags.trigger,
         version: flags.version
       })
-      errors.push(...workflowTriggerPrerequisiteErrors({
-        triggerCount: workspace.manifest.triggers.length,
-        allowedScopes: workspace.allowedScopes,
-        redirectUris: workspace.redirectUris,
-        clientKeyCount: workspace.clientKeyCount,
-        userTypes: workspace.userTypes
-      }))
+      errors.push(
+        ...workflowTriggerPrerequisiteErrors({
+          triggerCount: workspace.manifest.triggers.length,
+          allowedScopes: workspace.allowedScopes,
+          redirectUris: workspace.redirectUris,
+          clientKeyCount: workspace.clientKeyCount,
+          userTypes: workspace.userTypes
+        })
+      )
       if (errors.length > 0) throw new Error(`Workflow trigger configuration is invalid:\n- ${errors.join('\n- ')}`)
-      const result = { valid: true, appId: workspace.manifest.appId, triggers: workspace.manifest.triggers.length, errors: [] }
+      const result = {
+        valid: true,
+        appId: workspace.manifest.appId,
+        triggers: workspace.manifest.triggers.length,
+        errors: []
+      }
       if (this.jsonEnabled()) return result
       this.log(`Workflow trigger configuration is valid (${result.triggers} trigger(s)).`)
     } catch (error) {

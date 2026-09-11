@@ -1,10 +1,7 @@
 import { Command, Flags } from '@oclif/core'
 
 import { loadBillingSyncContext } from '../../../lib/billing/command-context.js'
-import {
-  billingSubscriptionOperationLabel,
-  billingUsageOperationLabel
-} from '../../../lib/billing/service.js'
+import { billingSubscriptionOperationLabel, billingUsageOperationLabel } from '../../../lib/billing/service.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
 export default class AppBillingDiff extends Command {

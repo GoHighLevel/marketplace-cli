@@ -1,10 +1,10 @@
-import { BillingPlan, BillingUsageMeter } from '../api/client.js'
+import { type BillingPlan, type BillingUsageMeter } from '../api/client.js'
 import {
-  BillingSubscriptionManifest,
-  BillingSubscriptionPlan,
-  BillingUsageManifest,
-  BillingUsageMeterDefinition,
-  BillingUsageTierDefinition,
+  type BillingSubscriptionManifest,
+  type BillingSubscriptionPlan,
+  type BillingUsageManifest,
+  type BillingUsageMeterDefinition,
+  type BillingUsageTierDefinition,
   buildBillingSubscriptionManifest,
   buildBillingUsageManifest,
   toBillingMeterCreateBody,
@@ -12,10 +12,10 @@ import {
   toBillingPlanCreateBody
 } from './manifest.js'
 import {
-  BillingSubscriptionOperation,
-  BillingSubscriptionSyncPlan,
-  BillingUsageOperation,
-  BillingUsageSyncPlan
+  type BillingSubscriptionOperation,
+  type BillingSubscriptionSyncPlan,
+  type BillingUsageOperation,
+  type BillingUsageSyncPlan
 } from './sync.js'
 import { valuesEqual } from '../shared/three-way-diff.js'
 
@@ -60,10 +60,7 @@ function withoutId<T extends { id?: string }>(value: T): Omit<T, 'id'> {
 }
 
 export async function fetchBillingSnapshot(client: BillingReadApi, appId: string): Promise<BillingSnapshot> {
-  const [plans, meters] = await Promise.all([
-    client.getBillingPlans(appId),
-    client.getBillingUsageMeters(appId)
-  ])
+  const [plans, meters] = await Promise.all([client.getBillingPlans(appId), client.getBillingUsageMeters(appId)])
   return {
     subscriptions: buildBillingSubscriptionManifest(appId, plans),
     usage: buildBillingUsageManifest(appId, meters)
@@ -84,15 +81,14 @@ export function billingUsageOperationLabel(operation: BillingUsageOperation): st
   return `${operation.type}:${operation.meterId}:${operation.tierId}`
 }
 
-function assertExecutablePlans(
-  subscriptions: BillingSubscriptionSyncPlan,
-  usage: BillingUsageSyncPlan
-): void {
+function assertExecutablePlans(subscriptions: BillingSubscriptionSyncPlan, usage: BillingUsageSyncPlan): void {
   const errors = [...subscriptions.errors, ...usage.errors]
   const conflicts = [...subscriptions.conflicts, ...usage.conflicts]
   if (errors.length > 0) throw new Error(`Billing push is invalid:\n- ${errors.join('\n- ')}`)
   if (conflicts.length > 0) {
-    throw new Error(`Billing push has portal conflicts:\n- ${conflicts.join('\n- ')}\nPull and reapply the local changes.`)
+    throw new Error(
+      `Billing push has portal conflicts:\n- ${conflicts.join('\n- ')}\nPull and reapply the local changes.`
+    )
   }
 }
 
@@ -214,31 +210,37 @@ export function verifyBillingOperations(
 ): string[] {
   const mismatches: string[] = []
   for (const operation of subscriptions.operations) {
-    const current = operation.type === 'create-plan'
-      ? remote.subscriptions.plans.find(plan => planMatches(operation.desired, plan))
-      : remote.subscriptions.plans.find(plan => plan.id === operation.planId)
-    const matches = operation.type === 'delete-plan'
-      ? !current
-      : Boolean(current && planMatches(operation.desired, current))
+    const current =
+      operation.type === 'create-plan'
+        ? remote.subscriptions.plans.find(plan => planMatches(operation.desired, plan))
+        : remote.subscriptions.plans.find(plan => plan.id === operation.planId)
+    const matches =
+      operation.type === 'delete-plan' ? !current : Boolean(current && planMatches(operation.desired, current))
     if (!matches) mismatches.push(billingSubscriptionOperationLabel(operation))
   }
   for (const operation of usage.operations) {
-    const meter = operation.type === 'create-meter'
-      ? remote.usage.meters.find(item =>
-          item.productId === operation.desired.productId && item.direction === operation.desired.direction
-        )
-      : remote.usage.meters.find(item => item.id === operation.meterId)
-    let matches = false
+    const meter =
+      operation.type === 'create-meter'
+        ? remote.usage.meters.find(
+            item => item.productId === operation.desired.productId && item.direction === operation.desired.direction
+          )
+        : remote.usage.meters.find(item => item.id === operation.meterId)
+    let matches: boolean
     if (operation.type === 'create-meter') matches = Boolean(meter && meterMatches(operation.desired, meter))
     else if (operation.type === 'delete-meter') matches = !meter
-    else if (operation.type === 'delete-tier') matches = Boolean(meter && !meter.tiers.some(tier => tier.id === operation.tierId))
+    else if (operation.type === 'delete-tier')
+      matches = Boolean(meter && !meter.tiers.some(tier => tier.id === operation.tierId))
     else if (operation.type === 'create-tier') {
-      matches = Boolean(meter && meterSharedMatches(operation.desiredMeter, meter) &&
-        meter.tiers.some(tier => tierMatches(operation.desiredTier, tier)))
+      matches = Boolean(
+        meter &&
+        meterSharedMatches(operation.desiredMeter, meter) &&
+        meter.tiers.some(tier => tierMatches(operation.desiredTier, tier))
+      )
     } else {
       const tier = meter?.tiers.find(item => item.id === operation.tierId)
-      matches = Boolean(meter && tier && meterSharedMatches(operation.desiredMeter, meter) &&
-        tierMatches(operation.desiredTier, tier))
+      matches = Boolean(
+        meter && tier && meterSharedMatches(operation.desiredMeter, meter) && tierMatches(operation.desiredTier, tier)
+      )
     }
     if (!matches) mismatches.push(billingUsageOperationLabel(operation))
   }
@@ -282,8 +284,8 @@ function reconcileFailedUsage(
   operation: BillingUsageOperation
 ): void {
   if (operation.type === 'create-meter') {
-    const partial = reconciled.meters.find(meter =>
-      meter.productId === operation.desired.productId && meter.direction === operation.desired.direction
+    const partial = reconciled.meters.find(
+      meter => meter.productId === operation.desired.productId && meter.direction === operation.desired.direction
     )
     if (!partial) {
       reconciled.meters.push(structuredClone(operation.desired))
@@ -343,7 +345,9 @@ export function reconcileBillingAfterPush(
   }
   reconciled.subscriptions.plans.sort((left, right) => (left.id ?? left.name).localeCompare(right.id ?? right.name))
   reconciled.usage.meters.sort((left, right) =>
-    (left.id ?? `${left.productId}:${left.direction ?? ''}`).localeCompare(right.id ?? `${right.productId}:${right.direction ?? ''}`)
+    (left.id ?? `${left.productId}:${left.direction ?? ''}`).localeCompare(
+      right.id ?? `${right.productId}:${right.direction ?? ''}`
+    )
   )
   return reconciled
 }

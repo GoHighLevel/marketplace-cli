@@ -1,10 +1,10 @@
 import path from 'node:path'
 
-import { AppVersion, VersionListItem } from '../api/client.js'
+import { type AppVersion, type VersionListItem } from '../api/client.js'
 import type { BillingWorkspaceResult } from '../billing/workspace.js'
 import { isRecord } from '../api/response.js'
 import { requireRegularFile } from './local-workspace.js'
-import { APP_MANIFEST_FILENAME, AppWorkspaceResult } from './workspace.js'
+import { APP_MANIFEST_FILENAME, type AppWorkspaceResult } from './workspace.js'
 import { isAppResourceIdentifier } from './schema.js'
 import { readJsonFile } from '../shared/json-file.js'
 import type { WorkflowActionsWorkspaceResult } from '../workflows/actions/workspace.js'
@@ -99,9 +99,7 @@ export function resolveVersionId(
   const match = versions.find(version => version._id === selector || version.version === selector)
   if (match) return match._id
   const available = versions.map(version => `${version.version ?? 'unversioned'} (${version._id})`).join(', ')
-  throw new Error(
-    `Version "${selector}" was not found for this app. Available versions: ${available || 'none'}.`
-  )
+  throw new Error(`Version "${selector}" was not found for this app. Available versions: ${available || 'none'}.`)
 }
 
 export async function loadAppVersionForExport(

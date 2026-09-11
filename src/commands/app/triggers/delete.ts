@@ -33,14 +33,18 @@ export default class AppTriggersDelete extends Command {
     try {
       const workspace = await loadWorkflowTriggersWorkspace(flags.directory)
       if (workspace.manifest.triggers.length === 0) throw new Error('This app has no workflow triggers to delete.')
-      const selector = args.trigger ?? await select({
-        message: 'Workflow trigger to remove:',
-        choices: workspace.manifest.triggers.map(trigger => ({
-          name: `${trigger.versions[0]?.info.name ?? trigger.key} (${trigger.key})`,
-          value: trigger.key
+      const selector =
+        args.trigger ??
+        (await select({
+          message: 'Workflow trigger to remove:',
+          choices: workspace.manifest.triggers.map(trigger => ({
+            name: `${trigger.versions[0]?.info.name ?? trigger.key} (${trigger.key})`,
+            value: trigger.key
+          }))
         }))
-      })
-      const index = workspace.manifest.triggers.findIndex(trigger => trigger.key === selector || trigger.templateId === selector)
+      const index = workspace.manifest.triggers.findIndex(
+        trigger => trigger.key === selector || trigger.templateId === selector
+      )
       if (index < 0) throw new Error(`Workflow trigger "${selector}" was not found in local JSON.`)
       const trigger = workspace.manifest.triggers[index]
       if (!flags.force) {
@@ -59,9 +63,16 @@ export default class AppTriggersDelete extends Command {
       const manifest = structuredClone(workspace.manifest)
       manifest.triggers.splice(index, 1)
       const files = await writeWorkflowTriggersWorkspace(workspace.directory, manifest, workspace.state.baseline)
-      const result = { appId: manifest.appId, key: trigger.key, triggerDirectory: files.triggerDirectory, stagedDeletion: true }
+      const result = {
+        appId: manifest.appId,
+        key: trigger.key,
+        triggerDirectory: files.triggerDirectory,
+        stagedDeletion: true
+      }
       if (this.jsonEnabled()) return result
-      this.log(`Removed "${trigger.key}" from ${files.triggerDirectory}. Run \`ghl app triggers push --force\` to apply the deletion.`)
+      this.log(
+        `Removed "${trigger.key}" from ${files.triggerDirectory}. Run \`ghl app triggers push --force\` to apply the deletion.`
+      )
     } catch (error) {
       if (isPromptCancel(error)) {
         this.log(error.message)

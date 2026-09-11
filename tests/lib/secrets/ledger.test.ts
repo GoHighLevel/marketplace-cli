@@ -75,20 +75,32 @@ describe('secret ledger', () => {
     expect((await listSecrets(dir, 'default')).map(entry => entry.value)).toEqual(['new'])
 
     await fs.writeFile(path.join(dir, 'secrets.json'), 'invalid json')
-    await expect(
-      tryRecordSecret(dir, 'default', { kind: 'sso-key', label: 'App', value: 'ignored' })
-    ).resolves.toBe(false)
+    await expect(tryRecordSecret(dir, 'default', { kind: 'sso-key', label: 'App', value: 'ignored' })).resolves.toBe(
+      false
+    )
   })
 
   it('consumes matching secrets exactly once without deleting other scopes', async () => {
     await recordSecret(dir, 'default', {
-      kind: 'client-secret', label: 'app-one', appId: 'app1', reference: 'app1-key', value: 'secret-one'
+      kind: 'client-secret',
+      label: 'app-one',
+      appId: 'app1',
+      reference: 'app1-key',
+      value: 'secret-one'
     })
     await recordSecret(dir, 'default', {
-      kind: 'sso-key', label: 'app-one-sso', appId: 'app1', reference: 'app1', value: 'sso-one'
+      kind: 'sso-key',
+      label: 'app-one-sso',
+      appId: 'app1',
+      reference: 'app1',
+      value: 'sso-one'
     })
     await recordSecret(dir, 'default', {
-      kind: 'client-secret', label: 'app-two', appId: 'app2', reference: 'app2-key', value: 'secret-two'
+      kind: 'client-secret',
+      label: 'app-two',
+      appId: 'app2',
+      reference: 'app2-key',
+      value: 'secret-two'
     })
 
     const first = await consumeSecrets(dir, 'default', entry => secretAppId(entry) === 'app1')
@@ -102,7 +114,11 @@ describe('secret ledger', () => {
 
   it('allows only one concurrent consumer to receive a secret', async () => {
     await recordSecret(dir, 'default', {
-      kind: 'client-secret', label: 'production', appId: 'app1', reference: 'app1-key', value: 'one-time'
+      kind: 'client-secret',
+      label: 'production',
+      appId: 'app1',
+      reference: 'app1-key',
+      value: 'one-time'
     })
 
     const results = await Promise.all([
@@ -131,9 +147,9 @@ describe('secret ledger', () => {
 
   it('rejects a malformed secrets file instead of overwriting it', async () => {
     await fs.writeFile(path.join(dir, 'secrets.json'), JSON.stringify({ profiles: { default: 'nope' } }))
-    await expect(
-      recordSecret(dir, 'default', { kind: 'sso-key', label: 'My App', value: 'k1' })
-    ).rejects.toThrow(/unexpected format/i)
+    await expect(recordSecret(dir, 'default', { kind: 'sso-key', label: 'My App', value: 'k1' })).rejects.toThrow(
+      /unexpected format/i
+    )
     await expect(listSecrets(dir, 'default')).rejects.toThrow(/unexpected format/i)
   })
 
@@ -150,14 +166,14 @@ describe('secret ledger', () => {
     )
     await expect(listSecrets(dir, 'default')).rejects.toThrow(/unexpected format/i)
 
-    await expect(
-      recordSecret(dir, 'bad profile', { kind: 'sso-key', label: 'My App', value: 'k1' })
-    ).rejects.toThrow(/profile name/i)
+    await expect(recordSecret(dir, 'bad profile', { kind: 'sso-key', label: 'My App', value: 'k1' })).rejects.toThrow(
+      /profile name/i
+    )
 
     await fs.writeFile(path.join(dir, 'secrets.json'), JSON.stringify({ version: 1, profiles: {} }))
-    await expect(
-      recordSecret(dir, 'default', { kind: 'sso-key', label: '', value: 'k1' })
-    ).rejects.toThrow(/secret entry/i)
+    await expect(recordSecret(dir, 'default', { kind: 'sso-key', label: '', value: 'k1' })).rejects.toThrow(
+      /secret entry/i
+    )
   })
 })
 

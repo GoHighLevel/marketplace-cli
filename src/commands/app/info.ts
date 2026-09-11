@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core'
 
-import { AppVersion, PreSubmitValidation } from '../../lib/api/client.js'
+import { type AppVersion, type PreSubmitValidation } from '../../lib/api/client.js'
 import { currentInstaller, currentTarget } from '../../lib/app/profile-sections.js'
 import { publishReadinessSymbol } from '../../lib/app/publish-readiness.js'
 import { loadAppContext } from '../../lib/app/section-context.js'

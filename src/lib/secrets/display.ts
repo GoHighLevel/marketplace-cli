@@ -1,4 +1,4 @@
-import { isAppScoped, maskSecret, SecretEntry, SecretKind, secretAppId } from './ledger.js'
+import { isAppScoped, maskSecret, type SecretEntry, type SecretKind, secretAppId } from './ledger.js'
 
 interface KindMeta {
   header: string
@@ -10,9 +10,19 @@ interface KindMeta {
 const KIND_ORDER: SecretKind[] = ['client-secret', 'sso-key', 'sandbox-password']
 
 const KIND_META: Record<SecretKind, KindMeta> = {
-  'client-secret': { header: 'Client keys:', nameLabel: 'Name', referenceLabel: 'Client ID', valueLabel: 'Client secret' },
+  'client-secret': {
+    header: 'Client keys:',
+    nameLabel: 'Name',
+    referenceLabel: 'Client ID',
+    valueLabel: 'Client secret'
+  },
   'sso-key': { header: 'SSO keys:', nameLabel: 'App', referenceLabel: 'App ID', valueLabel: 'SSO key' },
-  'sandbox-password': { header: 'Sandbox passwords:', nameLabel: 'Account', referenceLabel: 'Company ID', valueLabel: 'Password' }
+  'sandbox-password': {
+    header: 'Sandbox passwords:',
+    nameLabel: 'Account',
+    referenceLabel: 'Company ID',
+    valueLabel: 'Password'
+  }
 }
 
 export function isSecretInScope(entry: SecretEntry, appId?: string, includeAccount = false): boolean {

@@ -133,21 +133,32 @@ describe('loadAppVersionForExport', () => {
 
 describe('buildPullFilesOutput', () => {
   it('keeps every component state and guide path under an unambiguous key', () => {
-    expect(buildPullFilesOutput({
-      app: { directory: root, appFile: 'ghl-app.json', stateFile: '.ghl/state.json' },
-      actions: {
-        actionDirectory: 'actions', actionFiles: ['action.json'], codeDirectory: 'code', codeFiles: [],
-        guideFile: 'actions.md', stateFile: '.ghl/workflow-actions-state.json'
-      },
-      triggers: {
-        triggerDirectory: 'triggers', triggerFiles: ['trigger.json'],
-        triggerGuideFile: 'triggers.md', triggerStateFile: '.ghl/workflow-triggers-state.json'
-      },
-      billing: {
-        billingDirectory: 'billing', subscriptionFile: 'subscription.json', usageFile: 'usage-based.json',
-        guideFile: 'billing.md', stateFile: '.ghl/billing-state.json'
-      }
-    })).toMatchObject({
+    expect(
+      buildPullFilesOutput({
+        app: { directory: root, appFile: 'ghl-app.json', stateFile: '.ghl/state.json' },
+        actions: {
+          actionDirectory: 'actions',
+          actionFiles: ['action.json'],
+          codeDirectory: 'code',
+          codeFiles: [],
+          guideFile: 'actions.md',
+          stateFile: '.ghl/workflow-actions-state.json'
+        },
+        triggers: {
+          triggerDirectory: 'triggers',
+          triggerFiles: ['trigger.json'],
+          triggerGuideFile: 'triggers.md',
+          triggerStateFile: '.ghl/workflow-triggers-state.json'
+        },
+        billing: {
+          billingDirectory: 'billing',
+          subscriptionFile: 'subscription.json',
+          usageFile: 'usage-based.json',
+          guideFile: 'billing.md',
+          stateFile: '.ghl/billing-state.json'
+        }
+      })
+    ).toMatchObject({
       stateFile: '.ghl/state.json',
       actionGuideFile: 'actions.md',
       workflowActionStateFile: '.ghl/workflow-actions-state.json',

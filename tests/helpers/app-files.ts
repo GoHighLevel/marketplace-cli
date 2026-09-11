@@ -1,5 +1,5 @@
-import { AppVersion } from '../../src/lib/api/client.js'
-import { AppFiles, buildAppFiles } from '../../src/lib/app/manifest.js'
+import { type AppVersion } from '../../src/lib/api/client.js'
+import { type AppFiles, buildAppFiles } from '../../src/lib/app/manifest.js'
 
 const DESCRIPTION = 'A'.repeat(320)
 const SUB_ACCOUNT_DESCRIPTION = 'B'.repeat(320)

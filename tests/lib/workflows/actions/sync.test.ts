@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { WorkflowActionsManifest } from '../../../../src/lib/workflows/actions/manifest.js'
+import { type WorkflowActionsManifest } from '../../../../src/lib/workflows/actions/manifest.js'
 import { planWorkflowActionsSync } from '../../../../src/lib/workflows/actions/sync.js'
 
 function manifest(description = 'Base', summary = 'Base summary'): WorkflowActionsManifest {

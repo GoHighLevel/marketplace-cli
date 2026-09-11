@@ -44,11 +44,11 @@ describe('security review rules', () => {
     expect(() => requireSecurityReviewEligible(eligible, 4)).not.toThrow()
     expect(() => requireSecurityReviewEligible(eligible, 3)).toThrow(/four qualifying agency installs/i)
     expect(() => requireSecurityReviewEligible({ ...eligible, private: false }, 4)).toThrow(/private apps/i)
-    expect(() =>
-      requireSecurityReviewEligible({ ...eligible, securityReview: { status: 'inReview' } }, 4)
-    ).toThrow(/already in progress/i)
-    expect(() =>
-      requireSecurityReviewEligible({ ...eligible, securityReview: { status: 'in-review' } }, 4)
-    ).toThrow(/already in progress/i)
+    expect(() => requireSecurityReviewEligible({ ...eligible, securityReview: { status: 'inReview' } }, 4)).toThrow(
+      /already in progress/i
+    )
+    expect(() => requireSecurityReviewEligible({ ...eligible, securityReview: { status: 'in-review' } }, 4)).toThrow(
+      /already in progress/i
+    )
   })
 })

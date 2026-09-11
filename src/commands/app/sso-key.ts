@@ -37,7 +37,9 @@ export default class AppSsoKey extends Command {
     try {
       if (!flags.force) {
         if (!process.stdin.isTTY) {
-          this.error('Generating a new SSO key invalidates the previous one — pass --force when running non-interactively.')
+          this.error(
+            'Generating a new SSO key invalidates the previous one — pass --force when running non-interactively.'
+          )
         }
         const ok = await confirm({
           message: 'Generate a new SSO key? Any previous key stops working.',
@@ -67,12 +69,7 @@ export default class AppSsoKey extends Command {
         flags.reveal,
         { kind: 'sso-key', appId: context.selected.appId }
       )
-      const output = prepareGeneratedSecretOutput(
-        result.ssoKey,
-        stored,
-        flags.reveal,
-        interactiveOutput
-      )
+      const output = prepareGeneratedSecretOutput(result.ssoKey, stored, flags.reveal, interactiveOutput)
       if (output.unavailable) {
         this.error(
           'The SSO key was rotated, but the new key could not be saved locally. ' +

@@ -1,12 +1,12 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-import { AppFiles, AppManifest, WebhookManifest } from './manifest.js'
+import { type AppFiles, type AppManifest, type WebhookManifest } from './manifest.js'
 import {
   APP_MANIFEST_FILENAME,
   WEBHOOK_MANIFEST_RELATIVE_PATH,
   WORKSPACE_STATE_RELATIVE_PATH,
-  WorkspaceState
+  type WorkspaceState
 } from './workspace.js'
 import { readJsonFile } from '../shared/json-file.js'
 import { withoutJsonSchemaReference } from './json-schema.js'
@@ -85,7 +85,7 @@ export async function readLocalAppWorkspace(inputDirectory: string): Promise<Loc
   }
   const app = withoutJsonSchemaReference(appValue) as AppManifest
   const storedWebhooks = storedWebhooksValue
-    ? withoutJsonSchemaReference(storedWebhooksValue) as WebhookManifest
+    ? (withoutJsonSchemaReference(storedWebhooksValue) as WebhookManifest)
     : undefined
   const webhooks: WebhookManifest = storedWebhooks ?? {
     schemaVersion: 1,

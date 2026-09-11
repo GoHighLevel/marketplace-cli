@@ -58,9 +58,7 @@ export default class AppSecurityReview extends Command {
         })
         if (!ok) return
       }
-      await withSpinner('Requesting security review...', () =>
-        client.requestSecurityReview(selected.appId)
-      )
+      await withSpinner('Requesting security review...', () => client.requestSecurityReview(selected.appId))
       this.log('Security review requested.')
     } catch (error) {
       if (isPromptCancel(error)) {

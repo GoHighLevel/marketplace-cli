@@ -64,7 +64,9 @@ export default class AppTriggersPush extends Command {
           changes: context.plan.localChanges
         }
         if (this.jsonEnabled()) return result
-        this.log(`Validation passed. API operations: ${result.operations.map(operation => `${operation.type}:${operation.key}`).join(', ') || 'none'}.`)
+        this.log(
+          `Validation passed. API operations: ${result.operations.map(operation => `${operation.type}:${operation.key}`).join(', ') || 'none'}.`
+        )
         return
       }
       const execution = await withSpinner(
@@ -72,13 +74,16 @@ export default class AppTriggersPush extends Command {
         () => executeWorkflowTriggersSyncPlanIndependently(context.client, context.plan, { runtime: context.runtime }),
         { quiet: this.jsonEnabled() }
       )
-      const remote = execution.total > 0
-        ? await fetchWorkflowTriggersManifest(context.client, context.appId)
-        : context.remote
-      const successfulOperations = new Set(execution.results.filter(result => result.success).map(result => result.operation))
+      const remote =
+        execution.total > 0 ? await fetchWorkflowTriggersManifest(context.client, context.appId) : context.remote
+      const successfulOperations = new Set(
+        execution.results.filter(result => result.success).map(result => result.operation)
+      )
       const verificationPlan = {
         ...context.plan,
-        operations: context.plan.operations.filter(operation => successfulOperations.has(workflowTriggerOperationLabel(operation)))
+        operations: context.plan.operations.filter(operation =>
+          successfulOperations.has(workflowTriggerOperationLabel(operation))
+        )
       }
       const mismatches = new Set(verifyWorkflowTriggersApplied(verificationPlan, remote))
       for (const result of execution.results) {

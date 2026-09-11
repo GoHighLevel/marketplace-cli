@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { renderSecretEntries, scopeSecretEntries } from '../../../src/lib/secrets/display.js'
-import { SecretEntry } from '../../../src/lib/secrets/ledger.js'
+import { type SecretEntry } from '../../../src/lib/secrets/ledger.js'
 
 const entries: SecretEntry[] = [
   {

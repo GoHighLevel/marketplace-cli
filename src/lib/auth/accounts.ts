@@ -8,7 +8,11 @@ interface DeveloperAccountClient {
 }
 
 export function developerAccountName(account: DeveloperTeam): string {
-  const name = account.name?.replace(/[\u0000-\u001F\u007F-\u009F]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const name = account.name
+    // eslint-disable-next-line no-control-regex -- control characters are stripped from account names on purpose.
+    ?.replace(/[\u0000-\u001F\u007F-\u009F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (name) return name.slice(0, 200)
   return account.role?.toUpperCase() === 'OWNER' ? 'Your Team' : 'Unnamed account'
 }

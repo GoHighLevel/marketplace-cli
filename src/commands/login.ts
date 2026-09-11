@@ -71,7 +71,10 @@ export default class Login extends Command {
 
     let code: string
     try {
-      code = await withSpinner('Waiting for approval in the browser (times out in 5 minutes)...', () => server.waitForCode)
+      code = await withSpinner(
+        'Waiting for approval in the browser (times out in 5 minutes)...',
+        () => server.waitForCode
+      )
     } catch (error) {
       server.close()
       this.error(error instanceof Error ? error.message : 'Login failed')

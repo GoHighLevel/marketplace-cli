@@ -1,6 +1,6 @@
-import { WebhooksCatalog } from '../api/client.js'
+import { type WebhooksCatalog } from '../api/client.js'
 import { eventsAllowedByScopes, scopeNamesFromCatalog } from '../auth/settings.js'
-import { AppSyncPlan } from './sync.js'
+import { type AppSyncPlan } from './sync.js'
 
 export interface AuthCatalogClient {
   getScopesCatalog(): Promise<unknown>
@@ -24,7 +24,7 @@ export async function validateDynamicAuthConfiguration(
   const errors: string[] = []
   const scopes = plan.desired.app.oauth.allowedScopes
   if (scopeChanged) {
-    const catalog = catalogs.scopes ?? await client.getScopesCatalog()
+    const catalog = catalogs.scopes ?? (await client.getScopesCatalog())
     const available = new Set(scopeNamesFromCatalog(catalog, plan.desired.app.listing.userTypes))
     const invalidScopes = scopes.filter(scope => !available.has(scope))
     if (invalidScopes.length > 0) {
@@ -32,7 +32,7 @@ export async function validateDynamicAuthConfiguration(
     }
   }
 
-  const webhookCatalog = catalogs.webhooks ?? await client.getWebhooksCatalog()
+  const webhookCatalog = catalogs.webhooks ?? (await client.getWebhooksCatalog())
   const catalogEvents = new Set(webhookCatalog.events ?? [])
   const allowedEvents = new Set(eventsAllowedByScopes(scopes, webhookCatalog))
   const invalidEvents = plan.desired.webhooks.subscribedEvents

@@ -46,7 +46,9 @@ export default class AppKeysDelete extends Command {
       }
       if (!flags.force) {
         if (!process.stdin.isTTY) {
-          this.error('Deleting a client key breaks integrations using it — pass --force when running non-interactively.')
+          this.error(
+            'Deleting a client key breaks integrations using it — pass --force when running non-interactively.'
+          )
         }
         const ok = await confirm({
           message: `Delete client key ${keyId}? Integrations using it will stop working.`,
@@ -54,9 +56,7 @@ export default class AppKeysDelete extends Command {
         })
         if (!ok) return
       }
-      await withSpinner('Deleting client key...', () =>
-        context.client.deleteClientKey(context.selected.appId, keyId)
-      )
+      await withSpinner('Deleting client key...', () => context.client.deleteClientKey(context.selected.appId, keyId))
 
       /* The key no longer works — drop its ledgered secret so `ghl secrets`
          only shows live credentials. Best-effort: deletion already succeeded. */

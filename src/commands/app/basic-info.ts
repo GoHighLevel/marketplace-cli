@@ -1,14 +1,10 @@
 import { Command, Flags } from '@oclif/core'
 
 import { checkbox, input, isPromptCancel } from '../../lib/shared/prompts.js'
-import { AppVersion } from '../../lib/api/client.js'
-import {
-  CATEGORY_GROUPS,
-  normalizeBusinessNiches,
-  normalizeSubcategories
-} from '../../lib/app/categories.js'
+import { type AppVersion } from '../../lib/api/client.js'
+import { CATEGORY_GROUPS, normalizeBusinessNiches, normalizeSubcategories } from '../../lib/app/categories.js'
 import { validateAppName } from '../../lib/app/create.js'
-import { BasicInfoChanges, buildBasicInfoBody, validateBasicInfoBody } from '../../lib/app/profile-sections.js'
+import { type BasicInfoChanges, buildBasicInfoBody, validateBasicInfoBody } from '../../lib/app/profile-sections.js'
 import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateHttpsUrl } from '../../lib/shared/validation.js'

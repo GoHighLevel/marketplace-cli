@@ -41,16 +41,21 @@ export default class AppTriggersNewVersion extends Command {
         throw new Error('Push or discard local workflow trigger changes before creating a new version.')
       }
       const eligible = context.remote.triggers.filter(
-        trigger => !trigger.versions.some(version => version.status === 'draft') && trigger.versions[0]?.status === 'published'
+        trigger =>
+          !trigger.versions.some(version => version.status === 'draft') && trigger.versions[0]?.status === 'published'
       )
-      const selector = args.trigger ?? await select({
-        message: 'Published workflow trigger:',
-        choices: eligible.map(trigger => ({
-          name: `${trigger.versions[0]?.info.name ?? trigger.key} (${trigger.key})`,
-          value: trigger.key
+      const selector =
+        args.trigger ??
+        (await select({
+          message: 'Published workflow trigger:',
+          choices: eligible.map(trigger => ({
+            name: `${trigger.versions[0]?.info.name ?? trigger.key} (${trigger.key})`,
+            value: trigger.key
+          }))
         }))
-      })
-      const trigger = context.remote.triggers.find(candidate => candidate.key === selector || candidate.templateId === selector)
+      const trigger = context.remote.triggers.find(
+        candidate => candidate.key === selector || candidate.templateId === selector
+      )
       if (!trigger?.templateId) throw new Error(`Workflow trigger "${selector}" was not found.`)
       if (trigger.versions.some(version => version.status === 'draft')) {
         throw new Error(`Workflow trigger "${trigger.key}" already has an editable draft.`)

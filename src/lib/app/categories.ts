@@ -67,7 +67,10 @@ export const BUSINESS_NICHE_VALUES = [
 ]
 
 function uniqueCommaSeparated(input: string): string[] {
-  const values = input.split(',').map(value => value.trim()).filter(Boolean)
+  const values = input
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
   const seen = new Set<string>()
   return values.filter(value => {
     const key = value.toLowerCase()

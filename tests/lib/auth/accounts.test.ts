@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DeveloperTeam } from '../../../src/lib/api/client.js'
 import { getSelectedApp, saveSelectedApp } from '../../../src/lib/config/selection-store.js'
-import { developerAccountChoice, developerAccountSummary, switchDeveloperAccount } from '../../../src/lib/auth/accounts.js'
+import {
+  developerAccountChoice,
+  developerAccountSummary,
+  switchDeveloperAccount
+} from '../../../src/lib/auth/accounts.js'
 
 const teams: DeveloperTeam[] = [
   { team: 'team1', name: 'Primary', role: 'OWNER' },

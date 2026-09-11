@@ -1,10 +1,10 @@
 import { Command, Flags } from '@oclif/core'
 
 import { confirm, input, isPromptCancel } from '../../lib/shared/prompts.js'
-import { AppVersion } from '../../lib/api/client.js'
+import { type AppVersion } from '../../lib/api/client.js'
 import {
   buildProfilesBody,
-  ProfilesChanges,
+  type ProfilesChanges,
   validateDescription,
   validateProfilesBody
 } from '../../lib/app/profile-sections.js'

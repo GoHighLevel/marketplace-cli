@@ -40,7 +40,8 @@ export default class AppDiff extends Command {
         this.log('Local app configuration matches the developer portal.')
         return
       }
-      for (const change of plan.localChanges) this.log(`  local    ${sanitizeTerminalText(change.path)} -> ${change.section}`)
+      for (const change of plan.localChanges)
+        this.log(`  local    ${sanitizeTerminalText(change.path)} -> ${change.section}`)
       for (const change of plan.remoteChanges) this.log(`  remote   ${sanitizeTerminalText(change.path)}`)
       for (const change of plan.conflicts) this.log(`  conflict ${sanitizeTerminalText(change.path)}`)
       this.log(`API sections required by local changes: ${plan.sections.join(', ') || 'none'}.`)

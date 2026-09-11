@@ -1,4 +1,4 @@
-import { VersionListItem } from '../api/client.js'
+import { type VersionListItem } from '../api/client.js'
 import { normalizeStatus } from './rules.js'
 
 export type BumpType = 'patch' | 'minor' | 'major'
@@ -57,10 +57,18 @@ function compareVersions(a: string, b: string): number {
 export function baseVersionFromList(versions: VersionListItem[]): string | undefined {
   const candidates = versions.filter(item => {
     const status = normalizeStatus(item.status)
-    return status !== 'draft' && status !== 'disapproved' && typeof item.version === 'string' && semverParts(item.version) !== undefined
+    return (
+      status !== 'draft' &&
+      status !== 'disapproved' &&
+      typeof item.version === 'string' &&
+      semverParts(item.version) !== undefined
+    )
   })
   if (candidates.length === 0) return undefined
-  return candidates.map(item => item.version as string).sort(compareVersions).at(-1)
+  return candidates
+    .map(item => item.version as string)
+    .sort(compareVersions)
+    .at(-1)
 }
 
 export function activeVersionCount(versions: VersionListItem[]): number {
@@ -70,8 +78,7 @@ export function activeVersionCount(versions: VersionListItem[]): number {
 export function pendingVersions(versions: VersionListItem[], excludeId?: string): VersionListItem[] {
   return versions.filter(
     item =>
-      item._id !== excludeId &&
-      ['review', 'inreview', 'draft', 'disapproved'].includes(normalizeStatus(item.status))
+      item._id !== excludeId && ['review', 'inreview', 'draft', 'disapproved'].includes(normalizeStatus(item.status))
   )
 }
 
@@ -86,11 +93,12 @@ export function requireDraftable(versions: VersionListItem[], selectedId: string
     )
   }
   const liveVersions = versions.filter(
-    item => normalizeStatus(item.status) === 'live' && typeof item.version === 'string' && semverParts(item.version) !== undefined
+    item =>
+      normalizeStatus(item.status) === 'live' &&
+      typeof item.version === 'string' &&
+      semverParts(item.version) !== undefined
   )
-  const latest = [...liveVersions].sort((left, right) =>
-    compareVersions(right.version ?? '', left.version ?? '')
-  )[0]
+  const latest = [...liveVersions].sort((left, right) => compareVersions(right.version ?? '', left.version ?? ''))[0]
   if (!latest) throw new Error('Cannot create a draft: no valid live version is available.')
   if (latest._id !== selectedId) {
     throw new Error(`Drafts can only be cloned from the latest live version (${latest.version}).`)

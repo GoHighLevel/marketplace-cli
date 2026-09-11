@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { WorkflowTriggersManifest } from '../../../../src/lib/workflows/triggers/manifest.js'
+import { type WorkflowTriggersManifest } from '../../../../src/lib/workflows/triggers/manifest.js'
 import {
   validateWorkflowTriggersManifest,
   validateWorkflowTriggerVersionForPublish
@@ -10,58 +10,62 @@ function validManifest(): WorkflowTriggersManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    triggers: [{
-      key: 'contact_changed',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: {
-          name: 'Contact changed',
-          description: 'Starts a workflow when a contact changes.',
-          summary: 'Use this trigger to process contact changes from the integration.',
-          icon: 'fa-address-card'
-        },
-        customVarsJson: {
-          contact: { id: 'contact-1', email: 'person@example.com' },
-          tags: ['customer']
-        },
-        filters: [
+    triggers: [
+      {
+        key: 'contact_changed',
+        versions: [
           {
-            field: 'contact.email',
-            title: 'Email',
-            required: true,
-            fieldType: 'string',
-            altersDynamicField: false
-          },
-          {
-            field: 'tags',
-            title: 'Tags',
-            required: false,
-            fieldType: 'multiselect',
-            mappedTo: 'TAGS',
-            altersDynamicField: true
-          },
-          {
-            field: 'DYNAMIC',
-            title: 'Additional filters',
-            required: false,
-            fieldType: 'DYNAMIC',
-            dynamicFieldsConfig: {
-              url: 'https://api.example.com/workflow/filters',
-              headers: { Authorization: '${env:FILTER_TOKEN}' }
+            version: '1.0',
+            status: 'draft',
+            info: {
+              name: 'Contact changed',
+              description: 'Starts a workflow when a contact changes.',
+              summary: 'Use this trigger to process contact changes from the integration.',
+              icon: 'fa-address-card'
+            },
+            customVarsJson: {
+              contact: { id: 'contact-1', email: 'person@example.com' },
+              tags: ['customer']
+            },
+            filters: [
+              {
+                field: 'contact.email',
+                title: 'Email',
+                required: true,
+                fieldType: 'string',
+                altersDynamicField: false
+              },
+              {
+                field: 'tags',
+                title: 'Tags',
+                required: false,
+                fieldType: 'multiselect',
+                mappedTo: 'TAGS',
+                altersDynamicField: true
+              },
+              {
+                field: 'DYNAMIC',
+                title: 'Additional filters',
+                required: false,
+                fieldType: 'DYNAMIC',
+                dynamicFieldsConfig: {
+                  url: 'https://api.example.com/workflow/filters',
+                  headers: { Authorization: '${env:FILTER_TOKEN}' }
+                }
+              }
+            ],
+            customVars: [
+              { name: 'Contact ID', reference: 'contact.id', fieldType: 'string' },
+              { name: 'Tags', reference: 'tags', fieldType: 'array' }
+            ],
+            subscriptionConfig: {
+              url: 'https://api.example.com/workflow/subscriptions',
+              headers: { Authorization: '${env:SUBSCRIPTION_TOKEN}' }
             }
           }
-        ],
-        customVars: [
-          { name: 'Contact ID', reference: 'contact.id', fieldType: 'string' },
-          { name: 'Tags', reference: 'tags', fieldType: 'array' }
-        ],
-        subscriptionConfig: {
-          url: 'https://api.example.com/workflow/subscriptions',
-          headers: { Authorization: '${env:SUBSCRIPTION_TOKEN}' }
-        }
-      }]
-    }]
+        ]
+      }
+    ]
   }
 }
 
@@ -97,13 +101,15 @@ describe('workflow trigger schema validation', () => {
     ]
 
     const errors = validateWorkflowTriggersManifest(manifest)
-    expect(errors).toEqual(expect.arrayContaining([
-      expect.stringContaining('must define exactly one option source'),
-      expect.stringContaining('required must be false for a dynamic filter'),
-      expect.stringContaining('dynamicFieldsConfig is required for a dynamic filter'),
-      expect.stringContaining('may contain at most one DYNAMIC filter'),
-      expect.stringContaining('must use a public internet host')
-    ]))
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('must define exactly one option source'),
+        expect.stringContaining('required must be false for a dynamic filter'),
+        expect.stringContaining('dynamicFieldsConfig is required for a dynamic filter'),
+        expect.stringContaining('may contain at most one DYNAMIC filter'),
+        expect.stringContaining('must use a public internet host')
+      ])
+    )
   })
 
   it('validates payload references, custom-variable types, and duplicate fields', () => {
@@ -118,11 +124,13 @@ describe('workflow trigger schema validation', () => {
       { name: 'Missing', reference: 'contact.missing', fieldType: 'string' }
     ]
 
-    expect(validateWorkflowTriggersManifest(manifest)).toEqual(expect.arrayContaining([
-      expect.stringContaining('duplicates filter field "missing"'),
-      expect.stringContaining('does not resolve in customVarsJson'),
-      expect.stringContaining('fieldType must be "string" for trigger-data reference "contact.email"')
-    ]))
+    expect(validateWorkflowTriggersManifest(manifest)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('duplicates filter field "missing"'),
+        expect.stringContaining('does not resolve in customVarsJson'),
+        expect.stringContaining('fieldType must be "string" for trigger-data reference "contact.email"')
+      ])
+    )
   })
 
   it('bounds workflow values before applying validation regexes', () => {
@@ -132,11 +140,13 @@ describe('workflow trigger schema validation', () => {
     version.filters[0].field = 'a'.repeat(1_001)
     version.customVars[0].reference = 'a'.repeat(1_001)
 
-    expect(validateWorkflowTriggersManifest(manifest)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/version must be at most 21 characters/i),
-      expect.stringMatching(/filters\[0\]\.field must be at most 1,000 characters/i),
-      expect.stringMatching(/customVars\[0\]\.reference must be at most 1,000 characters/i)
-    ]))
+    expect(validateWorkflowTriggersManifest(manifest)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/version must be at most 21 characters/i),
+        expect.stringMatching(/filters\[0\]\.field must be at most 1,000 characters/i),
+        expect.stringMatching(/customVars\[0\]\.reference must be at most 1,000 characters/i)
+      ])
+    )
   })
 
   it('rejects unsupported properties, unsafe headers, and incomplete publish configuration', () => {
@@ -149,14 +159,26 @@ describe('workflow trigger schema validation', () => {
     }
 
     const errors = validateWorkflowTriggersManifest(manifest)
-    expect(errors).toEqual(expect.arrayContaining([
-      expect.stringContaining('unexpected is not a supported property'),
-      expect.stringMatching(/Bad Header.*must be a valid HTTP header name/),
-      expect.stringContaining('Authorization is sensitive and must use an environment or remote-preservation reference'),
-      expect.stringContaining('url is required when subscription headers are configured')
-    ]))
-    expect(validateWorkflowTriggerVersionForPublish(manifest as unknown as WorkflowTriggersManifest, 'contact_changed', '1.0')).toEqual(
-      expect.arrayContaining([expect.stringContaining('subscriptionConfig.url is required before submission for review')])
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('unexpected is not a supported property'),
+        expect.stringMatching(/Bad Header.*must be a valid HTTP header name/),
+        expect.stringContaining(
+          'Authorization is sensitive and must use an environment or remote-preservation reference'
+        ),
+        expect.stringContaining('url is required when subscription headers are configured')
+      ])
+    )
+    expect(
+      validateWorkflowTriggerVersionForPublish(
+        manifest as unknown as WorkflowTriggersManifest,
+        'contact_changed',
+        '1.0'
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('subscriptionConfig.url is required before submission for review')
+      ])
     )
   })
 
@@ -168,9 +190,11 @@ describe('workflow trigger schema validation', () => {
     }))
     manifest.triggers[0].versions.push({ version: '1.1', status: 'draft', info: { name: 'Second draft' } })
 
-    expect(validateWorkflowTriggersManifest(manifest)).toEqual(expect.arrayContaining([
-      expect.stringContaining('supports at most 20 triggers per app'),
-      expect.stringContaining('may contain only one draft version')
-    ]))
+    expect(validateWorkflowTriggersManifest(manifest)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('supports at most 20 triggers per app'),
+        expect.stringContaining('may contain only one draft version')
+      ])
+    )
   })
 })

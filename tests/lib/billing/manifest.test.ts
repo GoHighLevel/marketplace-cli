@@ -12,71 +12,87 @@ import {
 
 describe('billing manifests', () => {
   it('maps subscription API fields without billing-provider identifiers', () => {
-    expect(buildBillingSubscriptionManifest('app-1', [{
-      _id: 'plan-1',
-      name: 'Pro',
-      features: ['Automation'],
-      price: 29.99,
-      locationPrice: 19.99,
-      paymentTime: 'month',
-      paymentType: 'recurring',
-      isFreemiumPlan: false,
-      freeForAgency: false,
-      freeForLocation: false
-    }])).toEqual({
+    expect(
+      buildBillingSubscriptionManifest('app-1', [
+        {
+          _id: 'plan-1',
+          name: 'Pro',
+          features: ['Automation'],
+          price: 29.99,
+          locationPrice: 19.99,
+          paymentTime: 'month',
+          paymentType: 'recurring',
+          isFreemiumPlan: false,
+          freeForAgency: false,
+          freeForLocation: false
+        }
+      ])
+    ).toEqual({
       schemaVersion: 1,
       appId: 'app-1',
-      plans: [{
-        id: 'plan-1',
-        name: 'Pro',
-        features: ['Automation'],
-        paymentTime: 'month',
-        paymentType: 'recurring',
-        amount: 29.99,
-        locationAmount: 19.99,
-        freePlan: false,
-        freeForAgency: false,
-        freeForLocation: false
-      }]
+      plans: [
+        {
+          id: 'plan-1',
+          name: 'Pro',
+          features: ['Automation'],
+          paymentTime: 'month',
+          paymentType: 'recurring',
+          amount: 29.99,
+          locationAmount: 19.99,
+          freePlan: false,
+          freeForAgency: false,
+          freeForLocation: false
+        }
+      ]
     })
   })
 
   it('maps every meter tier and normalizes an unlimited maximum to null', () => {
-    expect(buildBillingUsageManifest('app-1', [{
-      _id: 'meter-1',
-      appId: 'app-1',
-      productType: 'workflow_action',
-      productId: 'send_message',
-      productName: 'Send message',
-      customPriceType: 'fixed',
-      usageUnit: 'execution',
-      billingTier: [{
-        _id: 'tier-1',
-        name: 'Standard',
-        minVolume: 0,
-        maxVolume: null,
-        pricePerUnit: 0.01,
-        executionLimitPerCycle: 1000
-      }]
-    }])).toEqual({
+    expect(
+      buildBillingUsageManifest('app-1', [
+        {
+          _id: 'meter-1',
+          appId: 'app-1',
+          productType: 'workflow_action',
+          productId: 'send_message',
+          productName: 'Send message',
+          customPriceType: 'fixed',
+          usageUnit: 'execution',
+          billingTier: [
+            {
+              _id: 'tier-1',
+              name: 'Standard',
+              minVolume: 0,
+              maxVolume: null,
+              pricePerUnit: 0.01,
+              executionLimitPerCycle: 1000
+            }
+          ]
+        }
+      ])
+    ).toEqual({
       schemaVersion: 1,
       appId: 'app-1',
-      meters: [{
-        id: 'meter-1',
-        productType: 'workflow_action',
-        productId: 'send_message',
-        productName: 'Send message',
-        customPriceType: 'fixed',
-        usageUnit: 'execution',
-        tiers: [{
-          id: 'tier-1',
-          name: 'Standard',
-          minVolume: 0,
-          maxVolume: null,
-          pricePerUnit: 0.01,
-          executionLimitPerCycle: 1000
-        }]
-      }]
+      meters: [
+        {
+          id: 'meter-1',
+          productType: 'workflow_action',
+          productId: 'send_message',
+          productName: 'Send message',
+          customPriceType: 'fixed',
+          usageUnit: 'execution',
+          tiers: [
+            {
+              id: 'tier-1',
+              name: 'Standard',
+              minVolume: 0,
+              maxVolume: null,
+              pricePerUnit: 0.01,
+              executionLimitPerCycle: 1000
+            }
+          ]
+        }
+      ]
     })
   })
 

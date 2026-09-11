@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-import { AppVersion } from '../api/client.js'
+import { type AppVersion } from '../api/client.js'
 import {
   AGENTS_FILENAME,
   assertWorkspaceDocumentationFilesWritable,
@@ -10,7 +10,7 @@ import {
   HIGHLEVEL_APP_FILENAME,
   writeWorkspaceDocumentation
 } from './instructions.js'
-import { AppFiles, AppManifest, buildAppFiles, WebhookManifest } from './manifest.js'
+import { type AppFiles, type AppManifest, buildAppFiles, type WebhookManifest } from './manifest.js'
 import { readJsonFile, writeJsonFileAtomic } from '../shared/json-file.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../shared/workspace-files.js'
 import { withJsonSchemaReference, writeJsonSchemaWorkspace } from './json-schema.js'
@@ -22,6 +22,7 @@ export const WORKSPACE_STATE_RELATIVE_PATH = path.join('.ghl', 'state.json')
 export { AGENTS_FILENAME, CLAUDE_FILENAME, HIGHLEVEL_APP_FILENAME }
 
 const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i
+// eslint-disable-next-line no-control-regex -- control characters are rejected in folder names on purpose.
 const INVALID_FOLDER_CHARACTER = /[<>:"/\\|?*\u0000-\u001F]/
 const MAX_FOLDER_NAME_LENGTH = 100
 
@@ -68,7 +69,10 @@ export function slugifyAppName(name: string, appId?: string): string {
     .slice(0, MAX_FOLDER_NAME_LENGTH)
     .replace(/-+$/g, '')
   if (slug && !WINDOWS_RESERVED_NAME.test(slug)) return slug
-  const suffix = appId?.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toLowerCase()
+  const suffix = appId
+    ?.replace(/[^a-zA-Z0-9]/g, '')
+    .slice(-8)
+    .toLowerCase()
   return suffix ? `ghl-app-${suffix}` : 'ghl-app'
 }
 
@@ -78,7 +82,8 @@ export function resolveAppDirectory(parentDirectory: string, folder: string): st
   if (!parentDirectory.trim()) throw new Error('Parent directory is required.')
   const parent = path.resolve(parentDirectory)
   const target = path.resolve(parent, folder)
-  if (path.dirname(target) !== parent) throw new Error('App folder name must stay inside the selected parent directory.')
+  if (path.dirname(target) !== parent)
+    throw new Error('App folder name must stay inside the selected parent directory.')
   return target
 }
 
@@ -144,11 +149,7 @@ async function writeFiles(directory: string, options: WriteAppWorkspaceOptions):
   }
   await writeJsonSchemaWorkspace(directory)
   const writes: Array<Promise<void>> = [
-    writeJsonFileAtomic(
-      path.join(directory, APP_MANIFEST_FILENAME),
-      withJsonSchemaReference(files.app, 'app'),
-      0o644
-    ),
+    writeJsonFileAtomic(path.join(directory, APP_MANIFEST_FILENAME), withJsonSchemaReference(files.app, 'app'), 0o644),
     writeJsonFileAtomic(path.join(directory, WORKSPACE_STATE_RELATIVE_PATH), state, 0o600),
     writeWorkspaceDocumentation(directory)
   ]
@@ -193,9 +194,7 @@ export async function writeAppWorkspace(options: WriteAppWorkspaceOptions): Prom
   const appId = String(options.version.appId ?? options.version._id)
   await assertAppDirectoryAvailable(options.directory, appId)
   const existing = await statIfPresent(options.directory)
-  const legacyWebhookFile = existing
-    ? await legacyWebhookFileToMigrate(options.directory, appId)
-    : undefined
+  const legacyWebhookFile = existing ? await legacyWebhookFileToMigrate(options.directory, appId) : undefined
 
   if (existing) {
     await writeFiles(options.directory, options)

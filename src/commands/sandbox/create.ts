@@ -35,10 +35,12 @@ export default class SandboxCreate extends Command {
     let name: string
     let password: string
     try {
-      name = flags.name?.trim() || (await input({
-        message: 'Sandbox agency name:',
-        validate: value => (value.trim().length > 0 ? true : 'Agency name is required.')
-      }))
+      name =
+        flags.name?.trim() ||
+        (await input({
+          message: 'Sandbox agency name:',
+          validate: value => (value.trim().length > 0 ? true : 'Agency name is required.')
+        }))
       password =
         flags.password ??
         (await passwordPrompt({ message: 'Password for the sandbox account:', validate: validateSandboxPassword }))
@@ -65,16 +67,12 @@ export default class SandboxCreate extends Command {
         { quiet: this.jsonEnabled() }
       )
 
-      const stored = await tryRecordSecret(
-        config.configDir,
-        client.activeProfileName,
-        {
-          kind: 'sandbox-password',
-          label: account.name ?? name.trim(),
-          reference: account.companyId,
-          value: password
-        }
-      )
+      const stored = await tryRecordSecret(config.configDir, client.activeProfileName, {
+        kind: 'sandbox-password',
+        label: account.name ?? name.trim(),
+        reference: account.companyId,
+        value: password
+      })
       const displayedPassword = secretForOutput(password, stored)
 
       if (this.jsonEnabled()) return { ...account, password: displayedPassword, passwordStored: stored }

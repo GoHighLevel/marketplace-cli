@@ -58,9 +58,16 @@ export default class AppActionsPush extends Command {
       }
       const operationSummary = context.plan.operations.map(operation => ({ type: operation.type, key: operation.key }))
       if (flags['dry-run']) {
-        const result = { dryRun: true, appId: context.appId, operations: operationSummary, changes: context.plan.localChanges }
+        const result = {
+          dryRun: true,
+          appId: context.appId,
+          operations: operationSummary,
+          changes: context.plan.localChanges
+        }
         if (this.jsonEnabled()) return result
-        this.log(`Validation passed. API operations: ${operationSummary.map(operation => `${operation.type}:${operation.key}`).join(', ') || 'none'}.`)
+        this.log(
+          `Validation passed. API operations: ${operationSummary.map(operation => `${operation.type}:${operation.key}`).join(', ') || 'none'}.`
+        )
         return
       }
 
@@ -70,9 +77,8 @@ export default class AppActionsPush extends Command {
         { quiet: this.jsonEnabled() }
       )
       try {
-        const remote = execution.total > 0
-          ? await fetchWorkflowActionsManifest(context.client, context.appId)
-          : context.remote
+        const remote =
+          execution.total > 0 ? await fetchWorkflowActionsManifest(context.client, context.appId) : context.remote
         const successfulOperations = new Set(
           execution.results.filter(result => result.success).map(result => result.operation)
         )
@@ -104,7 +110,9 @@ export default class AppActionsPush extends Command {
         }
         this.log(`Workflow action push complete: ${execution.succeeded} succeeded, ${execution.failed} failed.`)
         for (const item of execution.results) {
-          this.log(`  ${item.success ? 'succeeded' : 'failed'}  ${item.operation}${item.error ? ` — ${item.error}` : ''}`)
+          this.log(
+            `  ${item.success ? 'succeeded' : 'failed'}  ${item.operation}${item.error ? ` — ${item.error}` : ''}`
+          )
         }
         return
       } catch (error) {

@@ -14,17 +14,7 @@ interface PackageMetadata {
 const ROOT_DIRECTORY = fileURLToPath(new URL('..', import.meta.url))
 const LIBRARY_DIRECTORY = path.join(ROOT_DIRECTORY, 'src/lib')
 const LIBRARY_TEST_DIRECTORY = path.join(ROOT_DIRECTORY, 'tests/lib')
-const EXPECTED_DOMAINS = [
-  'api',
-  'app',
-  'auth',
-  'billing',
-  'config',
-  'secrets',
-  'shared',
-  'webhooks',
-  'workflows'
-]
+const EXPECTED_DOMAINS = ['api', 'app', 'auth', 'billing', 'config', 'secrets', 'shared', 'webhooks', 'workflows']
 
 const DOMAIN_FILENAME_RULES = [
   { directory: 'api', redundantPrefixes: ['api'] },
@@ -111,9 +101,7 @@ describe('project structure', () => {
   })
 
   it('uses the marketplace CLI package identity everywhere users install it', async () => {
-    const metadata = JSON.parse(
-      await fs.readFile(path.join(ROOT_DIRECTORY, 'package.json'), 'utf8')
-    ) as PackageMetadata
+    const metadata = JSON.parse(await fs.readFile(path.join(ROOT_DIRECTORY, 'package.json'), 'utf8')) as PackageMetadata
     const readme = await fs.readFile(path.join(ROOT_DIRECTORY, 'README.md'), 'utf8')
 
     expect(metadata.name).toBe('@gohighlevel/marketplace-cli')

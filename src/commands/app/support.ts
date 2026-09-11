@@ -1,11 +1,11 @@
 import { Command, Flags } from '@oclif/core'
 
-import { AppVersion } from '../../lib/api/client.js'
+import { type AppVersion } from '../../lib/api/client.js'
 import { checkbox, input, isPromptCancel } from '../../lib/shared/prompts.js'
 import {
   buildSupportBody,
   SUPPORTED_SERVICES,
-  SupportChanges,
+  type SupportChanges,
   validateSupportBody,
   validateSupportUrl
 } from '../../lib/app/profile-sections.js'

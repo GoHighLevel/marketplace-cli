@@ -1,6 +1,6 @@
 import { isRecord } from '../api/response.js'
-import { AppFiles } from './manifest.js'
-import { WorkspaceState } from './workspace.js'
+import { type AppFiles } from './manifest.js'
+import { type WorkspaceState } from './workspace.js'
 
 type Check = (value: unknown, path: string, errors: string[]) => void
 type FieldRule = { check: Check; optional?: boolean }
@@ -128,7 +128,10 @@ const appManifestShape = exactObject({
       allowedScopes: { check: arrayOf(stringValue) },
       redirectUris: { check: arrayOf(stringValue) },
       defaults: {
-        check: exactObject({ clientKey: { check: nullable(stringValue) }, redirectUrl: { check: nullable(stringValue) } })
+        check: exactObject({
+          clientKey: { check: nullable(stringValue) },
+          redirectUrl: { check: nullable(stringValue) }
+        })
       },
       clientKeys: {
         check: arrayOf(

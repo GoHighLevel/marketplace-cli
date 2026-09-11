@@ -3,7 +3,7 @@ import { Command, Flags } from '@oclif/core'
 import { checkboxSearch, confirm, input, isPromptCancel } from '../../../lib/shared/prompts.js'
 import { normalizeVariadicArgs } from '../../../lib/shared/arguments.js'
 import {
-  AuthSettingsChanges,
+  type AuthSettingsChanges,
   buildAuthSettingsBody,
   requireAuthPrereqs,
   scopeCatalogEntries

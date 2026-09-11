@@ -1,11 +1,5 @@
 import { isRecord } from '../api/response.js'
-import {
-  BillingSubscriptionManifest,
-  BillingSubscriptionPlan,
-  BillingUsageManifest,
-  BillingUsageMeterDefinition,
-  BillingUsageTierDefinition
-} from './manifest.js'
+import { type BillingSubscriptionPlan, type BillingUsageMeterDefinition } from './manifest.js'
 import { MAX_PLANS, MAX_PLAN_FEATURES, MAX_TEMPLATE_PLANS, requirePricingEditable } from './pricing.js'
 import { validateHttpsUrl, validateTextForWhiteLabel } from '../shared/validation.js'
 
@@ -169,17 +163,22 @@ function validatePlan(value: unknown, index: number, options: BillingSubscriptio
   } else if (value.freeForAgency === true && value.freeForLocation === true) {
     errors.push(`${path} cannot be free for both agencies and sub-accounts unless freePlan is true.`)
   }
-  if (value.freeForAgency === true && value.freePlan !== true &&
-    (typeof value.locationAmount !== 'number' || value.locationAmount < 0.01)) {
+  if (
+    value.freeForAgency === true &&
+    value.freePlan !== true &&
+    (typeof value.locationAmount !== 'number' || value.locationAmount < 0.01)
+  ) {
     errors.push(`${path}.locationAmount is required when the plan is free for agencies.`)
   }
-  if (value.freeForLocation === true && value.freePlan !== true &&
-    (typeof value.amount !== 'number' || value.amount < 0.01)) {
+  if (
+    value.freeForLocation === true &&
+    value.freePlan !== true &&
+    (typeof value.amount !== 'number' || value.amount < 0.01)
+  ) {
     errors.push(`${path}.amount is required when the plan is free for sub-accounts.`)
   }
-  const hasSplitPricing = plan.freePlan !== true && (
-    plan.locationAmount !== undefined || plan.freeForAgency || plan.freeForLocation
-  )
+  const hasSplitPricing =
+    plan.freePlan !== true && (plan.locationAmount !== undefined || plan.freeForAgency || plan.freeForLocation)
   if (options.contextual !== false && hasSplitPricing && options.userTypes.length < 2) {
     errors.push(`${path} uses sub-account pricing, which requires the app to target both agencies and sub-accounts.`)
   }
@@ -258,13 +257,20 @@ function validateTier(value: unknown, meterIndex: number, tierIndex: number, dyn
   if (typeof value.minVolume !== 'number' || !Number.isFinite(value.minVolume) || value.minVolume < 0) {
     errors.push(`${path}.minVolume must be a non-negative finite number.`)
   }
-  if (value.maxVolume !== null &&
-    (typeof value.maxVolume !== 'number' || !Number.isFinite(value.maxVolume) || value.maxVolume <= Number(value.minVolume))) {
+  if (
+    value.maxVolume !== null &&
+    (typeof value.maxVolume !== 'number' ||
+      !Number.isFinite(value.maxVolume) ||
+      value.maxVolume <= Number(value.minVolume))
+  ) {
     errors.push(`${path}.maxVolume must be null or greater than minVolume.`)
   }
   errors.push(...validateUnitPrice(value.pricePerUnit, `${path}.pricePerUnit`))
-  if (typeof value.executionLimitPerCycle !== 'number' || !Number.isInteger(value.executionLimitPerCycle) ||
-    value.executionLimitPerCycle < 1) {
+  if (
+    typeof value.executionLimitPerCycle !== 'number' ||
+    !Number.isInteger(value.executionLimitPerCycle) ||
+    value.executionLimitPerCycle < 1
+  ) {
     errors.push(`${path}.executionLimitPerCycle must be a positive integer.`)
   }
   if (dynamic) {
@@ -274,14 +280,18 @@ function validateTier(value: unknown, meterIndex: number, tierIndex: number, dyn
       if (value.minPricePerUnit >= value.maxPricePerUnit) {
         errors.push(`${path}.minPricePerUnit must be less than maxPricePerUnit.`)
       }
-      if (typeof value.pricePerUnit === 'number' &&
-        (value.pricePerUnit < value.minPricePerUnit || value.pricePerUnit > value.maxPricePerUnit)) {
+      if (
+        typeof value.pricePerUnit === 'number' &&
+        (value.pricePerUnit < value.minPricePerUnit || value.pricePerUnit > value.maxPricePerUnit)
+      ) {
         errors.push(`${path}.pricePerUnit must be between minPricePerUnit and maxPricePerUnit.`)
       }
     }
   } else {
-    if (value.minPricePerUnit !== undefined) errors.push(`${path}.minPricePerUnit is only supported for dynamic pricing.`)
-    if (value.maxPricePerUnit !== undefined) errors.push(`${path}.maxPricePerUnit is only supported for dynamic pricing.`)
+    if (value.minPricePerUnit !== undefined)
+      errors.push(`${path}.minPricePerUnit is only supported for dynamic pricing.`)
+    if (value.maxPricePerUnit !== undefined)
+      errors.push(`${path}.maxPricePerUnit is only supported for dynamic pricing.`)
   }
   return errors
 }
@@ -309,10 +319,13 @@ function validateMeter(value: unknown, index: number, options: BillingUsageValid
   }
   const productTypes = ['conversation_provider', 'workflow_action', 'workflow_trigger', 'custom']
   if (!productTypes.includes(String(value.productType))) {
-    errors.push(`${path}.productType must be "conversation_provider", "workflow_action", "workflow_trigger", or "custom".`)
+    errors.push(
+      `${path}.productType must be "conversation_provider", "workflow_action", "workflow_trigger", or "custom".`
+    )
   }
   for (const field of ['productId', 'productName', 'usageUnit'] as const) {
-    if (typeof value[field] !== 'string' || !value[field].trim()) errors.push(`${path}.${field} must be a non-empty string.`)
+    if (typeof value[field] !== 'string' || !value[field].trim())
+      errors.push(`${path}.${field} must be a non-empty string.`)
   }
   if (typeof value.usageUnit === 'string' && value.usageUnit.length > 19) {
     errors.push(`${path}.usageUnit must contain at most 19 characters.`)
@@ -336,8 +349,11 @@ function validateMeter(value: unknown, index: number, options: BillingUsageValid
     if (options.actionKeys && typeof value.productId === 'string' && !options.actionKeys.has(value.productId)) {
       errors.push(`${path}.productId must reference a local workflow action key.`)
     }
-    if (options.registeredActionKeys && typeof value.productId === 'string' &&
-      !options.registeredActionKeys.has(value.productId)) {
+    if (
+      options.registeredActionKeys &&
+      typeof value.productId === 'string' &&
+      !options.registeredActionKeys.has(value.productId)
+    ) {
       errors.push(`${path}.productId must reference a remotely registered workflow action; push the action first.`)
     }
   }
@@ -346,8 +362,11 @@ function validateMeter(value: unknown, index: number, options: BillingUsageValid
     if (options.triggerKeys && typeof value.productId === 'string' && !options.triggerKeys.has(value.productId)) {
       errors.push(`${path}.productId must reference a local workflow trigger key.`)
     }
-    if (options.registeredTriggerKeys && typeof value.productId === 'string' &&
-      !options.registeredTriggerKeys.has(value.productId)) {
+    if (
+      options.registeredTriggerKeys &&
+      typeof value.productId === 'string' &&
+      !options.registeredTriggerKeys.has(value.productId)
+    ) {
       errors.push(`${path}.productId must reference a remotely registered workflow trigger; push the trigger first.`)
     }
   }
@@ -355,7 +374,9 @@ function validateMeter(value: unknown, index: number, options: BillingUsageValid
     if (value.productId.length > CUSTOM_PRODUCT_ID_MAX_LENGTH) {
       errors.push(`${path}.productId must be at most ${CUSTOM_PRODUCT_ID_MAX_LENGTH} characters.`)
     } else if (!isCustomProductId(value.productId)) {
-      errors.push(`${path}.productId must start with "custom_" and contain only letters, numbers, underscores, or hyphens.`)
+      errors.push(
+        `${path}.productId must start with "custom_" and contain only letters, numbers, underscores, or hyphens.`
+      )
     }
   }
   if (value.customPriceType === 'dynamic') {

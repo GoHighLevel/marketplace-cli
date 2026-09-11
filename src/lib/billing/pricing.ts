@@ -1,4 +1,4 @@
-import { BillingSettings } from '../api/client.js'
+import { type BillingSettings } from '../api/client.js'
 import { normalizeStatus } from '../app/rules.js'
 import { validateHttpsUrl, validatePositiveInteger, validateTextForWhiteLabel } from '../shared/validation.js'
 
@@ -107,7 +107,9 @@ export function buildBillingPlan(input: BillingPlanInput) {
     if (nameCheck !== true) throw new Error(nameCheck)
   }
   if (input.free && input.model !== undefined && input.model !== 'freemium') {
-    throw new Error('Free plans are only available for freemium apps — set the model first: `ghl app pricing setup --model freemium`.')
+    throw new Error(
+      'Free plans are only available for freemium apps — set the model first: `ghl app pricing setup --model freemium`.'
+    )
   }
   if (input.free && (input.amount !== undefined || input.locationAmount !== undefined)) {
     throw new Error('Do not pass --amount or --location-amount with --free.')
@@ -126,7 +128,8 @@ export function buildBillingPlan(input: BillingPlanInput) {
   }
   const features = (input.features ?? []).map(feature => feature.trim())
   if (features.some(feature => !feature)) throw new Error('Plan features cannot be blank.')
-  if (features.length > MAX_PLAN_FEATURES) throw new Error(`A pricing plan can have at most ${MAX_PLAN_FEATURES} features.`)
+  if (features.length > MAX_PLAN_FEATURES)
+    throw new Error(`A pricing plan can have at most ${MAX_PLAN_FEATURES} features.`)
   if (input.isWhiteLabelFriendly) {
     for (const feature of features) {
       const check = validateTextForWhiteLabel(feature, `Plan feature "${feature}"`)
@@ -139,7 +142,11 @@ export function buildBillingPlan(input: BillingPlanInput) {
     freeForAgency: input.free,
     freeForLocation: input.free,
     amount: input.free ? 0 : input.amount,
-    ...(input.free ? { locationAmount: 0 } : input.locationAmount !== undefined ? { locationAmount: input.locationAmount } : {}),
+    ...(input.free
+      ? { locationAmount: 0 }
+      : input.locationAmount !== undefined
+        ? { locationAmount: input.locationAmount }
+        : {}),
     features,
     paymentTime: input.interval,
     paymentType: input.interval === 'life_time' ? 'one_time' : 'recurring'

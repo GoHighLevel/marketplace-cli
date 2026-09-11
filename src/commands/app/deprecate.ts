@@ -28,7 +28,9 @@ export default class AppDeprecate extends Command {
     const interactive = process.stdin.isTTY
 
     if ((flags.date === undefined || flags.reason === undefined) && !interactive) {
-      this.error('Pass --date and --reason when running non-interactively, e.g. `ghl app deprecate --date 2026-12-31 --reason "Superseded by v2"`.')
+      this.error(
+        'Pass --date and --reason when running non-interactively, e.g. `ghl app deprecate --date 2026-12-31 --reason "Superseded by v2"`.'
+      )
     }
 
     /* The portal never asks for a timezone — it sends the local one. */

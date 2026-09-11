@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { WorkflowActionSummary } from '../../../../src/lib/api/client.js'
+import { type WorkflowActionSummary } from '../../../../src/lib/api/client.js'
 import {
   executeWorkflowActionsSyncPlan,
   executeWorkflowActionsSyncPlanIndependently,
@@ -8,9 +8,9 @@ import {
   reconcileWorkflowActionsAfterPush,
   verifyWorkflowActionsApplied,
   workflowActionPublishCandidates,
-  WorkflowActionsApi
+  type WorkflowActionsApi
 } from '../../../../src/lib/workflows/actions/service.js'
-import { WorkflowActionsSyncPlan } from '../../../../src/lib/workflows/actions/sync.js'
+import { type WorkflowActionsSyncPlan } from '../../../../src/lib/workflows/actions/sync.js'
 
 function summary(): WorkflowActionSummary {
   return {
@@ -100,11 +100,13 @@ describe('workflow action service orchestration', () => {
     const manifest = {
       schemaVersion: 1 as const,
       appId: 'app-1',
-      actions: [{
-        templateId: 'template-1',
-        key: 'send_message',
-        versions: [{ version: '1.0', status: 'published' as const, info: { name: 'Send message' } }]
-      }]
+      actions: [
+        {
+          templateId: 'template-1',
+          key: 'send_message',
+          versions: [{ version: '1.0', status: 'published' as const, info: { name: 'Send message' } }]
+        }
+      ]
     }
 
     expect(workflowActionPublishCandidates(manifest, [summary()])).toEqual([
@@ -114,11 +116,15 @@ describe('workflow action service orchestration', () => {
         repairRegistry: true
       })
     ])
-    expect(workflowActionPublishCandidates(manifest, [{
-      ...summary(),
-      status: 'approved',
-      isActive: true
-    }])).toEqual([])
+    expect(
+      workflowActionPublishCandidates(manifest, [
+        {
+          ...summary(),
+          status: 'approved',
+          isActive: true
+        }
+      ])
+    ).toEqual([])
   })
 
   it('creates a minimal action without a redundant configuration update', async () => {
@@ -254,16 +260,18 @@ describe('workflow action service orchestration', () => {
           key: 'second',
           desired: {
             key: 'second',
-            versions: [{
-              version: '1.0',
-              status: 'draft',
-              info: { name: 'Second' },
-              executionConfig: {
-                type: 'API',
-                url: 'https://example.com/action',
-                headers: { Authorization: '${env:MISSING_TOKEN}' }
+            versions: [
+              {
+                version: '1.0',
+                status: 'draft',
+                info: { name: 'Second' },
+                executionConfig: {
+                  type: 'API',
+                  url: 'https://example.com/action',
+                  headers: { Authorization: '${env:MISSING_TOKEN}' }
+                }
               }
-            }]
+            ]
           }
         }
       ]
@@ -352,10 +360,7 @@ describe('workflow action service orchestration', () => {
     expect(reconcileWorkflowActionsAfterPush(local, remote, new Set(['second']))).toEqual({
       schemaVersion: 1,
       appId: 'app-1',
-      actions: [
-        remote.actions[0],
-        { ...local.actions[1], templateId: 'template-second' }
-      ]
+      actions: [remote.actions[0], { ...local.actions[1], templateId: 'template-second' }]
     })
   })
 
@@ -424,40 +429,48 @@ describe('workflow action service orchestration', () => {
       remoteChanges: [],
       conflicts: [],
       errors: [],
-      operations: [{
-        type: 'create',
-        key: 'send_message',
-        desired: {
+      operations: [
+        {
+          type: 'create',
           key: 'send_message',
-          versions: [{
-            version: '1.0',
-            status: 'draft',
-            info: { name: 'Send message' },
-            inputs: [],
-            customVars: [],
-            customVarsJson: {},
-            payloadCustomizationType: 'default',
-            customizedPayload: {},
-            branchesConfig: {}
-          }]
+          desired: {
+            key: 'send_message',
+            versions: [
+              {
+                version: '1.0',
+                status: 'draft',
+                info: { name: 'Send message' },
+                inputs: [],
+                customVars: [],
+                customVarsJson: {},
+                payloadCustomizationType: 'default',
+                customizedPayload: {},
+                branchesConfig: {}
+              }
+            ]
+          }
         }
-      }]
+      ]
     }
     const remote = {
       schemaVersion: 1 as const,
       appId: 'app-1',
-      actions: [{
-        templateId: 'template-1',
-        key: 'send_message',
-        versions: [{
-          version: '1.0',
-          status: 'draft' as const,
-          info: { name: 'Send message' },
-          inputs: [],
-          customVars: [],
-          payloadCustomizationType: 'default' as const
-        }]
-      }]
+      actions: [
+        {
+          templateId: 'template-1',
+          key: 'send_message',
+          versions: [
+            {
+              version: '1.0',
+              status: 'draft' as const,
+              info: { name: 'Send message' },
+              inputs: [],
+              customVars: [],
+              payloadCustomizationType: 'default' as const
+            }
+          ]
+        }
+      ]
     }
 
     expect(verifyWorkflowActionsApplied(plan, remote)).toEqual([])
@@ -470,35 +483,43 @@ describe('workflow action service orchestration', () => {
       remoteChanges: [],
       conflicts: [],
       errors: [],
-      operations: [{
-        type: 'create',
-        key: 'run_code',
-        desired: {
+      operations: [
+        {
+          type: 'create',
           key: 'run_code',
-          versions: [{
-            version: '1.0',
-            status: 'draft',
-            info: { name: 'Run code' },
-            executionConfig: { type: 'CODE', code: 'return {}' },
-            payloadCustomizationType: 'default',
-            customizedPayload: {}
-          }]
+          desired: {
+            key: 'run_code',
+            versions: [
+              {
+                version: '1.0',
+                status: 'draft',
+                info: { name: 'Run code' },
+                executionConfig: { type: 'CODE', code: 'return {}' },
+                payloadCustomizationType: 'default',
+                customizedPayload: {}
+              }
+            ]
+          }
         }
-      }]
+      ]
     }
     const remote = {
       schemaVersion: 1 as const,
       appId: 'app-1',
-      actions: [{
-        templateId: 'template-1',
-        key: 'run_code',
-        versions: [{
-          version: '1.0',
-          status: 'draft' as const,
-          info: { name: 'Run code' },
-          executionConfig: { type: 'CODE' as const, code: 'return {}' }
-        }]
-      }]
+      actions: [
+        {
+          templateId: 'template-1',
+          key: 'run_code',
+          versions: [
+            {
+              version: '1.0',
+              status: 'draft' as const,
+              info: { name: 'Run code' },
+              executionConfig: { type: 'CODE' as const, code: 'return {}' }
+            }
+          ]
+        }
+      ]
     }
 
     expect(verifyWorkflowActionsApplied(plan, remote)).toEqual([])

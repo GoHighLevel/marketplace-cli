@@ -1,7 +1,7 @@
-import { ApiClient, AppListItem } from '../api/client.js'
+import { type ApiClient, type AppListItem } from '../api/client.js'
 import { readPullWorkspaceBinding } from './pull.js'
-import { CliConfig } from '../config/environment.js'
-import { getSelectedApp, saveSelectedApp, SelectedApp } from '../config/selection-store.js'
+import { type CliConfig } from '../config/environment.js'
+import { getSelectedApp, saveSelectedApp, type SelectedApp } from '../config/selection-store.js'
 
 export function toSelectedApp(item: AppListItem): SelectedApp {
   return { appId: String(item.appId ?? item._id), versionId: String(item._id), name: item.name }
@@ -13,7 +13,7 @@ export async function toLatestSelectedApp(client: ApiClient, item: AppListItem):
   return {
     appId: String(latest.appId ?? appId),
     versionId: latest._id,
-    ...(latest.name ?? item.name ? { name: latest.name ?? item.name } : {})
+    ...((latest.name ?? item.name) ? { name: latest.name ?? item.name } : {})
   }
 }
 
@@ -45,9 +45,7 @@ export async function findAppItemById(client: ApiClient, appId: string, nameHint
 
 export async function findAppById(client: ApiClient, appId: string): Promise<SelectedApp> {
   const item = await findAppItemById(client, appId)
-  return appId === String(item.appId ?? item._id)
-    ? toLatestSelectedApp(client, item)
-    : toSelectedApp(item)
+  return appId === String(item.appId ?? item._id) ? toLatestSelectedApp(client, item) : toSelectedApp(item)
 }
 
 export interface ResolvedAppDetails {
@@ -64,9 +62,7 @@ export async function resolveAppDetails(
   if (flagAppId) {
     const summary = await findAppItemById(client, flagAppId)
     const appId = String(summary.appId ?? summary._id)
-    const selected = flagAppId === appId
-      ? await toLatestSelectedApp(client, summary)
-      : toSelectedApp(summary)
+    const selected = flagAppId === appId ? await toLatestSelectedApp(client, summary) : toSelectedApp(summary)
     return { selected, summary }
   }
   const workspace = await readPullWorkspaceBinding(workspaceDirectory)

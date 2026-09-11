@@ -30,7 +30,11 @@ export default class AppRedirectDefault extends Command {
 
     try {
       const context = await loadAppContext(flags.app)
-      requireVersionStatus(context.version.status, ['live', 'deprecating', 'deprecated'], 'set a default redirect URI on')
+      requireVersionStatus(
+        context.version.status,
+        ['live', 'deprecating', 'deprecated'],
+        'set a default redirect URI on'
+      )
       const uris = context.version.redirectUris ?? []
       const currentDefault = context.version.defaults?.redirectUrl
 

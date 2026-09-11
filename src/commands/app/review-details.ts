@@ -1,10 +1,10 @@
 import { Command, Flags } from '@oclif/core'
 
 import { input, isPromptCancel } from '../../lib/shared/prompts.js'
-import { AppVersion } from '../../lib/api/client.js'
+import { type AppVersion } from '../../lib/api/client.js'
 import {
   buildReviewDetailsBody,
-  ReviewDetailsChanges,
+  type ReviewDetailsChanges,
   validateDemoUrl,
   validateReviewDetailsBody,
   validateReviewDetailsChanges
@@ -98,12 +98,12 @@ export default class AppReviewDetails extends Command {
     const testCredentials = await input({
       message: 'Test credentials for the review team:',
       default: version.testCredentials ?? '',
-      validate: value => value.length <= 200 ? true : 'Test credentials must be at most 200 characters.'
+      validate: value => (value.length <= 200 ? true : 'Test credentials must be at most 200 characters.')
     })
     const notes = await input({
       message: 'Additional details (optional):',
       default: version.additionalDetails ?? '',
-      validate: value => value.length <= 500 ? true : 'Additional details must be at most 500 characters.'
+      validate: value => (value.length <= 500 ? true : 'Additional details must be at most 500 characters.')
     })
 
     /* The portal only asks for a reason when the app is private. */

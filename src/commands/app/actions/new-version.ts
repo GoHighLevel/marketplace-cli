@@ -41,25 +41,32 @@ export default class AppActionsNewVersion extends Command {
         throw new Error('Push or discard local workflow action changes before creating a new version.')
       }
       const eligible = context.remote.actions.filter(
-        action => !action.versions.some(version => version.status === 'draft') && action.versions[0]?.status === 'published'
+        action =>
+          !action.versions.some(version => version.status === 'draft') && action.versions[0]?.status === 'published'
       )
       if (!args.action && eligible.length === 0) {
         throw new Error('No published workflow action is eligible for a new version.')
       }
-      const selector = args.action ?? await select({
-        message: 'Published workflow action:',
-        choices: eligible.map(action => ({
-          name: `${action.versions[0]?.info.name ?? action.key} (${action.key})`,
-          value: action.key
+      const selector =
+        args.action ??
+        (await select({
+          message: 'Published workflow action:',
+          choices: eligible.map(action => ({
+            name: `${action.versions[0]?.info.name ?? action.key} (${action.key})`,
+            value: action.key
+          }))
         }))
-      })
-      const action = context.remote.actions.find(candidate => candidate.key === selector || candidate.templateId === selector)
+      const action = context.remote.actions.find(
+        candidate => candidate.key === selector || candidate.templateId === selector
+      )
       if (!action?.templateId) throw new Error(`Workflow action "${selector}" was not found.`)
       if (action.versions.some(version => version.status === 'draft')) {
         throw new Error(`Workflow action "${action.key}" already has a draft version.`)
       }
       if (action.versions[0]?.status !== 'published') {
-        throw new Error(`Workflow action "${action.key}" must have a latest published version before creating a new draft.`)
+        throw new Error(
+          `Workflow action "${action.key}" must have a latest published version before creating a new draft.`
+        )
       }
       const created = await withSpinner(
         'Creating workflow action version...',

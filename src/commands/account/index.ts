@@ -28,10 +28,12 @@ export default class AccountList extends Command {
       )
       const accounts = teams.map(team => developerAccountRecord(team, client.activeTeamId))
       if (this.jsonEnabled()) return { activeAccountId: client.activeTeamId ?? null, accounts }
-      this.log(renderTable(
-        ['ACTIVE', 'ACCOUNT', 'ACCOUNT ID', 'ROLE'],
-        accounts.map(account => [account.active ? '*' : '', account.name, account.accountId, account.role ?? ''])
-      ))
+      this.log(
+        renderTable(
+          ['ACTIVE', 'ACCOUNT', 'ACCOUNT ID', 'ROLE'],
+          accounts.map(account => [account.active ? '*' : '', account.name, account.accountId, account.role ?? ''])
+        )
+      )
       this.log('\nSwitch accounts with `ghl account switch <account-id>`.')
       return
     } catch (error) {

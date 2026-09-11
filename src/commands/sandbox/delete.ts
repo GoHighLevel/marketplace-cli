@@ -1,6 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core'
 
-import { ApiClient, SandboxAccount } from '../../lib/api/client.js'
+import { ApiClient, type SandboxAccount } from '../../lib/api/client.js'
 import { getConfig } from '../../lib/config/environment.js'
 import { confirm, isPromptCancel, select } from '../../lib/shared/prompts.js'
 import { removeSecrets } from '../../lib/secrets/ledger.js'
@@ -9,10 +9,7 @@ import { withSpinner } from '../../lib/shared/spinner.js'
 export default class SandboxDelete extends Command {
   static description = 'Delete a sandbox agency account from your developer account'
 
-  static examples = [
-    '<%= config.bin %> sandbox delete',
-    '<%= config.bin %> sandbox delete <companyId> --force'
-  ]
+  static examples = ['<%= config.bin %> sandbox delete', '<%= config.bin %> sandbox delete <companyId> --force']
 
   static args = {
     companyId: Args.string({ description: 'Company id of the sandbox to delete (picked interactively when omitted)' })

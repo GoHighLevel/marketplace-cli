@@ -1,27 +1,21 @@
-import { ApiClient, AppVersion } from '../api/client.js'
+import { ApiClient, type AppVersion } from '../api/client.js'
 import { resolveApp } from '../app/context.js'
 import { readPullWorkspaceBinding } from '../app/pull.js'
 import {
-  BillingSnapshot,
+  type BillingSnapshot,
   billingSubscriptionOperationLabel,
   billingUsageOperationLabel,
   fetchBillingSnapshot,
   reconcileBillingAfterPush
 } from './service.js'
 import {
-  BillingSubscriptionSyncPlan,
-  BillingUsageSyncPlan,
+  type BillingSubscriptionSyncPlan,
+  type BillingUsageSyncPlan,
   planBillingSubscriptionSync,
   planBillingUsageSync
 } from './sync.js'
-import {
-  BillingWorkspace,
-  loadBillingWorkspace
-} from './workspace.js'
-import {
-  validateBillingSubscriptionManifest,
-  validateBillingUsageManifest
-} from './schema.js'
+import { type BillingWorkspace, loadBillingWorkspace } from './workspace.js'
+import { validateBillingSubscriptionManifest, validateBillingUsageManifest } from './schema.js'
 import { getConfig } from '../config/environment.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../workflows/actions/workspace.js'
 import { loadWorkflowTriggersWorkspaceIfPresent } from '../workflows/triggers/workspace.js'
@@ -85,14 +79,18 @@ async function workflowKeys(directory: string): Promise<{
     loadWorkflowTriggersWorkspaceIfPresent(directory)
   ])
   return {
-    ...(actions ? {
-      actionKeys: new Set(actions.manifest.actions.map(action => action.key)),
-      registeredActionKeys: new Set(actions.state.baseline.actions.map(action => action.key))
-    } : {}),
-    ...(triggers ? {
-      triggerKeys: new Set(triggers.manifest.triggers.map(trigger => trigger.key)),
-      registeredTriggerKeys: new Set(triggers.state.baseline.triggers.map(trigger => trigger.key))
-    } : {})
+    ...(actions
+      ? {
+          actionKeys: new Set(actions.manifest.actions.map(action => action.key)),
+          registeredActionKeys: new Set(actions.state.baseline.actions.map(action => action.key))
+        }
+      : {}),
+    ...(triggers
+      ? {
+          triggerKeys: new Set(triggers.manifest.triggers.map(trigger => trigger.key)),
+          registeredTriggerKeys: new Set(triggers.state.baseline.triggers.map(trigger => trigger.key))
+        }
+      : {})
   }
 }
 
@@ -106,16 +104,16 @@ export async function validateLocalBillingIntent(
   } = {}
 ): Promise<string[]> {
   const keys = await workflowKeys(workspace.directory)
-  const subscriptionPlan = options.subscriptionPlan ?? planBillingSubscriptionSync(
-    workspace.state.subscriptionBaseline,
-    workspace.subscriptions,
-    workspace.state.subscriptionBaseline
-  )
-  const usagePlan = options.usagePlan ?? planBillingUsageSync(
-    workspace.state.usageBaseline,
-    workspace.usage,
-    workspace.state.usageBaseline
-  )
+  const subscriptionPlan =
+    options.subscriptionPlan ??
+    planBillingSubscriptionSync(
+      workspace.state.subscriptionBaseline,
+      workspace.subscriptions,
+      workspace.state.subscriptionBaseline
+    )
+  const usagePlan =
+    options.usagePlan ??
+    planBillingUsageSync(workspace.state.usageBaseline, workspace.usage, workspace.state.usageBaseline)
   const version = options.remoteVersion
   const desired = options.desired ?? {
     subscriptions: workspace.subscriptions,
@@ -132,8 +130,8 @@ export async function validateLocalBillingIntent(
     configurationMutationRequested: subscriptionPlan.operations.some(operation => operation.type !== 'delete-plan'),
     contextual: subscriptionPlan.operations.some(operation => operation.type !== 'delete-plan')
   } as const
-  const usageMutationRequested = usagePlan.operations.some(operation =>
-    operation.type !== 'delete-meter' && operation.type !== 'delete-tier'
+  const usageMutationRequested = usagePlan.operations.some(
+    operation => operation.type !== 'delete-meter' && operation.type !== 'delete-tier'
   )
   const usageOptions = {
     appType: version?.appType ?? workspace.app.appType,
@@ -144,18 +142,24 @@ export async function validateLocalBillingIntent(
   }
   const componentStateErrors: string[] = []
   if (desired.usage.meters.some(meter => meter.productType === 'workflow_action') && !keys.actionKeys) {
-    componentStateErrors.push('Workflow action meters require synchronized action state; run `ghl app actions pull` first.')
+    componentStateErrors.push(
+      'Workflow action meters require synchronized action state; run `ghl app actions pull` first.'
+    )
   }
   if (desired.usage.meters.some(meter => meter.productType === 'workflow_trigger') && !keys.triggerKeys) {
-    componentStateErrors.push('Workflow trigger meters require synchronized trigger state; run `ghl app triggers pull` first.')
+    componentStateErrors.push(
+      'Workflow trigger meters require synchronized trigger state; run `ghl app triggers pull` first.'
+    )
   }
-  return [...new Set([
-    ...validateBillingSubscriptionManifest(desired.subscriptions, subscriptionOptions),
-    ...validateBillingUsageManifest(desired.usage, usageOptions),
-    ...componentStateErrors,
-    ...subscriptionPlan.errors,
-    ...usagePlan.errors
-  ])]
+  return [
+    ...new Set([
+      ...validateBillingSubscriptionManifest(desired.subscriptions, subscriptionOptions),
+      ...validateBillingUsageManifest(desired.usage, usageOptions),
+      ...componentStateErrors,
+      ...subscriptionPlan.errors,
+      ...usagePlan.errors
+    ])
+  ]
 }
 
 export async function loadBillingSyncContext(directory: string): Promise<BillingSyncContext> {
@@ -216,7 +220,8 @@ export function billingPlanError(
   usagePlan: BillingUsageSyncPlan
 ): Error | undefined {
   const errors = [...subscriptionPlan.errors, ...usagePlan.errors]
-  if (errors.length > 0) return new Error(`Billing configuration cannot be pushed:\n- ${[...new Set(errors)].join('\n- ')}`)
+  if (errors.length > 0)
+    return new Error(`Billing configuration cannot be pushed:\n- ${[...new Set(errors)].join('\n- ')}`)
   const conflicts = [...subscriptionPlan.conflicts, ...usagePlan.conflicts]
   if (conflicts.length > 0) {
     return new Error(

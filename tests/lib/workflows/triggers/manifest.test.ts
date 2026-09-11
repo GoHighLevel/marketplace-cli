@@ -22,13 +22,15 @@ describe('workflow trigger manifest mapping', () => {
           url: 'https://example.com/subscriptions',
           headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' }
         },
-        filters: [{
-          field: 'contact.id',
-          title: 'Contact ID',
-          fieldType: 'select',
-          options: [{ label: 'Example', value: 'abc' }],
-          fetchOptions: undefined
-        }]
+        filters: [
+          {
+            field: 'contact.id',
+            title: 'Contact ID',
+            fieldType: 'select',
+            options: [{ label: 'Example', value: 'abc' }],
+            fetchOptions: undefined
+          }
+        ]
       },
       {
         appId: 'app-1',
@@ -55,14 +57,16 @@ describe('workflow trigger manifest mapping', () => {
     expect(createEmptyWorkflowTriggersManifest('app-1')).toEqual({ schemaVersion: 1, appId: 'app-1', triggers: [] })
     expect(createWorkflowTriggerScaffold('Contact changed', 'contact_changed')).toEqual({
       key: 'contact_changed',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: { name: 'Contact changed' },
-        filters: [],
-        customVars: [],
-        customVarsJson: {}
-      }]
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Contact changed' },
+          filters: [],
+          customVars: [],
+          customVarsJson: {}
+        }
+      ]
     })
   })
 

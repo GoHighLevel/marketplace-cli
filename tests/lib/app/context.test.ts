@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { ApiClient } from '../../../src/lib/api/client.js'
+import { type ApiClient } from '../../../src/lib/api/client.js'
 import {
   findAppById,
   findAppItemById,
@@ -12,7 +12,7 @@ import {
   resolveAppDetails,
   toSelectedApp
 } from '../../../src/lib/app/context.js'
-import { CliConfig } from '../../../src/lib/config/environment.js'
+import { type CliConfig } from '../../../src/lib/config/environment.js'
 import { saveSelectedApp } from '../../../src/lib/config/selection-store.js'
 
 let dir: string

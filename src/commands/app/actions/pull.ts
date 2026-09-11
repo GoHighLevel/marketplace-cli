@@ -25,7 +25,8 @@ export default class AppActionsPull extends Command {
     const { flags } = await this.parse(AppActionsPull)
     try {
       const binding = await readPullWorkspaceBinding(flags.directory)
-      if (!binding) throw new Error('No ghl-app.json was found. Run this command inside an app workspace or pass --directory.')
+      if (!binding)
+        throw new Error('No ghl-app.json was found. Run this command inside an app workspace or pass --directory.')
       const context = await loadWorkflowActionsRemoteContext({
         appId: flags.app,
         directory: binding.directory,

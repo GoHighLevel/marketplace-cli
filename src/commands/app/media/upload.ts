@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core'
 
-import { ProfileUpdateResult } from '../../../lib/api/client.js'
+import { type ProfileUpdateResult } from '../../../lib/api/client.js'
 import { normalizeVariadicArgs } from '../../../lib/shared/arguments.js'
 import { buildUploadForm, validateScreenshotCount } from '../../../lib/app/media.js'
 import {
@@ -151,7 +151,9 @@ export default class AppMediaUpload extends Command {
           await context.client.deleteFiles(context.selected.appId, urls)
         } catch {
           const message = error instanceof Error ? error.message : 'Failed to attach uploaded media.'
-          throw new Error(`${message} Cleanup also failed; the uploaded files may need manual deletion: ${urls.join(', ')}`)
+          throw new Error(
+            `${message} Cleanup also failed; the uploaded files may need manual deletion: ${urls.join(', ')}`
+          )
         }
         const message = error instanceof Error ? error.message : 'Failed to attach uploaded media.'
         throw new Error(`${message} The uploaded files were removed.`)

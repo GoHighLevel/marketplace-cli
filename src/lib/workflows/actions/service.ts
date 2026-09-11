@@ -1,16 +1,16 @@
-import { WorkflowActionConfig, WorkflowActionSummary } from '../../api/client.js'
+import { type WorkflowActionConfig, type WorkflowActionSummary } from '../../api/client.js'
 import {
   buildWorkflowActionsManifest,
   redactWorkflowActionVersion,
-  WorkflowActionsManifest,
-  WorkflowActionVersion,
+  type WorkflowActionsManifest,
+  type WorkflowActionVersion,
   toWorkflowActionUpdateBody
 } from './manifest.js'
 import { validateWorkflowActionsManifest } from './schema.js'
 import {
-  CreateWorkflowActionOperation,
-  WorkflowActionsSyncPlan,
-  WorkflowActionSyncOperation
+  type CreateWorkflowActionOperation,
+  type WorkflowActionsSyncPlan,
+  type WorkflowActionSyncOperation
 } from './sync.js'
 import { isWorkflowActionSecretReference } from './secrets.js'
 import { canonicalWorkflowConfig } from '../shared/verification.js'
@@ -100,9 +100,7 @@ export async function fetchWorkflowActionsSnapshot(
     }
     summaryIds.add(summary.actionId)
   }
-  const bulkConfigs = summaries.length > 0
-    ? await client.listWorkflowActionConfigs(appId)
-    : []
+  const bulkConfigs = summaries.length > 0 ? await client.listWorkflowActionConfigs(appId) : []
   const orphanConfigs = bulkConfigs.filter(config => !summaryIds.has(config.templateId))
   if (orphanConfigs.length > 0) {
     throw new Error(
@@ -119,9 +117,7 @@ export async function fetchWorkflowActionsSnapshot(
   configs.push(...recovered.flat())
 
   const recoveredVersions = new Set(configs.map(configKey))
-  const stillMissing = summaries.filter(
-    summary => !recoveredVersions.has(`${summary.actionId}:${summary.version}`)
-  )
+  const stillMissing = summaries.filter(summary => !recoveredVersions.has(`${summary.actionId}:${summary.version}`))
   if (stillMissing.length > 0) {
     throw new Error(
       `Workflow action registry contains ${stillMissing.map(summary => `${summary.actionId}@${summary.version}`).join(', ')}, ` +
@@ -130,7 +126,8 @@ export async function fetchWorkflowActionsSnapshot(
   }
   const unique = new Set<string>()
   for (const config of configs) {
-    if (config.appId !== appId) throw new Error(`Workflow action ${config.templateId} belongs to app "${config.appId}", not "${appId}".`)
+    if (config.appId !== appId)
+      throw new Error(`Workflow action ${config.templateId} belongs to app "${config.appId}", not "${appId}".`)
     const key = configKey(config)
     if (unique.has(key)) throw new Error(`Workflow action service returned duplicate ${key}.`)
     unique.add(key)
@@ -162,16 +159,16 @@ export function workflowActionPublishCandidates(
   const summariesByTemplate = new Map(summaries.map(summary => [summary.actionId, summary]))
   const candidates: WorkflowActionPublishCandidate[] = []
   for (const action of manifest.actions) {
-    const draft = action.versions.find(version =>
-      version.status === 'draft' && (!requestedVersion || version.version === requestedVersion)
+    const draft = action.versions.find(
+      version => version.status === 'draft' && (!requestedVersion || version.version === requestedVersion)
     )
     if (draft) {
       candidates.push({ action, version: draft, repairRegistry: false })
       continue
     }
     if (!action.templateId) continue
-    const published = action.versions.find(version =>
-      version.status === 'published' && (!requestedVersion || version.version === requestedVersion)
+    const published = action.versions.find(
+      version => version.status === 'published' && (!requestedVersion || version.version === requestedVersion)
     )
     const summary = summariesByTemplate.get(action.templateId)
     if (!published || !summary) continue
@@ -191,7 +188,9 @@ export function workflowActionOperationLabel(operation: WorkflowActionSyncOperat
 function assertExecutablePlan(plan: WorkflowActionsSyncPlan): void {
   if (plan.errors.length > 0) throw new Error(`Workflow action push is invalid:\n- ${plan.errors.join('\n- ')}`)
   if (plan.conflicts.length > 0) {
-    throw new Error(`Workflow action push has portal conflicts:\n- ${plan.conflicts.join('\n- ')}\nPull and reapply the local changes.`)
+    throw new Error(
+      `Workflow action push has portal conflicts:\n- ${plan.conflicts.join('\n- ')}\nPull and reapply the local changes.`
+    )
   }
 }
 
@@ -242,9 +241,15 @@ async function createAvailabilityErrors(
   checks.forEach((check, index) => {
     const operation = creates[index]
     if (check.status === 'rejected') {
-      errors.set(operation, check.reason instanceof Error ? check.reason.message : 'Action key availability check failed.')
+      errors.set(
+        operation,
+        check.reason instanceof Error ? check.reason.message : 'Action key availability check failed.'
+      )
     } else if (!check.value) {
-      errors.set(operation, `Workflow action key "${operation.key}" is no longer available. Pull and choose a different key.`)
+      errors.set(
+        operation,
+        `Workflow action key "${operation.key}" is no longer available. Pull and choose a different key.`
+      )
     }
   })
   return errors
@@ -374,14 +379,13 @@ export function reconcileWorkflowActionsAfterPush(
 
 function sameConfig(left: WorkflowActionVersion, right: WorkflowActionVersion): boolean {
   const options = { isSecretReference: isWorkflowActionSecretReference }
-  return JSON.stringify(canonicalWorkflowConfig(redactWorkflowActionVersion(left), options)) ===
+  return (
+    JSON.stringify(canonicalWorkflowConfig(redactWorkflowActionVersion(left), options)) ===
     JSON.stringify(canonicalWorkflowConfig(redactWorkflowActionVersion(right), options))
+  )
 }
 
-export function verifyWorkflowActionsApplied(
-  plan: WorkflowActionsSyncPlan,
-  remote: WorkflowActionsManifest
-): string[] {
+export function verifyWorkflowActionsApplied(plan: WorkflowActionsSyncPlan, remote: WorkflowActionsManifest): string[] {
   const mismatches: string[] = []
   for (const operation of plan.operations) {
     const action = remote.actions.find(candidate => candidate.key === operation.key)
@@ -389,12 +393,15 @@ export function verifyWorkflowActionsApplied(
       if (action) mismatches.push(`delete:${operation.key}`)
       continue
     }
-    const desired = operation.type === 'create'
-      ? operation.desired.versions.find(version => version.status === 'draft')
-      : operation.desired
+    const desired =
+      operation.type === 'create'
+        ? operation.desired.versions.find(version => version.status === 'draft')
+        : operation.desired
     const actual = desired && action?.versions.find(version => version.version === desired.version)
     if (!desired || !actual || !sameConfig(desired, actual)) {
-      mismatches.push(operation.type === 'create' ? `create:${operation.key}` : `update:${operation.key}@${operation.version}`)
+      mismatches.push(
+        operation.type === 'create' ? `create:${operation.key}` : `update:${operation.key}@${operation.version}`
+      )
     }
   }
   return mismatches

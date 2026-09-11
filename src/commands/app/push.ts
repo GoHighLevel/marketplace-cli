@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core'
 
-import { AppVersion } from '../../lib/api/client.js'
+import { type AppVersion } from '../../lib/api/client.js'
 import { persistSelection } from '../../lib/app/context.js'
 import { buildAppFiles } from '../../lib/app/manifest.js'
 import { validateLocalBillingIntent } from '../../lib/billing/command-context.js'
@@ -10,7 +10,7 @@ import { validateDynamicAuthConfiguration } from '../../lib/app/push-preflight.j
 import { loadAppVersionForExport } from '../../lib/app/pull.js'
 import { loadRemoteAppSyncContext, validationError } from '../../lib/app/sync-context.js'
 import { validateSyncPlan, verifyAppliedChanges } from '../../lib/app/sync.js'
-import { AppWorkspaceResult, writeAppWorkspace } from '../../lib/app/workspace.js'
+import { type AppWorkspaceResult, writeAppWorkspace } from '../../lib/app/workspace.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { planWorkflowActionsSync } from '../../lib/workflows/actions/sync.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../../lib/workflows/actions/workspace.js'
@@ -104,9 +104,10 @@ export default class AppPush extends Command {
       let finalVersion: AppVersion
       let workspace: AppWorkspaceResult
       try {
-        finalVersion = pushed.appliedSections.length > 0
-          ? await loadAppVersionForExport(context.client, context.plan.appId, pushed.versionId)
-          : context.remoteVersion
+        finalVersion =
+          pushed.appliedSections.length > 0
+            ? await loadAppVersionForExport(context.client, context.plan.appId, pushed.versionId)
+            : context.remoteVersion
         const finalFiles = buildAppFiles(finalVersion)
         const mismatches = verifyAppliedChanges(context.plan, finalFiles)
         if (mismatches.length > 0) {

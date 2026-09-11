@@ -201,8 +201,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       },
       {
         command: 'ghl app webhook events',
-        description:
-          'List webhook events currently unlocked by the app OAuth scopes using the live event catalog.'
+        description: 'List webhook events currently unlocked by the app OAuth scopes using the live event catalog.'
       },
       {
         command: 'ghl app webhook subscribe [events...]',
@@ -276,31 +275,38 @@ const COMMAND_GROUPS: CommandGroup[] = [
     commands: [
       {
         command: 'ghl app triggers',
-        description: 'List workflow triggers for the current workspace or selected app. Supports `--app`, `--directory`, and `--json`.'
+        description:
+          'List workflow triggers for the current workspace or selected app. Supports `--app`, `--directory`, and `--json`.'
       },
       {
         command: 'ghl app triggers pull',
-        description: 'Refresh one JSON file per trigger, regenerate the trigger guide, and reset the trigger conflict baseline.'
+        description:
+          'Refresh one JSON file per trigger, regenerate the trigger guide, and reset the trigger conflict baseline.'
       },
       {
         command: 'ghl app triggers create [name]',
-        description: 'Add a local version 1.0 draft. Automation passes `--key <stable_key>`; push creates the remote trigger.'
+        description:
+          'Add a local version 1.0 draft. Automation passes `--key <stable_key>`; push creates the remote trigger.'
       },
       {
         command: 'ghl app triggers validate',
-        description: 'Validate information, sample data, filters, option sources, custom variables, callbacks, app prerequisites, URLs, versions, and header references locally. Add `--publishable`, optionally with `--trigger` and `--version`, for release requirements.'
+        description:
+          'Validate information, sample data, filters, option sources, custom variables, callbacks, app prerequisites, URLs, versions, and header references locally. Add `--publishable`, optionally with `--trigger` and `--version`, for release requirements.'
       },
       {
         command: 'ghl app triggers diff',
-        description: 'Perform a three-way comparison and show portal conflicts plus the minimal create, update, and delete API plan.'
+        description:
+          'Perform a three-way comparison and show portal conflicts plus the minimal create, update, and delete API plan.'
       },
       {
         command: 'ghl app triggers push',
-        description: 'Validate every trigger, then push each changed trigger independently. Reports succeeded and failed counts; use `--dry-run` to preview and `--force` for deletions.'
+        description:
+          'Validate every trigger, then push each changed trigger independently. Reports succeeded and failed counts; use `--dry-run` to preview and `--force` for deletions.'
       },
       {
         command: 'ghl app triggers delete [key]',
-        description: 'Stage deletion by removing the local trigger file. Apply the permanent remote deletion with `ghl app triggers push --force`.'
+        description:
+          'Stage deletion by removing the local trigger file. Apply the permanent remote deletion with `ghl app triggers push --force`.'
       },
       {
         command: 'ghl app triggers new-version [key]',
@@ -308,7 +314,8 @@ const COMMAND_GROUPS: CommandGroup[] = [
       },
       {
         command: 'ghl app triggers publish [key]',
-        description: 'Validate and publish a trigger draft. Automation requires `--notes` and `--force`; local changes must be pushed first.'
+        description:
+          'Validate and publish a trigger draft. Automation requires `--notes` and `--force`; local changes must be pushed first.'
       }
     ]
   },
@@ -317,23 +324,28 @@ const COMMAND_GROUPS: CommandGroup[] = [
     commands: [
       {
         command: 'ghl app billing',
-        description: 'Show app-level subscription plans and usage meters. Resolves the app from the current workspace before stored selection and supports `--json`.'
+        description:
+          'Show app-level subscription plans and usage meters. Resolves the app from the current workspace before stored selection and supports `--json`.'
       },
       {
         command: 'ghl app billing pull',
-        description: 'Refresh `src/billing/subscription.json` and `usage-based.json` plus the private conflict baseline. Empty source files and directories are omitted.'
+        description:
+          'Refresh `src/billing/subscription.json` and `usage-based.json` plus the private conflict baseline. Empty source files and directories are omitted.'
       },
       {
         command: 'ghl app billing validate',
-        description: 'Validate plan caps, immutable fields, prices, durations, app/version restrictions, product references, dynamic-price bounds, directions, and non-overlapping tiers locally.'
+        description:
+          'Validate plan caps, immutable fields, prices, durations, app/version restrictions, product references, dynamic-price bounds, directions, and non-overlapping tiers locally.'
       },
       {
         command: 'ghl app billing diff',
-        description: 'Perform a three-way comparison and show portal conflicts plus the exact plan/meter/tier API operations.'
+        description:
+          'Perform a three-way comparison and show portal conflicts plus the exact plan/meter/tier API operations.'
       },
       {
         command: 'ghl app billing push',
-        description: 'Validate, merge, independently push, refetch, verify, and reconcile billing resources. `--dry-run` previews operations; deletions require `--force` in automation.'
+        description:
+          'Validate, merge, independently push, refetch, verify, and reconcile billing resources. `--dry-run` previews operations; deletions require `--force` in automation.'
       },
       {
         command: 'ghl app billing plan',
@@ -341,7 +353,8 @@ const COMMAND_GROUPS: CommandGroup[] = [
       },
       {
         command: 'ghl app billing plan create [name]',
-        description: 'Stage a free, paid, split-target, monthly, yearly, or life-time plan in `subscription.json`. The remote plan is created only by billing push.'
+        description:
+          'Stage a free, paid, split-target, monthly, yearly, or life-time plan in `subscription.json`. The remote plan is created only by billing push.'
       },
       {
         command: 'ghl app billing plan delete [plan]',
@@ -353,15 +366,18 @@ const COMMAND_GROUPS: CommandGroup[] = [
       },
       {
         command: 'ghl app billing meter create [name]',
-        description: 'Stage conversation-provider, workflow action/trigger, or custom fixed/dynamic usage pricing. Workflow products can be selected from local module JSON.'
+        description:
+          'Stage conversation-provider, workflow action/trigger, or custom fixed/dynamic usage pricing. Workflow products can be selected from local module JSON.'
       },
       {
         command: 'ghl app billing meter delete [meter]',
-        description: 'Stage meter deletion by meter id or unambiguous product id. Apply it with `ghl app billing push --force`.'
+        description:
+          'Stage meter deletion by meter id or unambiguous product id. Apply it with `ghl app billing push --force`.'
       },
       {
         command: 'ghl app pricing',
-        description: 'Show the legacy pricing summary for the selected app. Prefer `ghl app billing` for JSON-first plans and meters.'
+        description:
+          'Show the legacy pricing summary for the selected app. Prefer `ghl app billing` for JSON-first plans and meters.'
       },
       {
         command: 'ghl app pricing setup',

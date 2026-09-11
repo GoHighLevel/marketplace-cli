@@ -1,15 +1,12 @@
-import { ApiClient, WorkflowActionSummary } from '../../api/client.js'
+import { ApiClient, type WorkflowActionSummary } from '../../api/client.js'
 import { resolveApp } from '../../app/context.js'
 import { readPullWorkspaceBinding } from '../../app/pull.js'
 import { getConfig } from '../../config/environment.js'
 import { fetchWorkflowActionsSnapshot } from './service.js'
 import { workflowActionPrerequisiteErrors } from './contract.js'
-import { WorkflowActionsManifest } from './manifest.js'
-import { planWorkflowActionsSync, WorkflowActionsSyncPlan } from './sync.js'
-import {
-  loadWorkflowActionsWorkspace,
-  WorkflowActionsWorkspace
-} from './workspace.js'
+import { type WorkflowActionsManifest } from './manifest.js'
+import { planWorkflowActionsSync, type WorkflowActionsSyncPlan } from './sync.js'
+import { loadWorkflowActionsWorkspace, type WorkflowActionsWorkspace } from './workspace.js'
 
 export interface WorkflowActionsRemoteContext {
   appId: string
@@ -43,7 +40,7 @@ export async function loadWorkflowActionsRemoteContext(options: {
     ? options.requireWorkspaceMatch && binding?.appId === options.appId
       ? binding.appId
       : (await resolveApp(client, config, options.appId)).appId
-    : binding?.appId ?? (await resolveApp(client, config)).appId
+    : (binding?.appId ?? (await resolveApp(client, config)).appId)
   return {
     appId,
     client,
@@ -81,7 +78,8 @@ export async function loadWorkflowActionsSyncContext(
 }
 
 export function workflowActionsPlanError(plan: WorkflowActionsSyncPlan): Error | undefined {
-  if (plan.errors.length > 0) return new Error(`Workflow action configuration cannot be pushed:\n- ${plan.errors.join('\n- ')}`)
+  if (plan.errors.length > 0)
+    return new Error(`Workflow action configuration cannot be pushed:\n- ${plan.errors.join('\n- ')}`)
   if (plan.conflicts.length > 0) {
     return new Error(
       `Workflow action configuration conflicts with portal changes:\n- ${plan.conflicts.join('\n- ')}\n` +

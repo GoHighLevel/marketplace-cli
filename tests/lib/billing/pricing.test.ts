@@ -25,7 +25,9 @@ describe('billing settings', () => {
   })
 
   it('stores the external billing URL without a scheme, like the portal', () => {
-    expect(buildBillingSettings({ model: 'paid', externalBillingUrl: 'https://billing.example.com/checkout' })).toMatchObject({
+    expect(
+      buildBillingSettings({ model: 'paid', externalBillingUrl: 'https://billing.example.com/checkout' })
+    ).toMatchObject({
       externalBilling: true,
       externalBillingUrl: 'billing.example.com/checkout'
     })
@@ -40,16 +42,20 @@ describe('billing settings', () => {
   })
 
   it('matches the portal cutoff for external billing eligibility', () => {
-    expect(() => buildBillingSettings({
-      model: 'paid',
-      externalBillingUrl: 'https://billing.example.com',
-      createdAt: '2026-06-18T00:00:00.000Z'
-    })).toThrow(/after June 17, 2026/i)
-    expect(buildBillingSettings({
-      model: 'paid',
-      externalBillingUrl: 'https://billing.example.com',
-      createdAt: '2026-06-17T00:00:00.000Z'
-    }).externalBilling).toBe(true)
+    expect(() =>
+      buildBillingSettings({
+        model: 'paid',
+        externalBillingUrl: 'https://billing.example.com',
+        createdAt: '2026-06-18T00:00:00.000Z'
+      })
+    ).toThrow(/after June 17, 2026/i)
+    expect(
+      buildBillingSettings({
+        model: 'paid',
+        externalBillingUrl: 'https://billing.example.com',
+        createdAt: '2026-06-17T00:00:00.000Z'
+      }).externalBilling
+    ).toBe(true)
   })
 
   it('locks pricing edits for the statuses the portal disables', () => {
@@ -70,7 +76,9 @@ describe('billing plans', () => {
 
   it('requires a name and positive paid amounts', () => {
     expect(() => buildBillingPlan({ name: ' ', free: true, interval: 'month' })).toThrow(/name is required/i)
-    expect(() => buildBillingPlan({ name: 'Pro', free: false, amount: 0, interval: 'month' })).toThrow(/at least 0\.01/i)
+    expect(() => buildBillingPlan({ name: 'Pro', free: false, amount: 0, interval: 'month' })).toThrow(
+      /at least 0\.01/i
+    )
     expect(() => buildBillingPlan({ name: 'Micro', free: false, amount: 0.01, interval: 'month' })).not.toThrow()
     expect(
       buildBillingPlan({
@@ -120,7 +128,14 @@ describe('billing plans', () => {
       buildBillingPlan({ name: 'Pro', free: false, amount: 9, interval: 'month', isTemplateApp: true })
     ).toThrow(/one-time/i)
     expect(() =>
-      buildBillingPlan({ name: 'Pro', free: false, amount: 9, locationAmount: 5, interval: 'month', allowLocationPricing: false })
+      buildBillingPlan({
+        name: 'Pro',
+        free: false,
+        amount: 9,
+        locationAmount: 5,
+        interval: 'month',
+        allowLocationPricing: false
+      })
     ).toThrow(/both agencies and sub-accounts/i)
   })
 

@@ -1,10 +1,7 @@
 import { Args, Command, Flags } from '@oclif/core'
 
 import { validateLocalBillingIntent } from '../../../../lib/billing/command-context.js'
-import {
-  loadBillingWorkspace,
-  writeLocalBillingWorkspace
-} from '../../../../lib/billing/workspace.js'
+import { loadBillingWorkspace, writeLocalBillingWorkspace } from '../../../../lib/billing/workspace.js'
 import { confirm, isPromptCancel, select } from '../../../../lib/shared/prompts.js'
 
 export default class AppBillingPlanDelete extends Command {
@@ -34,18 +31,21 @@ export default class AppBillingPlanDelete extends Command {
     try {
       const workspace = await loadBillingWorkspace(flags.directory)
       if (workspace.subscriptions.plans.length === 0) throw new Error('This app has no local subscription plans.')
-      const selector = args.plan ?? await select({
-        message: 'Subscription plan to remove:',
-        choices: workspace.subscriptions.plans.map(plan => ({
-          name: `${plan.name} (${plan.id ?? 'new'})`,
-          value: plan.id ?? plan.name
+      const selector =
+        args.plan ??
+        (await select({
+          message: 'Subscription plan to remove:',
+          choices: workspace.subscriptions.plans.map(plan => ({
+            name: `${plan.name} (${plan.id ?? 'new'})`,
+            value: plan.id ?? plan.name
+          }))
         }))
-      })
       const index = workspace.subscriptions.plans.findIndex(plan => plan.id === selector || plan.name === selector)
       if (index < 0) throw new Error(`Subscription plan "${selector}" was not found in local JSON.`)
       const plan = workspace.subscriptions.plans[index]
       if (!flags.force) {
-        if (!process.stdin.isTTY || this.jsonEnabled()) throw new Error('Pass --force to remove a plan non-interactively.')
+        if (!process.stdin.isTTY || this.jsonEnabled())
+          throw new Error('Pass --force to remove a plan non-interactively.')
         const approved = await confirm({ message: `Remove "${plan.name}" from local JSON?`, default: false })
         if (!approved) {
           this.log('Cancelled — nothing was changed.')

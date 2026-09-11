@@ -1,35 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import {
-  BillingSubscriptionManifest,
-  BillingUsageManifest
-} from '../../../src/lib/billing/manifest.js'
+import { type BillingSubscriptionManifest, type BillingUsageManifest } from '../../../src/lib/billing/manifest.js'
 import {
   executeBillingSyncPlans,
   fetchBillingSnapshot,
   reconcileBillingAfterPush,
   verifyBillingOperations
 } from '../../../src/lib/billing/service.js'
-import {
-  planBillingSubscriptionSync,
-  planBillingUsageSync
-} from '../../../src/lib/billing/sync.js'
+import { planBillingSubscriptionSync, planBillingUsageSync } from '../../../src/lib/billing/sync.js'
 
 function subscriptions(name = 'Pro'): BillingSubscriptionManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    plans: [{
-      id: 'plan-1',
-      name,
-      features: [],
-      paymentTime: 'month',
-      paymentType: 'recurring',
-      amount: 10,
-      freePlan: false,
-      freeForAgency: false,
-      freeForLocation: false
-    }]
+    plans: [
+      {
+        id: 'plan-1',
+        name,
+        features: [],
+        paymentTime: 'month',
+        paymentType: 'recurring',
+        amount: 10,
+        freePlan: false,
+        freeForAgency: false,
+        freeForLocation: false
+      }
+    ]
   }
 }
 
@@ -37,36 +33,42 @@ function usage(name = 'Executions'): BillingUsageManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    meters: [{
-      id: 'meter-1',
-      productType: 'workflow_action',
-      productId: 'send_message',
-      productName: 'Send message',
-      customPriceType: 'fixed',
-      usageUnit: 'execution',
-      tiers: [{
-        id: 'tier-1',
-        name,
-        minVolume: 0,
-        maxVolume: null,
-        pricePerUnit: 0.01,
-        executionLimitPerCycle: 100
-      }]
-    }]
+    meters: [
+      {
+        id: 'meter-1',
+        productType: 'workflow_action',
+        productId: 'send_message',
+        productName: 'Send message',
+        customPriceType: 'fixed',
+        usageUnit: 'execution',
+        tiers: [
+          {
+            id: 'tier-1',
+            name,
+            minVolume: 0,
+            maxVolume: null,
+            pricePerUnit: 0.01,
+            executionLimitPerCycle: 100
+          }
+        ]
+      }
+    ]
   }
 }
 
 describe('billing API service', () => {
   it('fetches and maps subscription and usage resources together', async () => {
     const client = {
-      getBillingPlans: vi.fn().mockResolvedValue([{
-        _id: 'plan-1',
-        name: 'Pro',
-        features: [],
-        price: 10,
-        paymentTime: 'month',
-        paymentType: 'recurring'
-      }]),
+      getBillingPlans: vi.fn().mockResolvedValue([
+        {
+          _id: 'plan-1',
+          name: 'Pro',
+          features: [],
+          price: 10,
+          paymentTime: 'month',
+          paymentType: 'recurring'
+        }
+      ]),
       getBillingUsageMeters: vi.fn().mockResolvedValue([])
     }
     const snapshot = await fetchBillingSnapshot(client, 'app-1')
@@ -104,7 +106,8 @@ describe('billing API service', () => {
     ]
     const subscriptionPlan = planBillingSubscriptionSync(baseline, local, baseline)
     const client = {
-      addBillingPlan: vi.fn()
+      addBillingPlan: vi
+        .fn()
         .mockRejectedValueOnce(new Error('Stripe is unavailable'))
         .mockResolvedValueOnce({ success: true }),
       updateBillingPlan: vi.fn(),
@@ -127,10 +130,12 @@ describe('billing API service', () => {
   it('verifies applied updates and keeps failed local intent during reconciliation', () => {
     const subscriptionPlan = planBillingSubscriptionSync(subscriptions(), subscriptions('Local'), subscriptions())
     const usagePlan = planBillingUsageSync(usage(), usage('Local tier'), usage())
-    expect(verifyBillingOperations(subscriptionPlan, usagePlan, {
-      subscriptions: subscriptions('Local'),
-      usage: usage('Local tier')
-    })).toEqual([])
+    expect(
+      verifyBillingOperations(subscriptionPlan, usagePlan, {
+        subscriptions: subscriptions('Local'),
+        usage: usage('Local tier')
+      })
+    ).toEqual([])
 
     const reconciled = reconcileBillingAfterPush(
       { subscriptions: subscriptions('Local'), usage: usage('Local tier') },

@@ -1,13 +1,7 @@
 export const WORKFLOW_REMOTE_REFERENCE = '${remote}'
 export const WORKFLOW_ENV_REFERENCE = /^\$\{env:[A-Z_][A-Z0-9_]*\}$/
 
-const SAFE_LITERAL_HEADERS = new Set([
-  'accept',
-  'accept-encoding',
-  'accept-language',
-  'content-type',
-  'user-agent'
-])
+const SAFE_LITERAL_HEADERS = new Set(['accept', 'accept-encoding', 'accept-language', 'content-type', 'user-agent'])
 
 export function workflowHeaderRequiresReference(name: string): boolean {
   return !SAFE_LITERAL_HEADERS.has(name.trim().toLowerCase())

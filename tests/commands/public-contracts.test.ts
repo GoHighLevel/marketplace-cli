@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Command, Config, ux } from '@oclif/core'
+import { type Command, Config, ux } from '@oclif/core'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import AccountSwitch from '../../src/commands/account/switch.js'
@@ -42,14 +42,16 @@ let commandIds: Set<string>
 
 async function listCommandIds(directory = COMMAND_DIRECTORY, segments: string[] = []): Promise<string[]> {
   const entries = await fs.readdir(directory, { withFileTypes: true })
-  const ids = await Promise.all(entries.map(async entry => {
-    if (entry.isDirectory()) return listCommandIds(path.join(directory, entry.name), [...segments, entry.name])
-    if (!entry.isFile() || !entry.name.endsWith('.ts')) return []
+  const ids = await Promise.all(
+    entries.map(async entry => {
+      if (entry.isDirectory()) return listCommandIds(path.join(directory, entry.name), [...segments, entry.name])
+      if (!entry.isFile() || !entry.name.endsWith('.ts')) return []
 
-    const commandSegments = [...segments, entry.name.slice(0, -3)]
-    if (commandSegments.at(-1) === 'index') commandSegments.pop()
-    return [commandSegments.join(':')]
-  }))
+      const commandSegments = [...segments, entry.name.slice(0, -3)]
+      if (commandSegments.at(-1) === 'index') commandSegments.pop()
+      return [commandSegments.join(':')]
+    })
+  )
   return ids.flat()
 }
 
@@ -64,7 +66,7 @@ async function runCommand(CommandType: CommandConstructor, args: string[]): Prom
   })
   const previousExitCode = process.exitCode
   process.exitCode = undefined
-  let exitCode = 0
+  let exitCode: number
 
   try {
     const command = new CommandType(args, commandConfig)
@@ -109,11 +111,13 @@ describe('public command contracts', () => {
 
   it('exposes app pull with explicit workspace and version controls', async () => {
     expect(AppPull.args).toHaveProperty('appId')
-    expect(AppPull.flags).toEqual(expect.objectContaining({
-      version: expect.any(Object),
-      directory: expect.any(Object),
-      folder: expect.any(Object)
-    }))
+    expect(AppPull.flags).toEqual(
+      expect.objectContaining({
+        version: expect.any(Object),
+        directory: expect.any(Object),
+        folder: expect.any(Object)
+      })
+    )
     expect(commandIds).toContain('app:pull')
   })
 
@@ -179,29 +183,27 @@ describe('public command contracts', () => {
       expect(invalid.stderr).not.toMatch(/not logged in/i)
     }
 
-    const invalidUrl = await runCommand(AppWebhookUrl, [
-      'http://127.0.0.1/internal-hook',
-      '--directory',
-      configDir
-    ])
+    const invalidUrl = await runCommand(AppWebhookUrl, ['http://127.0.0.1/internal-hook', '--directory', configDir])
     expect(invalidUrl.exitCode).not.toBe(0)
     expect(invalidUrl.stderr).toMatch(/valid https:\/\/ URL/i)
     expect(invalidUrl.stderr).not.toMatch(/not logged in|app workspace|ghl-app\.json/i)
   })
 
   it('exposes the JSON-first workflow action lifecycle and validates local input before authentication', async () => {
-    expect([...commandIds]).toEqual(expect.arrayContaining([
-      'app:actions',
-      'app:actions:pull',
-      'app:actions:create',
-      'app:actions:validate',
-      'app:actions:test',
-      'app:actions:diff',
-      'app:actions:push',
-      'app:actions:delete',
-      'app:actions:new-version',
-      'app:actions:publish'
-    ]))
+    expect([...commandIds]).toEqual(
+      expect.arrayContaining([
+        'app:actions',
+        'app:actions:pull',
+        'app:actions:create',
+        'app:actions:validate',
+        'app:actions:test',
+        'app:actions:diff',
+        'app:actions:push',
+        'app:actions:delete',
+        'app:actions:new-version',
+        'app:actions:publish'
+      ])
+    )
 
     const invalid = await runCommand(AppActionsValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)
@@ -211,20 +213,19 @@ describe('public command contracts', () => {
     const workspace = path.join(configDir, 'invalid-workflow-action')
     const workflowDirectory = path.join(workspace, 'src', 'modules', 'workflows', 'actions')
     const stateDirectory = path.join(workspace, '.ghl')
-    await Promise.all([
-      fs.mkdir(workflowDirectory, { recursive: true }),
-      fs.mkdir(stateDirectory, { recursive: true })
-    ])
+    await Promise.all([fs.mkdir(workflowDirectory, { recursive: true }), fs.mkdir(stateDirectory, { recursive: true })])
     const action: any = {
       schemaVersion: 1,
       key: 'send_message',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: { name: 'Send message' },
-        customVarsJson: { result: { status: 'delivered' } },
-        customVars: [{ name: 'Status', reference: 'result', fieldType: 'string' }]
-      }]
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Send message' },
+          customVarsJson: { result: { status: 'delivered' } },
+          customVars: [{ name: 'Status', reference: 'result', fieldType: 'string' }]
+        }
+      ]
     }
     const baseline = { schemaVersion: 1, appId: 'app-1', actions: [] }
     await Promise.all([
@@ -239,7 +240,9 @@ describe('public command contracts', () => {
     const validation = await runCommand(AppActionsValidate, ['--directory', workspace, '--json'])
     expect(validation.exitCode).not.toBe(0)
     const validationFailure = JSON.parse(validation.stdout) as { error: { message: string } }
-    expect(validationFailure.error.message).toMatch(/reference "result" must select a primitive value or a non-empty array/)
+    expect(validationFailure.error.message).toMatch(
+      /reference "result" must select a primitive value or a non-empty array/
+    )
     expect(validationFailure.error.message).not.toMatch(/not logged in/i)
 
     action.versions[0].customVars = []
@@ -262,17 +265,19 @@ describe('public command contracts', () => {
   })
 
   it('exposes the JSON-first workflow trigger lifecycle and validates local input before authentication', async () => {
-    expect([...commandIds]).toEqual(expect.arrayContaining([
-      'app:triggers',
-      'app:triggers:pull',
-      'app:triggers:create',
-      'app:triggers:validate',
-      'app:triggers:diff',
-      'app:triggers:push',
-      'app:triggers:delete',
-      'app:triggers:new-version',
-      'app:triggers:publish'
-    ]))
+    expect([...commandIds]).toEqual(
+      expect.arrayContaining([
+        'app:triggers',
+        'app:triggers:pull',
+        'app:triggers:create',
+        'app:triggers:validate',
+        'app:triggers:diff',
+        'app:triggers:push',
+        'app:triggers:delete',
+        'app:triggers:new-version',
+        'app:triggers:publish'
+      ])
+    )
 
     const invalid = await runCommand(AppTriggersValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)
@@ -281,19 +286,21 @@ describe('public command contracts', () => {
   })
 
   it('exposes JSON-first billing lifecycles and validates the workspace before authentication', async () => {
-    expect([...commandIds]).toEqual(expect.arrayContaining([
-      'app:billing',
-      'app:billing:pull',
-      'app:billing:validate',
-      'app:billing:diff',
-      'app:billing:push',
-      'app:billing:plan',
-      'app:billing:plan:create',
-      'app:billing:plan:delete',
-      'app:billing:meter',
-      'app:billing:meter:create',
-      'app:billing:meter:delete'
-    ]))
+    expect([...commandIds]).toEqual(
+      expect.arrayContaining([
+        'app:billing',
+        'app:billing:pull',
+        'app:billing:validate',
+        'app:billing:diff',
+        'app:billing:push',
+        'app:billing:plan',
+        'app:billing:plan:create',
+        'app:billing:plan:delete',
+        'app:billing:meter',
+        'app:billing:meter:create',
+        'app:billing:meter:delete'
+      ])
+    )
 
     const invalid = await runCommand(AppBillingValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)

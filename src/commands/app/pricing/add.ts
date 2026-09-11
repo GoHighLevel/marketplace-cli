@@ -127,7 +127,9 @@ export default class AppPricingAdd extends Command {
                 validate: value => {
                   try {
                     const parsed = parseAmount(value, 'Location amount')
-                    return parsed !== undefined && parsed >= 0.01 ? true : 'Paid plan location amount must be at least 0.01.'
+                    return parsed !== undefined && parsed >= 0.01
+                      ? true
+                      : 'Paid plan location amount must be at least 0.01.'
                   } catch (error) {
                     return error instanceof Error ? error.message : 'Invalid amount'
                   }
@@ -141,8 +143,12 @@ export default class AppPricingAdd extends Command {
           const featureText = await input({
             message: `Plan features (comma-separated, up to ${MAX_PLAN_FEATURES}, optional):`,
             validate: value => {
-              const list = value.split(',').map(item => item.trim()).filter(Boolean)
-              if (list.length > MAX_PLAN_FEATURES) return `A pricing plan can have at most ${MAX_PLAN_FEATURES} features.`
+              const list = value
+                .split(',')
+                .map(item => item.trim())
+                .filter(Boolean)
+              if (list.length > MAX_PLAN_FEATURES)
+                return `A pricing plan can have at most ${MAX_PLAN_FEATURES} features.`
               if (isWhiteLabelFriendly) {
                 for (const feature of list) {
                   const check = validateTextForWhiteLabel(feature, `Feature "${feature}"`)
@@ -152,7 +158,10 @@ export default class AppPricingAdd extends Command {
               return true
             }
           })
-          features = featureText.split(',').map(item => item.trim()).filter(Boolean)
+          features = featureText
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean)
         }
       }
 

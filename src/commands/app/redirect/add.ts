@@ -49,7 +49,10 @@ export default class AppRedirectAdd extends Command {
         const answer = await input({
           message: 'Redirect URI(s) to add (comma-separated, http(s)):',
           validate: value => {
-            const list = value.split(',').map(item => item.trim()).filter(Boolean)
+            const list = value
+              .split(',')
+              .map(item => item.trim())
+              .filter(Boolean)
             if (list.length === 0) return 'Enter at least one redirect URI.'
             for (const url of list) {
               const check = validateOne(url)
@@ -58,7 +61,10 @@ export default class AppRedirectAdd extends Command {
             return true
           }
         })
-        urls = answer.split(',').map(item => item.trim()).filter(Boolean)
+        urls = answer
+          .split(',')
+          .map(item => item.trim())
+          .filter(Boolean)
       }
 
       for (const url of urls) {

@@ -5,7 +5,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { validateLocalBillingIntent } from '../../../src/lib/billing/command-context.js'
-import { BillingWorkspace } from '../../../src/lib/billing/workspace.js'
+import { type BillingWorkspace } from '../../../src/lib/billing/workspace.js'
 
 const directories: string[] = []
 
@@ -42,18 +42,20 @@ async function billingWorkspace(): Promise<BillingWorkspace> {
   const subscriptions = {
     schemaVersion: 1 as const,
     appId: 'app-1',
-    plans: [{
-      id: 'plan-1',
-      name: 'Legacy plan',
-      features: ['Existing feature'],
-      paymentTime: 'month' as const,
-      paymentType: 'recurring' as const,
-      amount: 5,
-      locationAmount: 5,
-      freePlan: false,
-      freeForAgency: false,
-      freeForLocation: false
-    }]
+    plans: [
+      {
+        id: 'plan-1',
+        name: 'Legacy plan',
+        features: ['Existing feature'],
+        paymentTime: 'month' as const,
+        paymentType: 'recurring' as const,
+        amount: 5,
+        locationAmount: 5,
+        freePlan: false,
+        freeForAgency: false,
+        freeForLocation: false
+      }
+    ]
   }
   const usage = { schemaVersion: 1 as const, appId: 'app-1', meters: [] }
   return {
@@ -83,9 +85,11 @@ describe('billing command context', () => {
     expect(await validateLocalBillingIntent(workspace)).toEqual([])
 
     workspace.subscriptions.plans[0].features.push('Local edit')
-    expect(await validateLocalBillingIntent(workspace)).toEqual(expect.arrayContaining([
-      expect.stringMatching(/requires the app to target both agencies and sub-accounts/i),
-      expect.stringMatching(/billing model is free/i)
-    ]))
+    expect(await validateLocalBillingIntent(workspace)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/requires the app to target both agencies and sub-accounts/i),
+        expect.stringMatching(/billing model is free/i)
+      ])
+    )
   })
 })

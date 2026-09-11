@@ -33,12 +33,14 @@ export default class AppActionsValidate extends Command {
         actionKey: flags.action,
         version: flags.version
       })
-      errors.push(...workflowActionPrerequisiteErrors(
-        workspace.allowedScopes,
-        workspace.manifest.actions.length
-      ))
+      errors.push(...workflowActionPrerequisiteErrors(workspace.allowedScopes, workspace.manifest.actions.length))
       if (errors.length > 0) throw new Error(`Workflow action configuration is invalid:\n- ${errors.join('\n- ')}`)
-      const result = { valid: true, appId: workspace.manifest.appId, actions: workspace.manifest.actions.length, errors: [] }
+      const result = {
+        valid: true,
+        appId: workspace.manifest.appId,
+        actions: workspace.manifest.actions.length,
+        errors: []
+      }
       if (this.jsonEnabled()) return result
       this.log(`Workflow action configuration is valid (${result.actions} action(s)).`)
       return

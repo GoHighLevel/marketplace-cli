@@ -1,12 +1,12 @@
-import { ApiClient, WorkflowTriggerSummary } from '../../api/client.js'
+import { ApiClient, type WorkflowTriggerSummary } from '../../api/client.js'
 import { resolveApp } from '../../app/context.js'
 import { readPullWorkspaceBinding } from '../../app/pull.js'
 import { getConfig } from '../../config/environment.js'
 import { workflowTriggerPrerequisiteErrors } from './contract.js'
 import { fetchWorkflowTriggersSnapshot } from './service.js'
-import { planWorkflowTriggersSync, WorkflowTriggersSyncPlan } from './sync.js'
-import { WorkflowTriggersManifest } from './manifest.js'
-import { loadWorkflowTriggersWorkspace, WorkflowTriggersWorkspace } from './workspace.js'
+import { planWorkflowTriggersSync, type WorkflowTriggersSyncPlan } from './sync.js'
+import { type WorkflowTriggersManifest } from './manifest.js'
+import { loadWorkflowTriggersWorkspace, type WorkflowTriggersWorkspace } from './workspace.js'
 
 export interface WorkflowTriggersRemoteContext {
   appId: string
@@ -40,7 +40,7 @@ export async function loadWorkflowTriggersRemoteContext(options: {
     ? options.requireWorkspaceMatch && binding?.appId === options.appId
       ? binding.appId
       : (await resolveApp(client, config, options.appId)).appId
-    : binding?.appId ?? (await resolveApp(client, config)).appId
+    : (binding?.appId ?? (await resolveApp(client, config)).appId)
   return {
     appId,
     client,
@@ -84,7 +84,8 @@ export async function loadWorkflowTriggersSyncContext(
 }
 
 export function workflowTriggersPlanError(plan: WorkflowTriggersSyncPlan): Error | undefined {
-  if (plan.errors.length > 0) return new Error(`Workflow trigger configuration cannot be pushed:\n- ${plan.errors.join('\n- ')}`)
+  if (plan.errors.length > 0)
+    return new Error(`Workflow trigger configuration cannot be pushed:\n- ${plan.errors.join('\n- ')}`)
   if (plan.conflicts.length > 0) {
     return new Error(
       `Workflow trigger configuration conflicts with portal changes:\n- ${plan.conflicts.join('\n- ')}\n` +

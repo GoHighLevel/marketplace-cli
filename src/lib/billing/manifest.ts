@@ -1,4 +1,4 @@
-import { BillingPlan, BillingUsageMeter } from '../api/client.js'
+import { type BillingPlan, type BillingUsageMeter } from '../api/client.js'
 
 export type BillingPaymentTime = 'month' | 'year' | 'life_time'
 export type BillingPaymentType = 'recurring' | 'one_time'
@@ -85,7 +85,11 @@ function planId(plan: BillingPlan): string {
   return id
 }
 
-function remoteAmount(plan: BillingPlan, field: 'price' | 'locationPrice', legacy: 'amount' | 'locationAmount'): number | undefined {
+function remoteAmount(
+  plan: BillingPlan,
+  field: 'price' | 'locationPrice',
+  legacy: 'amount' | 'locationAmount'
+): number | undefined {
   const value = plan[field] ?? plan[legacy]
   return typeof value === 'number' ? value : undefined
 }
@@ -110,10 +114,7 @@ function mapBillingPlan(plan: BillingPlan): BillingSubscriptionPlan {
   }
 }
 
-export function buildBillingSubscriptionManifest(
-  appId: string,
-  plans: BillingPlan[]
-): BillingSubscriptionManifest {
+export function buildBillingSubscriptionManifest(appId: string, plans: BillingPlan[]): BillingSubscriptionManifest {
   return {
     schemaVersion: 1,
     appId,
@@ -144,7 +145,9 @@ function mapBillingMeter(meter: BillingUsageMeter): BillingUsageMeterDefinition 
     usageUnit: meter.usageUnit,
     ...(meter.direction ? { direction: meter.direction } : {}),
     ...(meter.pricingPageURL ? { pricingPageUrl: meter.pricingPageURL } : {}),
-    tiers: meter.billingTier.map(mapBillingTier).sort((left, right) => (left.id as string).localeCompare(right.id as string))
+    tiers: meter.billingTier
+      .map(mapBillingTier)
+      .sort((left, right) => (left.id as string).localeCompare(right.id as string))
   }
 }
 
@@ -185,10 +188,9 @@ export function createBillingPlanScaffold(input: CreateBillingPlanScaffoldInput)
 
 export function createBillingMeterScaffold(input: CreateBillingMeterScaffoldInput): BillingUsageMeterDefinition {
   const customPriceType = input.customPriceType ?? 'fixed'
-  const usageUnit = input.usageUnit ?? (
-    input.productType === 'conversation_provider' ? 'message' :
-      input.productType === 'custom' ? 'unit' : 'execution'
-  )
+  const usageUnit =
+    input.usageUnit ??
+    (input.productType === 'conversation_provider' ? 'message' : input.productType === 'custom' ? 'unit' : 'execution')
   return {
     productType: input.productType,
     productId: input.productId.trim(),
@@ -197,19 +199,21 @@ export function createBillingMeterScaffold(input: CreateBillingMeterScaffoldInpu
     usageUnit: usageUnit.trim().toLowerCase(),
     ...(input.direction ? { direction: input.direction } : {}),
     ...(input.pricingPageUrl ? { pricingPageUrl: input.pricingPageUrl.trim() } : {}),
-    tiers: [{
-      name: input.name.trim(),
-      minVolume: 0,
-      maxVolume: null,
-      pricePerUnit: input.pricePerUnit,
-      ...(customPriceType === 'dynamic' && input.minPricePerUnit !== undefined
-        ? { minPricePerUnit: input.minPricePerUnit }
-        : {}),
-      ...(customPriceType === 'dynamic' && input.maxPricePerUnit !== undefined
-        ? { maxPricePerUnit: input.maxPricePerUnit }
-        : {}),
-      executionLimitPerCycle: input.executionLimitPerCycle
-    }]
+    tiers: [
+      {
+        name: input.name.trim(),
+        minVolume: 0,
+        maxVolume: null,
+        pricePerUnit: input.pricePerUnit,
+        ...(customPriceType === 'dynamic' && input.minPricePerUnit !== undefined
+          ? { minPricePerUnit: input.minPricePerUnit }
+          : {}),
+        ...(customPriceType === 'dynamic' && input.maxPricePerUnit !== undefined
+          ? { maxPricePerUnit: input.maxPricePerUnit }
+          : {}),
+        executionLimitPerCycle: input.executionLimitPerCycle
+      }
+    ]
   }
 }
 

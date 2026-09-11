@@ -1,8 +1,13 @@
 import { Command, Flags } from '@oclif/core'
 
 import { confirm, input, isPromptCancel, select } from '../../../lib/shared/prompts.js'
-import { BillingSettings } from '../../../lib/api/client.js'
-import { buildBillingSettings, defaultFreePlan, isFreePlanEntry, requirePricingEditable } from '../../../lib/billing/pricing.js'
+import { type BillingSettings } from '../../../lib/api/client.js'
+import {
+  buildBillingSettings,
+  defaultFreePlan,
+  isFreePlanEntry,
+  requirePricingEditable
+} from '../../../lib/billing/pricing.js'
 import { loadAppContext } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 import { validateHttpsUrl, validatePositiveInteger } from '../../../lib/shared/validation.js'
@@ -62,7 +67,9 @@ export default class AppPricingSetup extends Command {
           if (useExternal) {
             externalBillingUrl = await input({
               message: 'External billing URL (https):',
-              default: context.version.externalBillingUrl ? `https://${context.version.externalBillingUrl.replace(/^https:\/\//, '')}` : '',
+              default: context.version.externalBillingUrl
+                ? `https://${context.version.externalBillingUrl.replace(/^https:\/\//, '')}`
+                : '',
               validate: value => validateHttpsUrl(value, 'External billing URL', { publicOnly: true })
             })
           }

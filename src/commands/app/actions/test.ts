@@ -66,9 +66,11 @@ export default class AppActionsTest extends Command {
       if (!action) throw new Error(`Workflow action "${args.action}" was not found in this workspace.`)
       const version = flags.version
         ? action.versions.find(item => item.version === flags.version)
-        : action.versions.find(item => item.status === 'draft') ?? action.versions[0]
+        : (action.versions.find(item => item.status === 'draft') ?? action.versions[0])
       if (!version) {
-        throw new Error(`Workflow action "${action.key}"${flags.version ? ` version ${flags.version}` : ''} was not found.`)
+        throw new Error(
+          `Workflow action "${action.key}"${flags.version ? ` version ${flags.version}` : ''} was not found.`
+        )
       }
 
       const context = await loadWorkflowActionsRemoteContext({

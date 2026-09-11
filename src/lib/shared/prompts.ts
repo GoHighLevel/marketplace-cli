@@ -6,7 +6,7 @@ import {
   select as inquirerSelect
 } from '@inquirer/prompts'
 
-import { CheckboxSearchConfig, checkboxSearch as rawCheckboxSearch } from './checkbox-search.js'
+import { type CheckboxSearchConfig, checkboxSearch as rawCheckboxSearch } from './checkbox-search.js'
 
 export class PromptCancelledError extends Error {
   constructor() {

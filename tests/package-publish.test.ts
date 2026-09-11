@@ -17,10 +17,12 @@ const PACKAGE_FILE = path.join(ROOT_DIRECTORY, 'package.json')
 
 async function listFiles(directory: string): Promise<string[]> {
   const entries = await fs.readdir(directory, { withFileTypes: true })
-  const files = await Promise.all(entries.map(async entry => {
-    const entryPath = path.join(directory, entry.name)
-    return entry.isDirectory() ? listFiles(entryPath) : [entryPath]
-  }))
+  const files = await Promise.all(
+    entries.map(async entry => {
+      const entryPath = path.join(directory, entry.name)
+      return entry.isDirectory() ? listFiles(entryPath) : [entryPath]
+    })
+  )
   return files.flat()
 }
 

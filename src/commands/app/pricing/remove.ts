@@ -23,7 +23,9 @@ export default class AppPricingRemove extends Command {
     const { args, flags } = await this.parse(AppPricingRemove)
 
     if (args.planId === undefined && !process.stdin.isTTY) {
-      this.error('Pass the plan id when running non-interactively, e.g. `ghl app pricing remove <planId>` (see `ghl app pricing`).')
+      this.error(
+        'Pass the plan id when running non-interactively, e.g. `ghl app pricing remove <planId>` (see `ghl app pricing`).'
+      )
     }
 
     try {
@@ -58,9 +60,7 @@ export default class AppPricingRemove extends Command {
         const ok = await confirm({ message: `Remove plan ${planId}?`, default: false })
         if (!ok) return
       }
-      await withSpinner('Removing plan...', () =>
-        context.client.deleteBillingPlan(context.selected.appId, planId)
-      )
+      await withSpinner('Removing plan...', () => context.client.deleteBillingPlan(context.selected.appId, planId))
       this.log(`Plan ${planId} removed.`)
     } catch (error) {
       if (isPromptCancel(error)) {

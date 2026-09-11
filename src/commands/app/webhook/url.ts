@@ -28,7 +28,9 @@ export default class AppWebhookUrl extends Command {
     const { args, flags } = await this.parse(AppWebhookUrl)
 
     if (args.url === undefined && !process.stdin.isTTY) {
-      this.error('Pass the webhook URL when running non-interactively, e.g. `ghl app webhook url https://acme.com/webhooks`.')
+      this.error(
+        'Pass the webhook URL when running non-interactively, e.g. `ghl app webhook url https://acme.com/webhooks`.'
+      )
     }
     const providedUrl = args.url?.trim()
     if (args.url !== undefined) {
@@ -37,18 +39,19 @@ export default class AppWebhookUrl extends Command {
     }
 
     try {
-      const context = await withSpinner(
-        'Loading webhook workspace...',
-        () => loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
+      const context = await withSpinner('Loading webhook workspace...', () =>
+        loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
       )
 
       const url =
         providedUrl ??
-        (await input({
-          message: 'Webhook URL (https):',
-          default: context.remoteFiles.webhooks.webhookUrl,
-          validate: value => validateHttpsUrl(value, 'Webhook URL', { publicOnly: true })
-        })).trim()
+        (
+          await input({
+            message: 'Webhook URL (https):',
+            default: context.remoteFiles.webhooks.webhookUrl,
+            validate: value => validateHttpsUrl(value, 'Webhook URL', { publicOnly: true })
+          })
+        ).trim()
       const validation = validateHttpsUrl(url, 'Webhook URL', { publicOnly: true })
       if (validation !== true) this.error(validation)
 

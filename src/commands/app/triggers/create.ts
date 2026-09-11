@@ -36,8 +36,21 @@ export default class AppTriggersCreate extends Command {
     }
     try {
       const workspace = await loadWorkflowTriggersWorkspace(flags.directory)
-      const name = args.name ?? await input({ message: 'Trigger name:', validate: value => value.trim() ? true : 'Trigger name is required.' })
-      const key = flags.key ?? await input({ message: 'Trigger key:', validate: value => /^[a-z][_a-z0-9]*$/.test(value) ? true : 'Use lowercase letters, numbers, and underscores, starting with a letter.' })
+      const name =
+        args.name ??
+        (await input({
+          message: 'Trigger name:',
+          validate: value => (value.trim() ? true : 'Trigger name is required.')
+        }))
+      const key =
+        flags.key ??
+        (await input({
+          message: 'Trigger key:',
+          validate: value =>
+            /^[a-z][_a-z0-9]*$/.test(value)
+              ? true
+              : 'Use lowercase letters, numbers, and underscores, starting with a letter.'
+        }))
       const manifest = structuredClone(workspace.manifest)
       manifest.triggers.push(createWorkflowTriggerScaffold(name.trim(), key.trim()))
       manifest.triggers.sort((left, right) => left.key.localeCompare(right.key))

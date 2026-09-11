@@ -35,9 +35,7 @@ describe('withEscapeCancel', () => {
   it('treats Ctrl+C (ExitPromptError) as a cancel', async () => {
     const exit = new Error('User force closed the prompt')
     exit.name = 'ExitPromptError'
-    await expect(withEscapeCancel(() => Promise.reject(exit), fakeStdin())).rejects.toBeInstanceOf(
-      PromptCancelledError
-    )
+    await expect(withEscapeCancel(() => Promise.reject(exit), fakeStdin())).rejects.toBeInstanceOf(PromptCancelledError)
   })
 
   it('re-throws real errors and removes the listener', async () => {

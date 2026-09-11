@@ -4,18 +4,9 @@ import path from 'node:path'
 import { MAX_PLAN_FEATURES, MAX_PLANS } from '../billing/pricing.js'
 import { writeTextFileAtomic } from '../shared/atomic-file.js'
 import { SUPPORTED_SERVICES } from './profile-sections.js'
-import {
-  WORKFLOW_ACTION_FIELD_TYPES,
-  WORKFLOW_ACTION_INTERNAL_REFERENCES
-} from '../workflows/actions/contract.js'
-import {
-  WORKFLOW_ACTION_KEY_MAX_LENGTH,
-  WORKFLOW_ACTION_KEY_PATTERN
-} from '../workflows/actions/key.js'
-import {
-  WORKFLOW_TRIGGER_FIELD_TYPES,
-  WORKFLOW_TRIGGER_INTERNAL_REFERENCES
-} from '../workflows/triggers/contract.js'
+import { WORKFLOW_ACTION_FIELD_TYPES, WORKFLOW_ACTION_INTERNAL_REFERENCES } from '../workflows/actions/contract.js'
+import { WORKFLOW_ACTION_KEY_MAX_LENGTH, WORKFLOW_ACTION_KEY_PATTERN } from '../workflows/actions/key.js'
+import { WORKFLOW_TRIGGER_FIELD_TYPES, WORKFLOW_TRIGGER_INTERNAL_REFERENCES } from '../workflows/triggers/contract.js'
 import {
   WORKFLOW_FIELD_KEY_MAX_LENGTH,
   WORKFLOW_REFERENCE_MAX_LENGTH,
@@ -33,7 +24,7 @@ export const JSON_SCHEMA_NAMES = [
   'usage-based'
 ] as const
 
-export type JsonSchemaName = typeof JSON_SCHEMA_NAMES[number]
+export type JsonSchemaName = (typeof JSON_SCHEMA_NAMES)[number]
 
 export const JSON_SCHEMA_RELATIVE_PATHS: Readonly<Record<JsonSchemaName, string>> = {
   app: '.ghl/schemas/ghl-app.schema.json',
@@ -148,10 +139,7 @@ const appBaseSchema = rootSchema(
     listing: object(
       {
         private: booleanValue(),
-        userTypes: arrayOf(
-          { enum: ['Company', 'Location'] },
-          { minItems: 1, maxItems: 2, uniqueItems: true }
-        ),
+        userTypes: arrayOf({ enum: ['Company', 'Location'] }, { minItems: 1, maxItems: 2, uniqueItems: true }),
         isWhiteLabelFriendly: booleanValue(),
         isAgencyBulkInstallEnabled: booleanValue(),
         searchKeywords: stringArray({ uniqueItems: true })
@@ -192,10 +180,7 @@ const appBaseSchema = rootSchema(
           ['clientKey', 'redirectUrl']
         ),
         clientKeys: arrayOf(
-          object(
-            { id: stringValue(), name: stringValue(), isDefault: booleanValue() },
-            ['id', 'name', 'isDefault']
-          )
+          object({ id: stringValue(), name: stringValue(), isDefault: booleanValue() }, ['id', 'name', 'isDefault'])
         )
       },
       ['allowedScopes', 'redirectUris', 'defaults', 'clientKeys']
@@ -208,10 +193,7 @@ const appBaseSchema = rootSchema(
         documentationUrl: stringValue(),
         termsAndConditionsUrl: stringValue(),
         privacyPolicyUrl: stringValue(),
-        supportedServices: arrayOf(
-          { enum: [...SUPPORTED_SERVICES] },
-          { uniqueItems: true }
-        )
+        supportedServices: arrayOf({ enum: [...SUPPORTED_SERVICES] }, { uniqueItems: true })
       },
       [
         'supportEmail',
@@ -305,9 +287,7 @@ const webhookSchema = rootSchema(
     appId: { type: 'string', pattern: RESOURCE_IDENTIFIER_PATTERN },
     versionId: { type: 'string', pattern: RESOURCE_IDENTIFIER_PATTERN },
     webhookUrl: stringValue(),
-    subscribedEvents: arrayOf(
-      object({ name: nonEmptyString(), url: stringValue() }, ['name'])
-    )
+    subscribedEvents: arrayOf(object({ name: nonEmptyString(), url: stringValue() }, ['name']))
   },
   ['schemaVersion', 'appId', 'versionId', 'webhookUrl', 'subscribedEvents']
 )
@@ -318,39 +298,38 @@ const headersSchema = (): JsonSchema => ({
   additionalProperties: nonEmptyString()
 })
 
-const workflowInfoSchema = (limits = false): JsonSchema => object(
-  {
-    name: nonEmptyString(),
-    description: { type: 'string', ...(limits ? { maxLength: 200 } : {}) },
-    summary: { type: 'string', ...(limits ? { maxLength: 500 } : {}) },
-    groupName: stringValue(),
-    keywords: stringArray(),
-    icon: stringValue(),
-    screenshots: stringArray()
-  },
-  ['name']
-)
+const workflowInfoSchema = (limits = false): JsonSchema =>
+  object(
+    {
+      name: nonEmptyString(),
+      description: { type: 'string', ...(limits ? { maxLength: 200 } : {}) },
+      summary: { type: 'string', ...(limits ? { maxLength: 500 } : {}) },
+      groupName: stringValue(),
+      keywords: stringArray(),
+      icon: stringValue(),
+      screenshots: stringArray()
+    },
+    ['name']
+  )
 
-const workflowOptionSchema = (): JsonSchema => object(
-  {
-    label: nonEmptyString(),
-    value: nonEmptyString(),
-    description: stringValue(),
-    disabled: booleanValue(),
-    icon: stringValue(),
-    iconUrl: stringValue()
-  },
-  ['label', 'value']
-)
+const workflowOptionSchema = (): JsonSchema =>
+  object(
+    {
+      label: nonEmptyString(),
+      value: nonEmptyString(),
+      description: stringValue(),
+      disabled: booleanValue(),
+      icon: stringValue(),
+      iconUrl: stringValue()
+    },
+    ['label', 'value']
+  )
 
 const actionDefinitions: Record<string, JsonSchema> = {
   actionInfo: workflowInfoSchema(),
   actionOption: workflowOptionSchema(),
   headers: headersSchema(),
-  validationRule: object(
-    { rule: nonEmptyString(), errorMessage: nonEmptyString() },
-    ['rule', 'errorMessage']
-  ),
+  validationRule: object({ rule: nonEmptyString(), errorMessage: nonEmptyString() }, ['rule', 'errorMessage']),
   fetchOptions: object({
     url: stringValue(),
     queryParams: arbitraryObject(),
@@ -647,10 +626,7 @@ const triggerDefinitions: Record<string, JsonSchema> = {
   triggerInfo: workflowInfoSchema(true),
   triggerOption: workflowOptionSchema(),
   headers: headersSchema(),
-  externalSource: object(
-    { url: nonEmptyString(), headers: reference('headers') },
-    ['url']
-  ),
+  externalSource: object({ url: nonEmptyString(), headers: reference('headers') }, ['url']),
   triggerFilter: object(
     {
       field: { type: 'string', minLength: 1, maxLength: WORKFLOW_REFERENCE_MAX_LENGTH },
@@ -738,16 +714,7 @@ const subscriptionSchema = rootSchema(
         freeForAgency: booleanValue(),
         freeForLocation: booleanValue()
       },
-      [
-        'name',
-        'features',
-        'paymentTime',
-        'paymentType',
-        'amount',
-        'freePlan',
-        'freeForAgency',
-        'freeForLocation'
-      ]
+      ['name', 'features', 'paymentTime', 'paymentType', 'amount', 'freePlan', 'freeForAgency', 'freeForLocation']
     )
   }
 )
@@ -875,7 +842,7 @@ async function assertSchemaPathsSafe(directory: string): Promise<void> {
 async function writeSchemaIfChanged(file: string, schema: JsonSchema): Promise<void> {
   const contents = `${JSON.stringify(schema, null, 2)}\n`
   try {
-    if (await fs.readFile(file, 'utf8') === contents) return
+    if ((await fs.readFile(file, 'utf8')) === contents) return
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
@@ -917,7 +884,9 @@ export async function writeJsonSchemaWorkspace(inputDirectory: string): Promise<
   const schemaDirectory = path.join(directory, '.ghl', 'schemas')
   await fs.mkdir(schemaDirectory, { recursive: true, mode: 0o700 })
   const schemaFiles = JSON_SCHEMA_NAMES.map(name => path.join(directory, JSON_SCHEMA_RELATIVE_PATHS[name]))
-  await Promise.all(JSON_SCHEMA_NAMES.map((name, index) => writeSchemaIfChanged(schemaFiles[index], JSON_SCHEMAS[name])))
+  await Promise.all(
+    JSON_SCHEMA_NAMES.map((name, index) => writeSchemaIfChanged(schemaFiles[index], JSON_SCHEMAS[name]))
+  )
   const vscode = await createVscodeSettings(directory)
   return {
     schemaDirectory,

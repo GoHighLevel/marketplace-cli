@@ -16,11 +16,9 @@ const directories: string[] = []
 function localReferences(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(localReferences)
   if (!value || typeof value !== 'object') return []
-  return Object.entries(value).flatMap(([key, child]) => (
-    key === '$ref' && typeof child === 'string' && child.startsWith('#/')
-      ? [child]
-      : localReferences(child)
-  ))
+  return Object.entries(value).flatMap(([key, child]) =>
+    key === '$ref' && typeof child === 'string' && child.startsWith('#/') ? [child] : localReferences(child)
+  )
 }
 
 function resolveLocalReference(schema: Record<string, unknown>, reference: string): unknown {
@@ -28,9 +26,11 @@ function resolveLocalReference(schema: Record<string, unknown>, reference: strin
     .slice(2)
     .split('/')
     .map(segment => segment.replaceAll('~1', '/').replaceAll('~0', '~'))
-    .reduce<unknown>((current, segment) => (
-      current && typeof current === 'object' ? (current as Record<string, unknown>)[segment] : undefined
-    ), schema)
+    .reduce<unknown>(
+      (current, segment) =>
+        current && typeof current === 'object' ? (current as Record<string, unknown>)[segment] : undefined,
+      schema
+    )
 }
 
 async function workspace(): Promise<string> {

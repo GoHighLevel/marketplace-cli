@@ -56,7 +56,9 @@ export default class AppScopesRemove extends Command {
       const removedEvents = (context.version.subscribedEvents ?? []).length - events.length
       if (removedEvents > 0 && !flags.force) {
         if (!process.stdin.isTTY) {
-          this.error(`${removedEvents} dependent webhook subscription(s) will be removed; pass --force non-interactively.`)
+          this.error(
+            `${removedEvents} dependent webhook subscription(s) will be removed; pass --force non-interactively.`
+          )
         }
         const ok = await confirm({
           message: `Remove the scopes and ${removedEvents} dependent webhook subscription(s)?`,
