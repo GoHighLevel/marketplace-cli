@@ -1,7 +1,7 @@
 {
   "name": "@gohighlevel/marketplace-cli",
   "version": "0.1.1",
-  "description": "Command-line interface for the GoHighLevel marketplace developer portal — build, configure, and publish marketplace apps from the terminal",
+  "description": "Command-line interface for the GoHighLevel marketplace developer portal \u2014 build, configure, and publish marketplace apps from the terminal",
   "keywords": [
     "gohighlevel",
     "highlevel",
@@ -43,10 +43,13 @@
     "pretest": "npm run build && npm run manifest",
     "test": "vitest run",
     "posttest": "node scripts/cleanup-manifest.mjs",
-    "lint": "tsc --noEmit",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "eslint --fix . && prettier --write .",
+    "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm test && npm run lint",
     "prepack": "npm run build && npm run manifest",
-    "postpack": "node scripts/cleanup-manifest.mjs"
+    "postpack": "node scripts/cleanup-manifest.mjs",
+    "prepare": "husky"
   },
   "oclif": {
     "bin": "ghl",
@@ -65,7 +68,7 @@
         "description": "Manage apps in your developer account (create, configure, publish)"
       },
       "app:keys": {
-        "description": "OAuth client keys — each key is a client id + one-time secret pair"
+        "description": "OAuth client keys \u2014 each key is a client id + one-time secret pair"
       },
       "app:scopes": {
         "description": "OAuth scopes the app requests at install time"
@@ -117,11 +120,28 @@
     "redos-detector": "^6.1.4"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@inquirer/testing": "^3.3.9",
     "@types/node": "^22.10.0",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
     "oclif": "^4.23.30",
+    "prettier": "^3.9.6",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.70.0",
     "vite": "^6.4.3",
     "vitest": "^3.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }
