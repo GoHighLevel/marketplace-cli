@@ -10,6 +10,9 @@ import {
   JSON_SCHEMA_NAMES,
   writeJsonSchemaWorkspace
 } from './json-schema.js'
+import { synchronizeTypeScriptConfig, type TypeScriptConfigResult } from './typescript-config.js'
+
+export type { TypeScriptConfigResult } from './typescript-config.js'
 
 export const DEFAULT_TYPES_FILENAME = 'ghl-app.d.ts'
 
@@ -60,6 +63,12 @@ export interface TypeDeclarationOptions {
 
 export interface TypesWorkspaceResult extends JsonSchemaWorkspaceResult {
   declarationFile: string
+  typescriptConfig: TypeScriptConfigResult
+}
+
+export interface TypeDeclarationWorkspaceResult {
+  declarationFile: string
+  typescriptConfig: TypeScriptConfigResult
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -286,7 +295,17 @@ export async function writeTypesWorkspace(
   options: TypeDeclarationOptions = {}
 ): Promise<TypesWorkspaceResult> {
   const directory = path.resolve(inputDirectory)
-  const declarationFile = await writeTypeDeclarationFile(directory, options)
+  const typeDeclaration = await writeTypeDeclarationWorkspace(directory, options)
   const schemaResult = await writeJsonSchemaWorkspace(directory)
-  return { declarationFile, ...schemaResult }
+  return { ...typeDeclaration, ...schemaResult }
+}
+
+export async function writeTypeDeclarationWorkspace(
+  inputDirectory: string,
+  options: TypeDeclarationOptions = {}
+): Promise<TypeDeclarationWorkspaceResult> {
+  const directory = path.resolve(inputDirectory)
+  const declarationFile = await writeTypeDeclarationFile(directory, options)
+  const typescriptConfig = await synchronizeTypeScriptConfig(directory, declarationFile)
+  return { declarationFile, typescriptConfig }
 }

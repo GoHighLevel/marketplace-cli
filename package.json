@@ -116,6 +116,7 @@
     "@oclif/plugin-commands": "^4.1.62",
     "@oclif/plugin-help": "^6.2.56",
     "acorn": "^8.18.0",
+    "jsonc-parser": "^3.3.1",
     "open": "^10.1.0",
     "redos-detector": "^6.1.4"
   },

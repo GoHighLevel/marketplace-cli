@@ -66,7 +66,14 @@ describe('writeTypesWorkspace', () => {
     const result = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
 
     expect(result.declarationFile).toBe(path.join(directory, DEFAULT_TYPES_FILENAME))
+    expect(result.typescriptConfig).toEqual({
+      file: path.join(directory, 'tsconfig.json'),
+      status: 'created'
+    })
     await expect(fs.readFile(result.declarationFile, 'utf8')).resolves.toBe(generateTypeDeclarations(GENERATED_AT))
+    await expect(fs.readFile(result.typescriptConfig.file, 'utf8')).resolves.toBe(
+      `${JSON.stringify({ include: [DEFAULT_TYPES_FILENAME, 'src/**/*'] }, null, 2)}\n`
+    )
     expect(result.schemaFiles).toEqual(
       JSON_SCHEMA_NAMES.map(name => path.join(directory, JSON_SCHEMA_RELATIVE_PATHS[name]))
     )
@@ -81,8 +88,114 @@ describe('writeTypesWorkspace', () => {
     })
 
     expect(result.declarationFile).toBe(path.join(directory, 'generated', 'ghl-types.d.ts'))
+    await expect(fs.readFile(result.typescriptConfig.file, 'utf8')).resolves.toContain('generated/ghl-types.d.ts')
     await expect(writeTypesWorkspace(directory, { output: '../outside.d.ts' })).rejects.toThrow(/inside.*workspace/i)
     await expect(writeTypesWorkspace(directory, { output: 'generated/types.ts' })).rejects.toThrow(/\.d\.ts/i)
+  })
+
+  it('creates a TypeScript project that can import the generated declarations', async () => {
+    const directory = await workspace()
+    const sourceDirectory = path.join(directory, 'src')
+    await fs.mkdir(sourceDirectory)
+    await fs.writeFile(
+      path.join(sourceDirectory, 'manifest.ts'),
+      "import type { GhlAppManifest } from '../ghl-app.js'\nexport type AppManifest = GhlAppManifest\n"
+    )
+    await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+
+    const parsed = ts.getParsedCommandLineOfConfigFile(
+      path.join(directory, 'tsconfig.json'),
+      {},
+      {
+        ...ts.sys,
+        onUnRecoverableConfigFileDiagnostic: () => undefined
+      }
+    )
+    expect(parsed).toBeDefined()
+    expect(parsed?.fileNames).toEqual(
+      expect.arrayContaining([path.join(directory, DEFAULT_TYPES_FILENAME), path.join(sourceDirectory, 'manifest.ts')])
+    )
+    expect(ts.getPreEmitDiagnostics(ts.createProgram(parsed?.fileNames ?? [], parsed?.options ?? {}))).toEqual([])
+  })
+
+  it('updates a commented tsconfig without losing developer settings and is idempotent', async () => {
+    const directory = await workspace()
+    const configFile = path.join(directory, 'tsconfig.json')
+    await fs.writeFile(
+      configFile,
+      '{\n  /* Keep this project setting. */\n  "compilerOptions": { "strict": true },\n  "include": ["src/**/*"],\n}\n'
+    )
+
+    const first = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+    const firstContents = await fs.readFile(configFile, 'utf8')
+    const second = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+
+    expect(first.typescriptConfig).toEqual({ file: configFile, status: 'updated' })
+    expect(second.typescriptConfig).toEqual({ file: configFile, status: 'unchanged' })
+    expect(await fs.readFile(configFile, 'utf8')).toBe(firstContents)
+    expect(firstContents).toContain('/* Keep this project setting. */')
+    expect(firstContents).toContain('"strict": true')
+    expect(firstContents).toMatch(/"include":\s*\[\s*"src\/\*\*\/\*",\s*"ghl-app\.d\.ts"\s*]/)
+  })
+
+  it('preserves an existing config whose default source selection already includes declarations', async () => {
+    const directory = await workspace()
+    const configFile = path.join(directory, 'tsconfig.json')
+    const contents = '{\n  "compilerOptions": { "strict": true } /* Keep compiler settings. */\n}\n'
+    await fs.writeFile(configFile, contents)
+
+    const result = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+
+    expect(result.typescriptConfig.status).toBe('unchanged')
+    await expect(fs.readFile(configFile, 'utf8')).resolves.toBe(contents)
+  })
+
+  it('adds declarations to an explicit files list without changing its source selection', async () => {
+    const directory = await workspace()
+    const configFile = path.join(directory, 'tsconfig.json')
+    await fs.writeFile(configFile, `${JSON.stringify({ files: ['src/index.ts'] }, null, 2)}\n`)
+
+    const result = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+    const config = JSON.parse(await fs.readFile(configFile, 'utf8')) as { files: string[]; include?: string[] }
+
+    expect(result.typescriptConfig.status).toBe('updated')
+    expect(config.files).toEqual(['src/index.ts', DEFAULT_TYPES_FILENAME])
+    expect(config.include).toBeUndefined()
+  })
+
+  it('updates an existing JavaScript project instead of creating a competing tsconfig', async () => {
+    const directory = await workspace()
+    const configFile = path.join(directory, 'jsconfig.json')
+    await fs.writeFile(configFile, `${JSON.stringify({ include: ['src/**/*.js'] }, null, 2)}\n`)
+
+    const result = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+    const config = JSON.parse(await fs.readFile(configFile, 'utf8')) as { include: string[] }
+
+    expect(result.typescriptConfig).toEqual({ file: configFile, status: 'updated' })
+    expect(config.include).toEqual(['src/**/*.js', DEFAULT_TYPES_FILENAME])
+    await expect(fs.stat(path.join(directory, 'tsconfig.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('does not overwrite an invalid or linked TypeScript config', async () => {
+    const directory = await workspace()
+    const configFile = path.join(directory, 'tsconfig.json')
+    await fs.writeFile(configFile, '{ invalid')
+
+    await expect(writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })).rejects.toThrow(
+      /tsconfig\.json.*invalid/i
+    )
+    await expect(fs.readFile(configFile, 'utf8')).resolves.toBe('{ invalid')
+
+    const linkedDirectory = await workspace()
+    const targetDirectory = await workspace()
+    const target = path.join(targetDirectory, 'tsconfig.json')
+    await fs.writeFile(target, '{"compilerOptions":{}}')
+    await fs.symlink(target, path.join(linkedDirectory, 'tsconfig.json'))
+
+    await expect(writeTypesWorkspace(linkedDirectory, { generatedAt: GENERATED_AT })).rejects.toThrow(
+      /tsconfig\.json.*symbolic link/i
+    )
+    await expect(fs.readFile(target, 'utf8')).resolves.toBe('{"compilerOptions":{}}')
   })
 
   it('rejects a symbolic-link output without changing its target', async () => {

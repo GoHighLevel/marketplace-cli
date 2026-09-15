@@ -53,12 +53,12 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app pull [appId]',
         description:
-          'Refresh generated JSON from the portal. Inside a workspace, app and version IDs come from `ghl-app.json` and no folder prompt is shown. Outside a workspace, provide or select an app and optionally use `--version`, `--directory`, or `--folder`. Add `--with-types` to generate TypeScript declarations, local JSON Schemas, schema references, and editor associations.'
+          'Refresh generated JSON from the portal. Inside a workspace, app and version IDs come from `ghl-app.json` and no folder prompt is shown. Outside a workspace, provide or select an app and optionally use `--version`, `--directory`, or `--folder`. Add `--with-types` to generate TypeScript declarations, wire the declaration into the project config, and add local JSON Schemas and editor associations.'
       },
       {
         command: 'ghl app types',
         description:
-          'Generate `ghl-app.d.ts`, all local JSON Schemas, and VS Code schema associations without authentication or API calls. Use `--directory <app-folder>` for another workspace or `--output <file.d.ts>` for a custom declaration path inside it.'
+          'Generate `ghl-app.d.ts`, wire it into `tsconfig.json` or `jsconfig.json`, and generate all local JSON Schemas and VS Code schema associations without authentication or API calls. Use `--directory <app-folder>` for another workspace or `--output <file.d.ts>` for a custom declaration path inside it.'
       },
       {
         command: 'ghl app validate',
@@ -512,7 +512,7 @@ ${audience}
 ## GHL marketplace app workspace
 
 - \`ghl-app.json\` contains app identity, listing, profiles, OAuth metadata, support, billing settings, and review configuration.
-- \`ghl-app.d.ts\` provides optional compile-time types only when TypeScript or JavaScript tooling imports its interfaces.
+- \`ghl-app.d.ts\` provides compile-time types when TypeScript or JavaScript tooling imports its interfaces; the generated declaration is automatically included in \`tsconfig.json\` or \`jsconfig.json\`.
 - \`.ghl/schemas/*.schema.json\` and \`.vscode/settings.json\` provide JSON validation and autocomplete when type/schema generation is enabled.
 - \`src/webhooks/ghl-webhooks.json\` contains configured webhook settings and is omitted when unused.
 - \`src/modules/workflows/actions/<action-name>.json\` contains one app-scoped action and all of its versions; its required underscore \`key\` must match the hyphenated filename.

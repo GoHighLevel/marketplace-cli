@@ -151,6 +151,10 @@ describe('public command contracts', () => {
       appId: 'app-1',
       directory,
       declarationFile: path.join(directory, 'generated', 'ghl-types.d.ts'),
+      typescriptConfig: {
+        file: path.join(directory, 'tsconfig.json'),
+        status: 'created'
+      },
       schemaFiles: expect.any(Array)
     })
     expect(commandIds).toContain('app:types')

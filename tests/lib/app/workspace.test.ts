@@ -179,7 +179,8 @@ describe('writeAppWorkspace', () => {
     )
     expect(claude).toMatch(/CLAUDE\.md[\s\S]*Claude Code[\s\S]*complete command reference/i)
     for (const document of [agents, claude]) {
-      expect(document).toContain('`ghl-app.d.ts` provides optional compile-time types')
+      expect(document).toContain('`ghl-app.d.ts` provides compile-time types')
+      expect(document).toContain('automatically included in `tsconfig.json` or `jsconfig.json`')
       expect(document).toContain('`.ghl/schemas/*.schema.json` and `.vscode/settings.json` provide JSON validation')
       expect(document).toContain('`--with-types`')
       expect(document).toContain('`--json-schema`')

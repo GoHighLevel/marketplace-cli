@@ -40,6 +40,10 @@ export default class AppTypes extends GhlCommand {
     if (this.jsonEnabled()) return result
 
     this.log(`Generated TypeScript declarations at ${generated.declarationFile}`)
+    if (generated.typescriptConfig.status === 'created')
+      this.log(`Created TypeScript project configuration at ${generated.typescriptConfig.file}`)
+    if (generated.typescriptConfig.status === 'updated')
+      this.log(`Updated TypeScript project configuration at ${generated.typescriptConfig.file}`)
     this.log(`Generated ${generated.schemaFiles.length} JSON Schema file(s) in ${generated.schemaDirectory}`)
     if (generated.vscodeSettingsCreated)
       this.log(`Created VS Code schema associations at ${generated.vscodeSettingsFile}`)

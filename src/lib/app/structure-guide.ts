@@ -15,6 +15,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
 <app-folder>/
 ├── ghl-app.json
 ├── ghl-app.d.ts
+├── tsconfig.json
 ├── AGENTS.md
 ├── CLAUDE.md
 ├── HIGHLEVEL_APP.md
@@ -52,9 +53,10 @@ This directory is the local, code-friendly representation of one HighLevel marke
 \`\`\`
 
 - The \`billing\`, \`webhooks\`, \`actions\`, \`triggers\`, and action \`code\` directories are created only when their corresponding configuration exists.
-- \`ghl-app.d.ts\`, \`.ghl/schemas/\`, and \`.vscode/settings.json\` are optional; generate them with \`ghl app types\` or \`ghl app pull --with-types\`.
+- \`ghl-app.d.ts\`, \`.ghl/schemas/\`, and \`.vscode/settings.json\` are optional; generate them with \`ghl app types\` or \`ghl app pull --with-types\`. The command creates or safely updates the TypeScript project configuration.
 - **\`ghl-app.json\`**: Supported app metadata and the app/version binding used by local commands.
 - **\`ghl-app.d.ts\`**: Readonly declarations for TypeScript or JavaScript tooling that explicitly imports the generated interfaces; JSON files are validated by the schemas instead.
+- **\`tsconfig.json\` / \`jsconfig.json\`**: Developer-owned project settings. Type generation creates \`tsconfig.json\` when neither exists, or adds the declaration to an existing \`include\` or \`files\` list without replacing other settings.
 - **\`src/webhooks/ghl-webhooks.json\`**: Configured app-level webhook URL and event subscriptions, kept separate from app metadata.
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
 - **\`src/modules/workflows/actions/<action-name>.json\`**: One JSON file per action, including every action-owned version. Its required \`key\` must match the key derived from the filename.

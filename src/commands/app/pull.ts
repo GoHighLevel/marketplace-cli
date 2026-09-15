@@ -24,7 +24,7 @@ import {
 } from '../../lib/billing/workspace.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { collectWorkspaceDirectory } from '../../lib/shared/workspace-input.js'
-import { writeTypeDeclarationFile } from '../../lib/app/types.js'
+import { writeTypeDeclarationWorkspace, type TypeScriptConfigResult } from '../../lib/app/types.js'
 import { fetchWorkflowActionsManifest } from '../../lib/workflows/actions/service.js'
 import { validateWorkflowActionsManifest } from '../../lib/workflows/actions/schema.js'
 import {
@@ -176,7 +176,7 @@ export default class AppPull extends GhlCommand {
         if (!flags['with-types']) return files
         return {
           ...files,
-          declarationFile: await writeTypeDeclarationFile(directory)
+          ...(await writeTypeDeclarationWorkspace(directory))
         }
       },
       { quiet: this.jsonEnabled() }
@@ -214,7 +214,9 @@ export default class AppPull extends GhlCommand {
     if (pulled.billing.subscriptions.plans.length > 0) this.log(`  Plans:    ${workspace.subscriptionFile}`)
     if (pulled.billing.usage.meters.length > 0) this.log(`  Meters:   ${workspace.usageFile}`)
     if (flags['with-types']) {
+      const typescriptConfig = workspace.typescriptConfig as TypeScriptConfigResult
       this.log(`  Types:    ${workspace.declarationFile}`)
+      this.log(`  TSConfig: ${typescriptConfig.file}`)
       this.log(`  Schemas:  ${path.join(workspace.directory as string, '.ghl', 'schemas')}`)
     }
     this.log(`Selected version ${selected.versionId}; subsequent commands will target it.`)
