@@ -394,6 +394,12 @@ describe('JSON schema registry', () => {
 
     const action = validWorkflowAction()
     expect(schemaAccepts('workflow-action', action)).toBe(true)
+    const typescriptAction = structuredClone(action)
+    ;(typescriptAction.versions as SchemaObject[])[0].executionConfig = {
+      type: 'CODE',
+      codeFile: 'code/send_message.1.0.ts'
+    }
+    expect(schemaAccepts('workflow-action', typescriptAction)).toBe(true)
     const actionWithTwoSources = structuredClone(action)
     const actionInput = ((actionWithTwoSources.versions as SchemaObject[])[0].inputs as SchemaObject[])[0] ?? {}
     actionInput.fetchOptions = { url: 'https://api.example.com/options' }

@@ -24,13 +24,15 @@ import {
 } from '../../lib/billing/workspace.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { collectWorkspaceDirectory } from '../../lib/shared/workspace-input.js'
-import { writeTypeDeclarationWorkspace, type TypeScriptConfigResult } from '../../lib/app/types.js'
+import { writeTypesWorkspace, type TypeScriptConfigResult } from '../../lib/app/types.js'
 import { fetchWorkflowActionsManifest } from '../../lib/workflows/actions/service.js'
 import { validateWorkflowActionsManifest } from '../../lib/workflows/actions/schema.js'
 import {
   assertWorkflowActionsWorkspaceWritable,
+  loadWorkflowActionsWorkspaceIfPresent,
   writeWorkflowActionsWorkspace
 } from '../../lib/workflows/actions/workspace.js'
+import { planWorkflowActionsSync } from '../../lib/workflows/actions/sync.js'
 import { fetchWorkflowTriggersManifest } from '../../lib/workflows/triggers/service.js'
 import { validateWorkflowTriggersManifest } from '../../lib/workflows/triggers/schema.js'
 import {
@@ -64,6 +66,10 @@ export default class AppPull extends GhlCommand {
     folder: Flags.string({ description: 'App folder name (default: app-name slug)' }),
     'with-types': Flags.boolean({
       description: 'Generate TypeScript declarations, JSON Schemas, and editor associations',
+      default: false
+    }),
+    force: Flags.boolean({
+      description: 'Discard local workflow-action changes and replace conflicts with portal JavaScript',
       default: false
     })
   }
@@ -127,6 +133,23 @@ export default class AppPull extends GhlCommand {
     if (triggerErrors.length > 0) {
       throw new Error(`Workflow trigger configuration is invalid:\n- ${triggerErrors.join('\n- ')}`)
     }
+    const existingActions =
+      workspaceBinding && !flags.force ? await loadWorkflowActionsWorkspaceIfPresent(directory) : undefined
+    if (existingActions && !flags.force) {
+      const actionPlan = planWorkflowActionsSync(
+        existingActions.state.baseline,
+        existingActions.manifest,
+        pulled.workflowActions,
+        { codeSources: existingActions.codeSources }
+      )
+      const conflicts = [...new Set([...actionPlan.localChanges, ...actionPlan.conflicts])].sort()
+      if (conflicts.length > 0) {
+        throw new Error(
+          `App pull would overwrite local or conflicting workflow-action changes:\n- ${conflicts.join('\n- ')}\n` +
+            'Resolve them first, or pass --force to replace local sources with the portal state.'
+        )
+      }
+    }
     if (workspaceBinding) {
       await Promise.all([
         assertWorkflowActionsWorkspaceWritable(directory, pulled.workflowActions),
@@ -147,7 +170,10 @@ export default class AppPull extends GhlCommand {
           directory,
           pulled.workflowActions,
           pulled.workflowActions,
-          { includeJsonSchema }
+          {
+            includeJsonSchema,
+            preserveCodeSources: flags.force ? undefined : existingActions?.codeSources
+          }
         )
         const triggerFiles = await writeWorkflowTriggersWorkspace(
           directory,
@@ -176,7 +202,7 @@ export default class AppPull extends GhlCommand {
         if (!flags['with-types']) return files
         return {
           ...files,
-          ...(await writeTypeDeclarationWorkspace(directory))
+          ...(await writeTypesWorkspace(directory))
         }
       },
       { quiet: this.jsonEnabled() }

@@ -6,6 +6,8 @@ import { type Command, Config, ux } from '@oclif/core'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import AccountSwitch from '../../src/commands/account/switch.js'
+import AppActionsCreate from '../../src/commands/app/actions/create.js'
+import AppActionsPull from '../../src/commands/app/actions/pull.js'
 import AppActionsPush from '../../src/commands/app/actions/push.js'
 import AppActionsValidate from '../../src/commands/app/actions/validate.js'
 import AppBillingValidate from '../../src/commands/app/billing/validate.js'
@@ -117,7 +119,8 @@ describe('public command contracts', () => {
         version: expect.any(Object),
         directory: expect.any(Object),
         folder: expect.any(Object),
-        'with-types': expect.objectContaining({ type: 'boolean', default: false })
+        'with-types': expect.objectContaining({ type: 'boolean', default: false }),
+        force: expect.objectContaining({ type: 'boolean', default: false })
       })
     )
     expect(commandIds).toContain('app:pull')
@@ -243,6 +246,8 @@ describe('public command contracts', () => {
         'app:actions:publish'
       ])
     )
+    expect(AppActionsCreate.flags.typescript).toMatchObject({ type: 'boolean', default: false })
+    expect(AppActionsPull.flags.force).toMatchObject({ type: 'boolean', default: false })
 
     const invalid = await runCommand(AppActionsValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)
@@ -301,6 +306,51 @@ describe('public command contracts', () => {
     const pushFailure = JSON.parse(push.stdout) as { error: { message: string } }
     expect(pushFailure.error.message).toMatch(/workflow action code is invalid[\s\S]*send_message\.1\.0\.js:1/i)
     expect(pushFailure.error.message).not.toMatch(/not logged in/i)
+
+    const typedWorkspace = path.join(configDir, 'typed-workflow-action')
+    await fs.mkdir(path.join(typedWorkspace, '.ghl'), { recursive: true })
+    await Promise.all([
+      fs.writeFile(
+        path.join(typedWorkspace, 'ghl-app.json'),
+        JSON.stringify({ schemaVersion: 1, appId: 'app-2', versionId: 'version-1' })
+      ),
+      fs.writeFile(
+        path.join(typedWorkspace, '.ghl', 'workflow-actions-state.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          appId: 'app-2',
+          baseline: { schemaVersion: 1, appId: 'app-2', actions: [] }
+        })
+      )
+    ])
+    const created = await runCommand(AppActionsCreate, [
+      'Typed action',
+      '--key',
+      'typed_action',
+      '--typescript',
+      '--directory',
+      typedWorkspace,
+      '--json'
+    ])
+    expect(created.exitCode).toBe(0)
+    expect(created.stderr).toBe('')
+    const typedCodeFile = path.join(
+      typedWorkspace,
+      'src',
+      'modules',
+      'workflows',
+      'actions',
+      'code',
+      'typed_action.1.0.ts'
+    )
+    await expect(fs.readFile(typedCodeFile, 'utf8')).resolves.toMatch(/export default action/)
+    await expect(fs.stat(typedCodeFile.replace(/\.ts$/, '.js'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.readFile(path.join(typedWorkspace, 'ghl-action-sandbox.d.ts'), 'utf8')).resolves.toMatch(
+      /GhlActionContext/
+    )
+    await expect(fs.readFile(path.join(path.dirname(typedCodeFile), 'tsconfig.json'), 'utf8')).resolves.toMatch(
+      /"lib": \[\s*"ES2022"/
+    )
   })
 
   it('exposes the JSON-first workflow trigger lifecycle and validates local input before authentication', async () => {

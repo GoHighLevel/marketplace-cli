@@ -19,6 +19,10 @@ import {
   WORKFLOW_ACTIONS_STATE_RELATIVE_PATH,
   writeWorkflowActionsWorkspace
 } from '../../../../src/lib/workflows/actions/workspace.js'
+import {
+  compileWorkflowActionTypeScript,
+  generateWorkflowActionTypeScriptScaffold
+} from '../../../../src/lib/workflows/actions/typescript.js'
 
 const directories: string[] = []
 
@@ -116,9 +120,10 @@ describe('workflow action workspaces', () => {
     expect(await fs.readFile(result.guideFile, 'utf8')).toMatch(
       /filename.*send-contact-sync-payload\.json.*send_contact_sync_payload/is
     )
-    expect(await fs.readFile(result.guideFile, 'utf8')).toMatch(
-      /code\/<action-key>\.<major>\.<minor>\.js[\s\S]*without executing[\s\S]*inline `code`/i
-    )
+    const guide = await fs.readFile(result.guideFile, 'utf8')
+    expect(guide).toMatch(/code\/<action-key>\.<major>\.<minor>\.js` or `\.ts/i)
+    expect(guide).toMatch(/without execution/i)
+    expect(guide).toMatch(/inline JSON `code`/i)
     expect(await fs.readFile(path.join(directory, 'HIGHLEVEL_APP.md'), 'utf8')).toMatch(
       /src\/modules\/workflows\/actions.*one JSON file per action/is
     )
@@ -238,6 +243,214 @@ describe('workflow action workspaces', () => {
     expect(apiBody.executionConfig).not.toHaveProperty('codeFile')
     expect((await fs.stat(result.codeDirectory)).mode & 0o777).toBe(0o755)
     expect((await fs.stat(result.codeFiles[0])).mode & 0o777).toBe(0o644)
+  })
+
+  it('loads TypeScript action sources, type-checks them, and keeps compiled JavaScript in memory only', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Calculate score' },
+          inputs: [{ field: 'score', title: 'Score', fieldType: 'numerical', required: true }],
+          customVarsJson: { result: 42 }
+        }
+      ]
+    }
+    const version = definition.versions[0]
+    const source = generateWorkflowActionTypeScriptScaffold(definition, version)
+    const sourceFile = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts')
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: sourceFile,
+      source,
+      action: definition,
+      version
+    })
+    expect(compiled.errors).toEqual([])
+    version.executionConfig = { type: 'CODE', code: compiled.code }
+    const manifest: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+
+    const result = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: version.version,
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+
+    expect(result.codeFiles).toEqual([sourceFile])
+    await expect(fs.readFile(sourceFile, 'utf8')).resolves.toBe(source)
+    await expect(fs.stat(sourceFile.replace(/\.ts$/, '.js'))).rejects.toMatchObject({ code: 'ENOENT' })
+    const json = JSON.parse(await fs.readFile(result.actionFiles[0], 'utf8'))
+    expect(json.versions[0].executionConfig.codeFile).toBe('code/calculate_score.1.0.ts')
+
+    const loaded = await loadWorkflowActionsWorkspace(directory)
+    expect(loaded.manifest).toEqual(manifest)
+    expect(loaded.codeSources).toEqual([
+      expect.objectContaining({
+        actionKey: 'calculate_score',
+        version: '1.0',
+        language: 'typescript',
+        file: sourceFile,
+        source,
+        compiledCode: compiled.code
+      })
+    ])
+  })
+
+  it('preserves TypeScript sources after synchronization when portal JavaScript still matches', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Calculate score' },
+          customVarsJson: {},
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const version = definition.versions[0]
+    const source = generateWorkflowActionTypeScriptScaffold(definition, version)
+    const sourceFile = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts')
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: sourceFile,
+      source,
+      action: definition,
+      version
+    })
+    version.executionConfig = { type: 'CODE', code: compiled.code }
+    const manifest: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: version.version,
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+    const existing = await loadWorkflowActionsWorkspace(directory)
+
+    const refreshed = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    expect(refreshed.codeFiles).toEqual([sourceFile])
+    await expect(fs.readFile(sourceFile, 'utf8')).resolves.toBe(source)
+  })
+
+  it('replaces TypeScript with portal JavaScript and removes generated action types when preservation is omitted', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Calculate score' },
+          customVarsJson: {},
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const version = definition.versions[0]
+    const source = generateWorkflowActionTypeScriptScaffold(definition, version)
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts'),
+      source,
+      action: definition,
+      version
+    })
+    version.executionConfig = { type: 'CODE', code: compiled.code }
+    const manifest: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    const typed = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: version.version,
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+
+    const replaced = await writeWorkflowActionsWorkspace(directory, manifest, manifest)
+
+    expect(replaced.codeFiles.map(file => path.basename(file))).toEqual(['calculate_score.1.0.js'])
+    await expect(fs.stat(typed.codeFiles[0])).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(directory, 'ghl-action-sandbox.d.ts'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(replaced.codeDirectory, 'tsconfig.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('carries TypeScript into a cloned server version only when the compiled code remains equivalent', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      templateId: 'template-1',
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'published',
+          info: { name: 'Calculate score' },
+          inputs: [{ field: 'score', title: 'Score', fieldType: 'numerical', required: true }],
+          customVarsJson: { result: 42 },
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const source = generateWorkflowActionTypeScriptScaffold(definition, definition.versions[0])
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts'),
+      source,
+      action: definition,
+      version: definition.versions[0]
+    })
+    definition.versions[0].executionConfig = { type: 'CODE', code: compiled.code }
+    const initial: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    await writeWorkflowActionsWorkspace(directory, initial, initial, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: '1.0',
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+    const existing = await loadWorkflowActionsWorkspace(directory)
+    const refreshed = structuredClone(initial)
+    refreshed.actions[0].versions.unshift({
+      ...structuredClone(refreshed.actions[0].versions[0]),
+      version: '1.1',
+      status: 'draft'
+    })
+
+    const result = await writeWorkflowActionsWorkspace(directory, refreshed, refreshed, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    expect(result.codeFiles.map(file => path.basename(file))).toEqual([
+      'calculate_score.1.0.ts',
+      'calculate_score.1.1.ts'
+    ])
+    await expect(fs.readFile(result.codeFiles[1], 'utf8')).resolves.toMatch(/GhlActionCalculateScoreV1_1Handler/)
   })
 
   it('round-trips malformed legacy code for immutable published versions', async () => {

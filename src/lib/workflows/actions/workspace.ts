@@ -12,16 +12,25 @@ import {
   workflowActionCodeFilename,
   workflowActionCodeReference,
   workflowActionCodeSyntaxError,
+  workflowActionSourceLanguage,
+  type WorkflowActionSourceLanguage,
   WORKFLOW_ACTION_CODE_DIRECTORY_NAME,
   WORKFLOW_ACTION_CODE_MAX_BYTES
 } from './code.js'
 import { buildWorkflowActionsGuide, WORKFLOW_ACTIONS_GUIDE_FILENAME } from './guide.js'
 import { workflowActionKeyValidationErrors, WORKFLOW_ACTION_KEY_MAX_LENGTH } from './key.js'
-import { type WorkflowActionDefinition, type WorkflowActionsManifest } from './manifest.js'
+import { type WorkflowActionDefinition, type WorkflowActionsManifest, type WorkflowActionVersion } from './manifest.js'
 import { validateWorkflowActionsManifest } from './schema.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
 import { isWorkflowVersion } from '../shared/value-validation.js'
 import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
+import { compileWorkflowActionTypeScript } from './typescript.js'
+import {
+  assertWorkflowActionTypesWorkspaceWritable,
+  removeWorkflowActionTypesWorkspace,
+  workflowActionVersionTypePrefix,
+  writeWorkflowActionTypesWorkspace
+} from './types.js'
 
 export { WORKFLOW_ACTIONS_GUIDE_FILENAME }
 export { WORKFLOW_ACTION_CODE_MAX_BYTES }
@@ -57,6 +66,7 @@ export interface WorkflowActionsWorkspace {
   actionFiles: string[]
   codeDirectory: string
   codeFiles: string[]
+  codeSources: WorkflowActionCodeSource[]
   guideFile: string
   stateFile: string
   manifest: WorkflowActionsManifest
@@ -87,8 +97,21 @@ interface WorkflowActionSourceResult {
   guideFile: string
 }
 
+export interface WorkflowActionCodeSource {
+  actionKey: string
+  version: string
+  language: WorkflowActionSourceLanguage
+  file: string
+  source: string
+  compiledCode: string
+}
+
+export type WorkflowActionCodeSourceOverride = Omit<WorkflowActionCodeSource, 'file'>
+
 export interface WriteWorkflowActionsWorkspaceOptions {
+  codeSourceOverrides?: readonly WorkflowActionCodeSourceOverride[]
   includeJsonSchema?: boolean
+  preserveCodeSources?: readonly WorkflowActionCodeSource[]
 }
 
 async function stat(target: string): Promise<Awaited<ReturnType<typeof fs.lstat>> | undefined> {
@@ -194,20 +217,25 @@ function assertValidManifest(manifest: WorkflowActionsManifest, binding: Workflo
 
 function actionSourceFromDefinition(
   action: WorkflowActionDefinition,
-  includeJsonSchema: boolean
+  includeJsonSchema: boolean,
+  sourceByVersion: ReadonlyMap<string, WorkflowActionCodeSourceOverride>
 ): {
   file: WorkflowActionFile
-  codeSources: Array<{ filename: string; contents: string }>
+  codeSources: Array<WorkflowActionCodeSourceOverride & { filename: string }>
 } {
   const versions = structuredClone(action.versions)
-  const codeSources: Array<{ filename: string; contents: string }> = []
+  const codeSources: Array<WorkflowActionCodeSourceOverride & { filename: string }> = []
   for (const version of versions) {
     if (version.executionConfig?.type !== 'CODE') continue
-    const filename = workflowActionCodeFilename(action.key, version.version)
-    codeSources.push({ filename, contents: version.executionConfig.code ?? '' })
+    const compiledCode = version.executionConfig.code ?? ''
+    const selected = sourceByVersion.get(`${action.key}@${version.version}`)
+    const language = selected?.language ?? 'javascript'
+    const source = selected?.source ?? compiledCode
+    const filename = workflowActionCodeFilename(action.key, version.version, language)
+    codeSources.push({ actionKey: action.key, version: version.version, language, filename, source, compiledCode })
     const sourceExecution = version.executionConfig as unknown as Record<string, unknown>
     delete sourceExecution.code
-    sourceExecution.codeFile = workflowActionCodeReference(action.key, version.version)
+    sourceExecution.codeFile = workflowActionCodeReference(action.key, version.version, language)
   }
   const file: WorkflowActionFile = {
     schemaVersion: 1,
@@ -219,6 +247,75 @@ function actionSourceFromDefinition(
     file: includeJsonSchema ? withJsonSchemaReference(file, 'workflow-action') : file,
     codeSources
   }
+}
+
+function replaceHandlerVersion(source: WorkflowActionCodeSource, actionKey: string, targetVersion: string): string {
+  const previous = workflowActionVersionTypePrefix(actionKey, source.version)
+  const next = workflowActionVersionTypePrefix(actionKey, targetVersion)
+  return source.source.replaceAll(previous, next)
+}
+
+function resolveCodeSources(
+  binding: WorkflowActionsAppBinding,
+  manifest: WorkflowActionsManifest,
+  options: WriteWorkflowActionsWorkspaceOptions
+): Map<string, WorkflowActionCodeSourceOverride> {
+  const preserved = options.preserveCodeSources ?? []
+  const sourceByVersion = new Map<string, WorkflowActionCodeSourceOverride>()
+  for (const source of preserved) sourceByVersion.set(`${source.actionKey}@${source.version}`, source)
+  for (const source of options.codeSourceOverrides ?? []) {
+    sourceByVersion.set(`${source.actionKey}@${source.version}`, source)
+  }
+
+  for (const action of manifest.actions) {
+    for (const version of action.versions) {
+      if (version.executionConfig?.type !== 'CODE') continue
+      const id = `${action.key}@${version.version}`
+      if (!sourceByVersion.has(id)) {
+        const compatible = preserved.find(
+          source =>
+            source.actionKey === action.key &&
+            source.language === 'typescript' &&
+            source.compiledCode === version.executionConfig?.code
+        )
+        if (compatible) {
+          sourceByVersion.set(id, {
+            actionKey: action.key,
+            version: version.version,
+            language: 'typescript',
+            source: replaceHandlerVersion(compatible, action.key, version.version),
+            compiledCode: compatible.compiledCode
+          })
+        }
+      }
+      const selected = sourceByVersion.get(id)
+      if (!selected || selected.compiledCode !== version.executionConfig.code) {
+        sourceByVersion.delete(id)
+        continue
+      }
+      if (selected.language !== 'typescript') continue
+      const filename = path.join(
+        binding.directory,
+        WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH,
+        workflowActionCodeFilename(action.key, version.version, 'typescript')
+      )
+      const compiled = compileWorkflowActionTypeScript({
+        directory: binding.directory,
+        filename,
+        source: selected.source,
+        action,
+        version
+      })
+      if (compiled.errors.length > 0) {
+        throw new Error(
+          `TypeScript source for action "${action.key}" version ${version.version} conflicts with its definition:\n- ` +
+            compiled.errors.join('\n- ')
+        )
+      }
+      if (compiled.code !== version.executionConfig.code) sourceByVersion.delete(id)
+    }
+  }
+  return sourceByVersion
 }
 
 function validateActionFile(value: unknown, relativeFile: string, filenameKey?: string): string[] {
@@ -279,7 +376,7 @@ async function actionJsonEntries(actionDirectory: string): Promise<string[]> {
     .sort()
 }
 
-async function codeJavaScriptEntries(codeDirectory: string): Promise<string[]> {
+async function managedCodeEntries(codeDirectory: string): Promise<string[]> {
   const directoryStat = await stat(codeDirectory)
   if (!directoryStat) return []
   if (directoryStat.isSymbolicLink()) {
@@ -289,7 +386,7 @@ async function codeJavaScriptEntries(codeDirectory: string): Promise<string[]> {
 
   const entries = await fs.readdir(codeDirectory, { withFileTypes: true })
   return entries
-    .filter(entry => entry.name.toLowerCase().endsWith('.js'))
+    .filter(entry => /\.(?:js|ts)$/i.test(entry.name))
     .map(entry => {
       const filePath = path.join(codeDirectory, entry.name)
       if (entry.isSymbolicLink()) throw new Error(`Workflow action code file "${filePath}" cannot be a symbolic link.`)
@@ -322,26 +419,35 @@ async function readCodeFile(filePath: string): Promise<{ code?: string; error?: 
 async function hydrateCodeSources(
   actionDirectory: string,
   sources: Array<{ relativeFile: string; key: string; value: unknown }>
-): Promise<{ actions: WorkflowActionDefinition[]; codeFiles: string[]; errors: string[] }> {
+): Promise<{
+  actions: WorkflowActionDefinition[]
+  codeFiles: string[]
+  codeSources: WorkflowActionCodeSource[]
+  errors: string[]
+}> {
   const codeDirectory = path.join(actionDirectory, WORKFLOW_ACTION_CODE_DIRECTORY_NAME)
   const errors: string[] = []
   const referenced = new Set<string>()
   const actions: WorkflowActionDefinition[] = []
   const pending: Array<{
+    action: WorkflowActionDefinition
     config: Record<string, unknown>
     filePath: string
+    language: WorkflowActionSourceLanguage
     propertyPath: string
     validateSyntax: boolean
+    version: WorkflowActionVersion
   }> = []
 
   for (const source of sources) {
     const file = isRecord(source.value) ? source.value : {}
     const versions = Array.isArray(file.versions) ? structuredClone(file.versions) : []
-    actions.push({
+    const action: WorkflowActionDefinition = {
       key: typeof file.key === 'string' ? file.key : source.key,
       ...(typeof file.templateId === 'string' ? { templateId: file.templateId } : {}),
       versions: versions as WorkflowActionDefinition['versions']
-    })
+    }
+    actions.push(action)
     versions.forEach((version, versionIndex) => {
       if (!isRecord(version) || !isRecord(version.executionConfig)) return
       const config = version.executionConfig
@@ -355,44 +461,77 @@ async function hydrateCodeSources(
         errors.push(`${propertyPath}.code cannot contain inline code; use the version's codeFile instead.`)
       }
       if (typeof version.version !== 'string' || !isWorkflowVersion(version.version)) return
-      const expectedReference = workflowActionCodeReference(source.key, version.version)
+      const language = typeof config.codeFile === 'string' ? workflowActionSourceLanguage(config.codeFile) : undefined
+      if (!language) {
+        errors.push(`${propertyPath}.codeFile must use a canonical .js or .ts action source path.`)
+        return
+      }
+      const expectedReference = workflowActionCodeReference(source.key, version.version, language)
       if (config.codeFile !== expectedReference) {
         errors.push(`${propertyPath}.codeFile must be "${expectedReference}".`)
         return
       }
-      const filename = workflowActionCodeFilename(source.key, version.version)
+      const filename = workflowActionCodeFilename(source.key, version.version, language)
       if (referenced.has(filename)) {
         errors.push(`${propertyPath}.codeFile duplicates "${expectedReference}".`)
         return
       }
       referenced.add(filename)
       pending.push({
+        action,
         config,
         filePath: path.join(codeDirectory, filename),
+        language,
         propertyPath,
-        validateSyntax: version.status !== 'published' && version.status !== 'in_review'
+        validateSyntax: version.status !== 'published' && version.status !== 'in_review',
+        version: version as unknown as WorkflowActionVersion
       })
     })
   }
 
   const resolved = await Promise.all(pending.map(item => readCodeFile(item.filePath)))
+  const hydratedSources: WorkflowActionCodeSource[] = []
   resolved.forEach((result, index) => {
     const item = pending[index]
     if (result.error) {
       errors.push(`${item.propertyPath}.codeFile ${result.error}`)
       return
     }
-    const code = result.code ?? ''
-    const syntaxError = item.validateSyntax ? workflowActionCodeSyntaxError(code, item.filePath) : undefined
+    const source = result.code ?? ''
+    const compiled =
+      item.language === 'typescript'
+        ? compileWorkflowActionTypeScript({
+            directory: path.resolve(actionDirectory, '..', '..', '..', '..'),
+            filename: item.filePath,
+            source,
+            action: item.action,
+            version: item.version
+          })
+        : { code: source, errors: [] }
+    if (compiled.errors.length > 0) {
+      errors.push(...compiled.errors.map(error => `${item.propertyPath}.codeFile ${error}`))
+      return
+    }
+    const syntaxError = item.validateSyntax
+      ? workflowActionCodeSyntaxError(compiled.code, item.filePath.replace(/\.ts$/, '.js'))
+      : undefined
     if (syntaxError) {
       errors.push(`${item.propertyPath}.codeFile ${syntaxError}`)
       return
     }
     delete item.config.codeFile
-    item.config.code = code
+    item.config.code = compiled.code
+    hydratedSources.push({
+      actionKey: item.action.key,
+      version: item.version.version,
+      language: item.language,
+      file: item.filePath,
+      source,
+      compiledCode: compiled.code
+    })
   })
 
-  const existing = await codeJavaScriptEntries(codeDirectory)
+  const existing = await managedCodeEntries(codeDirectory)
   for (const filename of existing) {
     if (!referenced.has(filename)) {
       errors.push(
@@ -403,6 +542,7 @@ async function hydrateCodeSources(
   return {
     actions,
     codeFiles: [...referenced].sort().map(filename => path.join(codeDirectory, filename)),
+    codeSources: hydratedSources.sort((left, right) => left.file.localeCompare(right.file)),
     errors
   }
 }
@@ -411,6 +551,7 @@ async function readActionManifest(binding: WorkflowActionsAppBinding): Promise<{
   manifest: WorkflowActionsManifest
   actionFiles: string[]
   codeFiles: string[]
+  codeSources: WorkflowActionCodeSource[]
 }> {
   const actionDirectory = path.join(binding.directory, WORKFLOW_ACTIONS_DIRECTORY_RELATIVE_PATH)
   const filenames = await actionJsonEntries(actionDirectory)
@@ -452,7 +593,8 @@ async function readActionManifest(binding: WorkflowActionsAppBinding): Promise<{
   return {
     manifest,
     actionFiles: filenames.map(filename => path.join(actionDirectory, filename)),
-    codeFiles: codeSources.codeFiles
+    codeFiles: codeSources.codeFiles,
+    codeSources: codeSources.codeSources
   }
 }
 
@@ -487,18 +629,18 @@ async function writeActionSources(
   assertValidManifest(manifest, binding)
   await Promise.all([assertWorkspacePathsSafe(binding), assertWorkspaceDocumentationFilesWritable(binding.directory)])
   const includeJsonSchema = options.includeJsonSchema !== false
-  if (includeJsonSchema) await writeJsonSchemaWorkspace(binding.directory)
   const legacyFile = path.join(binding.directory, LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH)
   const legacyExists = await requireRegularFile(legacyFile, 'Legacy workflow action file', true)
   const { actionDirectory, codeDirectory } = await sourceDirectories(binding)
   const existingFiles = await actionJsonEntries(actionDirectory)
-  const existingCodeFiles = await codeJavaScriptEntries(codeDirectory)
+  const existingCodeFiles = await managedCodeEntries(codeDirectory)
+  const sourceByVersion = resolveCodeSources(binding, manifest, options)
   for (const filename of existingFiles) workflowActionKeyFromFilename(filename)
   const desired = [...manifest.actions]
     .sort((left, right) => left.key.localeCompare(right.key))
     .map(action => ({
       filename: workflowActionFilenameFromKey(action.key),
-      source: actionSourceFromDefinition(action, includeJsonSchema)
+      source: actionSourceFromDefinition(action, includeJsonSchema, sourceByVersion)
     }))
   const filenames = new Set(desired.map(item => item.filename))
   if (filenames.size !== desired.length) throw new Error('Workflow action keys must map to unique filenames.')
@@ -511,6 +653,11 @@ async function writeActionSources(
   if (codeFilenames.size !== codeSources.length)
     throw new Error('Workflow action code files must map to unique action versions.')
   const codeFiles = codeSources.map(item => path.join(codeDirectory, item.filename))
+  const appTypesEnabled = (await stat(path.join(binding.directory, 'ghl-app.d.ts')))?.isFile() === true
+  const actionTypesEnabled =
+    manifest.actions.length > 0 && (appTypesEnabled || codeSources.some(source => source.language === 'typescript'))
+  if (actionTypesEnabled) await assertWorkflowActionTypesWorkspaceWritable(binding.directory, manifest)
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(binding.directory)
   if (desired.length > 0) {
     await fs.mkdir(actionDirectory, { recursive: true, mode: 0o755 })
     await fs.chmod(actionDirectory, 0o755)
@@ -519,7 +666,7 @@ async function writeActionSources(
     await fs.mkdir(codeDirectory, { recursive: true, mode: 0o755 })
     await fs.chmod(codeDirectory, 0o755)
   }
-  await Promise.all(codeSources.map((item, index) => writeTextFileAtomic(codeFiles[index], item.contents)))
+  await Promise.all(codeSources.map((item, index) => writeTextFileAtomic(codeFiles[index], item.source)))
   await Promise.all(desired.map((item, index) => writeJsonFileAtomic(actionFiles[index], item.source.file, 0o644)))
   await Promise.all(
     existingCodeFiles
@@ -536,6 +683,11 @@ async function writeActionSources(
     await writeTextFileAtomic(guideFile, buildWorkflowActionsGuide())
   } else {
     await removeRegularFileIfPresent(guideFile, 'Workflow action guide')
+  }
+  if (actionTypesEnabled) {
+    await writeWorkflowActionTypesWorkspace(binding.directory, manifest)
+  } else {
+    await removeWorkflowActionTypesWorkspace(binding.directory)
   }
   await removeEmptyDirectoryTree(codeDirectory, binding.directory)
   await removeEmptyDirectoryTree(actionDirectory, binding.directory)
@@ -557,10 +709,11 @@ export async function assertWorkflowActionsWorkspaceWritable(
 
 export async function writeLocalWorkflowActionsManifest(
   directory: string,
-  manifest: WorkflowActionsManifest
+  manifest: WorkflowActionsManifest,
+  options: WriteWorkflowActionsWorkspaceOptions = {}
 ): Promise<WorkflowActionSourceResult> {
   const binding = await appBindingForWorkspace(directory)
-  return writeActionSources(binding, manifest)
+  return writeActionSources(binding, manifest, options)
 }
 
 export async function writeWorkflowActionsWorkspace(
@@ -590,7 +743,7 @@ export async function loadWorkflowActionsWorkspace(directory: string): Promise<W
   const codeDirectory = path.join(binding.directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH)
   const stateFile = path.join(binding.directory, WORKFLOW_ACTIONS_STATE_RELATIVE_PATH)
   await requireRegularFile(stateFile, 'Workflow action state')
-  const { manifest, actionFiles, codeFiles } = await readActionManifest(binding)
+  const { manifest, actionFiles, codeFiles, codeSources } = await readActionManifest(binding)
   const state = await readJsonFile<unknown>(stateFile)
   const stateErrors = validateState(state, binding.whiteLabel)
   if (stateErrors.length > 0) {
@@ -609,6 +762,7 @@ export async function loadWorkflowActionsWorkspace(directory: string): Promise<W
     actionFiles,
     codeDirectory,
     codeFiles,
+    codeSources,
     guideFile: path.join(actionDirectory, WORKFLOW_ACTIONS_GUIDE_FILENAME),
     stateFile,
     manifest,

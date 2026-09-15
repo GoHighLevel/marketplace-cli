@@ -82,7 +82,9 @@ export async function loadWorkflowSyncContext<
   const client = new ApiClient(config)
   await client.init()
   const snapshot = await resource.fetchSnapshot(client, local.manifest.appId)
-  const plan = resource.planSync(local.state.baseline, local.manifest, snapshot.manifest)
+  const plan = resource.preserveSourceWorkspace
+    ? resource.planSync(local.state.baseline, local.manifest, snapshot.manifest, local)
+    : resource.planSync(local.state.baseline, local.manifest, snapshot.manifest)
   return {
     appId: local.manifest.appId,
     client,

@@ -45,6 +45,9 @@ export default class AppTypes extends GhlCommand {
     if (generated.typescriptConfig.status === 'updated')
       this.log(`Updated TypeScript project configuration at ${generated.typescriptConfig.file}`)
     this.log(`Generated ${generated.schemaFiles.length} JSON Schema file(s) in ${generated.schemaDirectory}`)
+    if (generated.actionTypes) {
+      this.log(`Generated workflow-action sandbox types at ${generated.actionTypes.sandboxDeclarationFile}`)
+    }
     if (generated.vscodeSettingsCreated)
       this.log(`Created VS Code schema associations at ${generated.vscodeSettingsFile}`)
     return

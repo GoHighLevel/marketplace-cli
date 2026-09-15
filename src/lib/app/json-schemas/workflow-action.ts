@@ -369,13 +369,14 @@ const actionDefinitions: Record<string, JsonSchema> = {
   executionConfig: {
     ...object(
       {
-        type: { enum: ['API', 'CODE'], description: 'Execute an HTTP request or a local JavaScript code file.' },
+        type: { enum: ['API', 'CODE'], description: 'Execute an HTTP request or a local action code file.' },
         url: optionalHttpUrl('Public HTTP or HTTPS endpoint for API execution.'),
         method: { enum: ['DELETE', 'GET', 'PATCH', 'POST', 'PUT'] },
         headers: reference('headers'),
         codeFile: nonEmptyString({
-          pattern: '^code/[a-z][_a-z0-9]*\\.\\d{1,10}\\.\\d{1,10}\\.js$',
-          description: 'Local code file. The CLI also verifies it matches this action key and version exactly.'
+          pattern: '^code/[a-z][_a-z0-9]*\\.\\d{1,10}\\.\\d{1,10}\\.(?:js|ts)$',
+          description:
+            'Local JavaScript or TypeScript source. The CLI verifies it matches this action key and version exactly.'
         }),
         pauseExecution: booleanValue()
       },

@@ -105,7 +105,10 @@ import type { GhlAppManifest } from './ghl-app.js'
 | `tsconfig.json` | TypeScript project configuration created when absent; existing `tsconfig.json` or `jsconfig.json` source lists are extended without replacing developer settings. |
 | `src/webhooks/ghl-webhooks.json` | Webhook URL and event subscriptions, created only when a URL or event is configured. |
 | `src/modules/workflows/actions/<action-name>.json` | One app-scoped workflow action per file. A name such as `send-contact-sync-payload.json` requires the JSON key `send_contact_sync_payload`. |
-| `src/modules/workflows/actions/code/<action-key>.<version>.js` | JavaScript source for one code-backed action version, referenced by `executionConfig.codeFile` in its action JSON. |
+| `src/modules/workflows/actions/code/<action-key>.<version>.js` | Portal JavaScript source for one code-backed action version, referenced by `executionConfig.codeFile`. |
+| `src/modules/workflows/actions/code/<action-key>.<version>.ts` | Optional typed handler created with `ghl app actions create --typescript`; the CLI type-checks and transpiles it in memory. |
+| `ghl-action-sandbox.d.ts` / `ghl-action-<key>.d.ts` | Generated sandbox, input, output, and versioned handler declarations for TypeScript actions. |
+| `src/modules/workflows/actions/code/tsconfig.json` | Generated isolated TypeScript project that excludes browser and Node globals unavailable in the action sandbox. |
 | `src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md` | Generated reference created with the actions directory only when the app has an action. |
 | `src/modules/workflows/triggers/<trigger-name>.json` | One app-scoped workflow trigger per file. A name such as `contact-status-updated.json` requires the JSON key `contact_status_updated`. |
 | `src/modules/workflows/triggers/HIGHLEVEL_WORKFLOW_TRIGGERS.md` | Generated key-by-key reference created with the triggers directory only when the app has a trigger. |
@@ -165,8 +168,8 @@ Subscription plans and usage meters are app-scoped rather than tied to one app v
 |---|---|
 | `ghl app list` | List apps. Flags: `--search <text>`, `--limit <n>` (default 50), `--skip <n>`, `--json`. |
 | `ghl app create` | Create an app in the portal, create its local JSON folder, and select it. Interactive, or provide `--name`, `--type public\|private`, `--target sub-account\|agency`, and `--listing white-label\|standard`; sub-account targets also require `--installer everyone\|agency-only`. Local flags: `--directory <parent>`, `--folder <name>`. |
-| `ghl app pull [appId]` | Refresh the current workspace using its `ghl-app.json`, or create a local workspace for an existing app when run elsewhere, then select that version. Generated type/schema support is opt-in with `--with-types`. Other flags: `--version <versionId\|semver>`, `--directory <parent>`, `--folder <name>`, `--json`. |
-| `ghl app types` | Generate `ghl-app.d.ts`, wire it into `tsconfig.json`/`jsconfig.json`, generate all six local JSON Schemas, and create VS Code schema associations without authentication or API calls. Flags: `--directory <app-folder>`, `--output <file.d.ts>`, `--json`. |
+| `ghl app pull [appId]` | Refresh the current workspace using its `ghl-app.json`, or create one for an existing app. Generated type/schema support is opt-in with `--with-types`. Action conflicts stop refresh; `--force` accepts portal JavaScript. Other flags: `--version <versionId\|semver>`, `--directory <parent>`, `--folder <name>`, `--json`. |
+| `ghl app types` | Generate `ghl-app.d.ts`, workflow-action sandbox/version declarations when actions exist, project integration, all six JSON Schemas, and VS Code associations without authentication. Flags: `--directory <app-folder>`, `--output <file.d.ts>`, `--json`. |
 | `ghl app validate` | Validate the local workspace without authentication or API calls. Use `--directory <app-folder>`; `--json-schema` prints the app draft-07 schema, with `--schema <config>` selecting another supported configuration; `--remote` runs the separate server publish-readiness checklist. |
 | `ghl app diff` | Read the current portal version and show local changes, portal-only changes, conflicts, and the minimal API section plan. Flags: `--directory <app-folder>`, `--json`. |
 | `ghl app push` | Validate, three-way merge, and push only changed sections; then verify and refresh local state. Flags: `--directory <app-folder>`, `--dry-run`, `--json`. |
@@ -224,14 +227,18 @@ All section editors are interactive with current values prefilled, or fully flag
 
 Workflow actions use one JSON file per action under `src/modules/workflows/actions/`. Every file contains a required `key`, while its filename independently derives the expected value: lowercase letters, numbers, and hyphens are allowed, and each hyphen becomes an underscore. For example, `send-contact-sync-payload.json` requires `"key": "send_contact_sync_payload"`. A mismatch fails local validation. App-version IDs are intentionally not duplicated into the module model.
 
-Code execution is stored separately as `code/<action-key>.<version>.js`, and the matching version uses `executionConfig.codeFile`. The version suffix prevents draft and published source from overwriting each other. Pull extracts the portal's inline code; validate and push compile the file without executing it, validate the complete action, and then send the contents back as the API's inline `executionConfig.code`. Code files must be UTF-8, at most 1 MiB, canonical for the action key and version, and cannot be symbolic links or unreferenced files.
+Code execution is stored separately as `code/<action-key>.<version>.js` or `.ts`, and the matching version uses `executionConfig.codeFile`. JavaScript files contain the portal's async-function body. TypeScript files export one typed default handler; the CLI type-checks them against generated action and sandbox declarations, transpiles them only in memory, and sends JavaScript as inline `executionConfig.code`. No compiled `.js` file is written beside TypeScript. Source must be UTF-8, at most 1 MiB, canonical for the action key and version, and cannot be a symlink or unreferenced file.
+
+The action sandbox intentionally has no `fetch`, Node APIs, timers, `crypto`, `URL`, or module loading. Typed handlers receive `inputData`, `customRequest`, `console`, Lodash (`_`), Moment (`moment`), `fileDownloader`, `_csv`, `_base64`, and `_uuid` through their context. Runtime imports are rejected; type-only imports are erased before upload.
+
+The portal stores JavaScript, so JavaScript-to-TypeScript reconstruction is not lossless. A normal pull preserves local TypeScript only while its compiled JavaScript still matches the portal. Local edits, portal code edits, or an incompatible portal input/output change stop pull with conflict paths. Review and reconcile those changes, or use `--force` to explicitly replace the TypeScript source with portal `.js`.
 
 | Command | Description |
 |---|---|
 | `ghl app actions` | List remotely registered actions. Resolves the app from the current workspace, `--app`, or the selected app; supports `--json`. |
-| `ghl app actions pull` | Refresh all per-action JSON files, extract versioned JavaScript under `actions/code/`, regenerate the action guide, and reset the action conflict baseline. |
-| `ghl app actions create [name]` | Add a separate local action file with a version `1.0` draft. Automation passes `--key <stable_key>`; push creates it remotely. |
-| `ghl app actions validate` | Compile referenced JavaScript without executing it, then validate every local action and the required `workflows.readonly` app scope without authentication. `--publishable` enforces inputs and API URL/code requirements; optionally target `--action` and `--version`. |
+| `ghl app actions pull` | Refresh action files and preserve compatible TypeScript sources. Conflicts stop the pull; `--force` discards local action changes and writes portal JavaScript. |
+| `ghl app actions create [name]` | Add a local version `1.0` draft. Automation passes `--key <stable_key>`; add `--typescript` to scaffold a typed code handler. |
+| `ghl app actions validate` | Compile JavaScript or type-check/transpile TypeScript without executing it, then validate every local action and the required `workflows.readonly` scope. `--publishable` adds release requirements. |
 | `ghl app actions test [key]` | Execute one local action version through the portal test runner. Accepts a JSON object through `--input` or `--input-file`; use `--location` when installed-location context is required. API actions call their configured endpoint and may cause real side effects. |
 | `ghl app actions diff` | Three-way action comparison with field conflicts and exact create/update/delete API operations; supports `--json`. |
 | `ghl app actions push` | Validate all files first, then apply each planned action independently and report total/succeeded/failed counts. Successful actions are verified; failed actions stay pending. `--dry-run` previews, and deletions require `--force` in automation. |

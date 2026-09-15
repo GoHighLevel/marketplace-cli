@@ -22,7 +22,15 @@ export function workflowCreateFlags(resource: WorkflowResourceNaming) {
     key: Flags.string({
       description: `Stable ${resource.singular} key using lowercase letters, numbers, and underscores`
     }),
-    directory: workflowDirectoryFlag()
+    directory: workflowDirectoryFlag(),
+    ...(resource.plural === 'actions'
+      ? {
+          typescript: Flags.boolean({
+            description: 'Create a typed action handler and transpile it to JavaScript when pushing',
+            default: false
+          })
+        }
+      : {})
   }
 }
 
@@ -30,6 +38,7 @@ export interface WorkflowCreateInput {
   name?: string
   key?: string
   directory: string
+  typescript?: boolean
 }
 
 export abstract class WorkflowCreateCommand<
@@ -61,10 +70,15 @@ export abstract class WorkflowCreateCommand<
           KEY_PATTERN.test(value) ? true : 'Use lowercase letters, numbers, and underscores, starting with a letter.'
       }))
     ).trim()
-    const manifest = this.resource.withScaffold(workspace.manifest, name, key)
+    const createOptions = options.typescript ? { typescript: true } : undefined
+    const manifest = createOptions
+      ? this.resource.withScaffold(workspace.manifest, name, key, createOptions)
+      : this.resource.withScaffold(workspace.manifest, name, key)
     const errors = this.resource.validateManifest(manifest)
     if (errors.length > 0) throw new Error(`${label} is invalid:\n- ${errors.join('\n- ')}`)
-    const staged = await this.resource.writeStagedSources(workspace, manifest)
+    const staged = createOptions
+      ? await this.resource.writeStagedSources(workspace, manifest, createOptions)
+      : await this.resource.writeStagedSources(workspace, manifest)
     const file = staged.files.find(candidate => candidate.endsWith(this.resource.filenameFromKey(key)))
     if (!file) throw new Error(`The workflow ${singular} file for "${key}" was not written.`)
     const result = { appId: manifest.appId, key, name, [`${singular}File`]: file, staged: true }

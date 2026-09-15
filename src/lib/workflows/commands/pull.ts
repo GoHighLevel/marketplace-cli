@@ -10,16 +10,25 @@ import {
 } from '../shared/resource.js'
 import { workflowDirectoryFlag, WorkflowResourceCommand } from './base.js'
 
-export function workflowPullFlags() {
+export function workflowPullFlags(resource: { plural: string }) {
   return {
     app: Flags.string({ description: 'App id; must match the workspace app' }),
-    directory: workflowDirectoryFlag()
+    directory: workflowDirectoryFlag(),
+    ...(resource.plural === 'actions'
+      ? {
+          force: Flags.boolean({
+            description: 'Discard local action changes and replace TypeScript conflicts with portal JavaScript',
+            default: false
+          })
+        }
+      : {})
   }
 }
 
 export interface WorkflowPullInput {
   app?: string
   directory: string
+  force?: boolean
 }
 
 export abstract class WorkflowPullCommand<
@@ -45,7 +54,22 @@ export abstract class WorkflowPullCommand<
       () => this.fetchManifest(context.client, context.appId),
       this.spinnerOptions
     )
-    const files = await this.resource.writeWorkspace(binding.directory, manifest)
+    const existing = options.force ? undefined : await this.resource.loadWorkspaceIfPresent?.(binding.directory)
+    if (existing && !options.force) {
+      const plan = this.resource.preserveSourceWorkspace
+        ? this.resource.planSync(existing.state.baseline, existing.manifest, manifest, existing)
+        : this.resource.planSync(existing.state.baseline, existing.manifest, manifest)
+      const conflicts = [...new Set([...plan.localChanges, ...plan.conflicts])].sort()
+      if (conflicts.length > 0) {
+        throw new Error(
+          `Workflow ${singular} pull would overwrite local or conflicting changes:\n- ${conflicts.join('\n- ')}\n` +
+            `Resolve them first, or pass --force to replace local sources with the portal state.`
+        )
+      }
+    }
+    const files = this.resource.preserveSourceWorkspace
+      ? await this.resource.writeWorkspace(binding.directory, manifest, manifest, options.force ? undefined : existing)
+      : await this.resource.writeWorkspace(binding.directory, manifest)
     const count = this.resource.items(manifest).length
     if (this.jsonEnabled()) {
       return { appId: context.appId, [plural]: count, files: count > 0 ? files : this.resource.stateFiles(files) }

@@ -11,6 +11,12 @@ import {
   writeJsonSchemaWorkspace
 } from './json-schema.js'
 import { synchronizeTypeScriptConfig, type TypeScriptConfigResult } from './typescript-config.js'
+import { loadWorkflowActionsWorkspaceIfPresent } from '../workflows/actions/workspace.js'
+import {
+  assertWorkflowActionTypesWorkspaceWritable,
+  type WorkflowActionTypesWorkspaceResult,
+  writeWorkflowActionTypesWorkspace
+} from '../workflows/actions/types.js'
 
 export type { TypeScriptConfigResult } from './typescript-config.js'
 
@@ -62,6 +68,7 @@ export interface TypeDeclarationOptions {
 }
 
 export interface TypesWorkspaceResult extends JsonSchemaWorkspaceResult {
+  actionTypes?: WorkflowActionTypesWorkspaceResult
   declarationFile: string
   typescriptConfig: TypeScriptConfigResult
 }
@@ -295,9 +302,17 @@ export async function writeTypesWorkspace(
   options: TypeDeclarationOptions = {}
 ): Promise<TypesWorkspaceResult> {
   const directory = path.resolve(inputDirectory)
+  const actions = await loadWorkflowActionsWorkspaceIfPresent(directory)
+  if (actions && actions.manifest.actions.length > 0) {
+    await assertWorkflowActionTypesWorkspaceWritable(directory, actions.manifest)
+  }
   const typeDeclaration = await writeTypeDeclarationWorkspace(directory, options)
   const schemaResult = await writeJsonSchemaWorkspace(directory)
-  return { ...typeDeclaration, ...schemaResult }
+  const actionTypes =
+    actions && actions.manifest.actions.length > 0
+      ? await writeWorkflowActionTypesWorkspace(directory, actions.manifest, { generatedAt: options.generatedAt })
+      : undefined
+  return { ...typeDeclaration, ...schemaResult, ...(actionTypes ? { actionTypes } : {}) }
 }
 
 export async function writeTypeDeclarationWorkspace(

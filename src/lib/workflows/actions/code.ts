@@ -7,16 +7,36 @@ export const WORKFLOW_ACTION_CODE_MAX_BYTES = 1024 * 1024
 
 const ACTION_VERSION = /^\d+\.\d+$/
 
-export function workflowActionCodeFilename(key: string, version: string): string {
+export type WorkflowActionSourceLanguage = 'javascript' | 'typescript'
+
+function sourceExtension(language: WorkflowActionSourceLanguage): string {
+  return language === 'typescript' ? 'ts' : 'js'
+}
+
+export function workflowActionCodeFilename(
+  key: string,
+  version: string,
+  language: WorkflowActionSourceLanguage = 'javascript'
+): string {
   const keyErrors = workflowActionKeyValidationErrors(key)
   if (keyErrors.length > 0) throw new Error(`Workflow action key "${key}" ${keyErrors.join(' and ')}.`)
   if (!ACTION_VERSION.test(version))
     throw new Error(`Workflow action version "${version}" must use major.minor format.`)
-  return `${key}.${version}.js`
+  return `${key}.${version}.${sourceExtension(language)}`
 }
 
-export function workflowActionCodeReference(key: string, version: string): string {
-  return `${WORKFLOW_ACTION_CODE_DIRECTORY_NAME}/${workflowActionCodeFilename(key, version)}`
+export function workflowActionCodeReference(
+  key: string,
+  version: string,
+  language: WorkflowActionSourceLanguage = 'javascript'
+): string {
+  return `${WORKFLOW_ACTION_CODE_DIRECTORY_NAME}/${workflowActionCodeFilename(key, version, language)}`
+}
+
+export function workflowActionSourceLanguage(reference: string): WorkflowActionSourceLanguage | undefined {
+  if (reference.endsWith('.ts')) return 'typescript'
+  if (reference.endsWith('.js')) return 'javascript'
+  return undefined
 }
 
 export function workflowActionCodeSyntaxError(code: string, filename: string): string | undefined {

@@ -45,7 +45,8 @@ export const WORKFLOW_TRIGGERS_RESOURCE: WorkflowTriggersResource = {
     const files = await writeWorkflowTriggersWorkspace(workspace.directory, manifest, workspace.state.baseline)
     return { directory: files.triggerDirectory, files: files.triggerFiles }
   },
-  writeWorkspace: writeWorkflowTriggersWorkspace,
+  writeWorkspace: (directory, manifest, baseline = manifest) =>
+    writeWorkflowTriggersWorkspace(directory, manifest, baseline),
   filesDirectory: files => files.triggerDirectory,
   stateFiles: files => ({ triggerStateFile: files.triggerStateFile }),
   validateManifest: (manifest, options = {}) =>

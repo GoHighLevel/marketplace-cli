@@ -13,12 +13,16 @@ import {
 import { planWorkflowActionsSync, type WorkflowActionsSyncPlan } from './sync.js'
 import {
   loadWorkflowActionsWorkspace,
+  loadWorkflowActionsWorkspaceIfPresent,
   workflowActionFilenameFromKey,
   type WorkflowActionsWorkspace,
   type WorkflowActionsWorkspaceResult,
   writeLocalWorkflowActionsManifest,
   writeWorkflowActionsWorkspace
 } from './workspace.js'
+import path from 'node:path'
+import { generateWorkflowActionTypeScriptScaffold, compileWorkflowActionTypeScript } from './typescript.js'
+import { workflowActionCodeFilename } from './code.js'
 
 export type WorkflowActionsResource = WorkflowResource<
   WorkflowActionsManifest,
@@ -32,21 +36,66 @@ export const WORKFLOW_ACTIONS_RESOURCE: WorkflowActionsResource = {
   singular: 'action',
   plural: 'actions',
   label: 'Workflow action',
+  preserveSourceWorkspace: true,
   items: manifest => manifest.actions,
-  withScaffold: (manifest, name, key) => ({
-    ...manifest,
-    actions: [...manifest.actions, createWorkflowActionScaffold(name, key)].sort((left, right) =>
-      left.key.localeCompare(right.key)
-    )
-  }),
+  withScaffold: (manifest, name, key, options) => {
+    const action = createWorkflowActionScaffold(name, key)
+    if (options?.typescript) action.versions[0].executionConfig = { type: 'CODE', code: '' }
+    return {
+      ...manifest,
+      actions: [...manifest.actions, action].sort((left, right) => left.key.localeCompare(right.key))
+    }
+  },
   withoutItem: (manifest, key) => ({ ...manifest, actions: manifest.actions.filter(action => action.key !== key) }),
   filenameFromKey: workflowActionFilenameFromKey,
   loadWorkspace: loadWorkflowActionsWorkspace,
-  writeStagedSources: async (workspace, manifest) => {
-    const files = await writeLocalWorkflowActionsManifest(workspace.directory, manifest)
+  loadWorkspaceIfPresent: loadWorkflowActionsWorkspaceIfPresent,
+  writeStagedSources: async (workspace, manifest, options) => {
+    let stagedManifest = manifest
+    const codeSourceOverrides = []
+    if (options?.typescript) {
+      const existingKeys = new Set(workspace.manifest.actions.map(action => action.key))
+      const action = manifest.actions.find(candidate => !existingKeys.has(candidate.key))
+      const version = action?.versions[0]
+      if (!action || !version) throw new Error('The new workflow action could not be identified for TypeScript setup.')
+      const source = generateWorkflowActionTypeScriptScaffold(action, version)
+      const filename = path.join(
+        workspace.codeDirectory,
+        workflowActionCodeFilename(action.key, version.version, 'typescript')
+      )
+      const compiled = compileWorkflowActionTypeScript({
+        directory: workspace.directory,
+        filename,
+        source,
+        action,
+        version
+      })
+      if (compiled.errors.length > 0) {
+        throw new Error(`Generated TypeScript action is invalid:\n- ${compiled.errors.join('\n- ')}`)
+      }
+      stagedManifest = structuredClone(manifest)
+      const stagedAction = stagedManifest.actions.find(candidate => candidate.key === action.key)
+      const stagedVersion = stagedAction?.versions.find(candidate => candidate.version === version.version)
+      if (!stagedVersion) throw new Error('The new workflow action version could not be staged.')
+      stagedVersion.executionConfig = { type: 'CODE', code: compiled.code }
+      codeSourceOverrides.push({
+        actionKey: action.key,
+        version: version.version,
+        language: 'typescript' as const,
+        source,
+        compiledCode: compiled.code
+      })
+    }
+    const files = await writeLocalWorkflowActionsManifest(workspace.directory, stagedManifest, {
+      preserveCodeSources: workspace.codeSources,
+      codeSourceOverrides
+    })
     return { directory: files.actionDirectory, files: files.actionFiles }
   },
-  writeWorkspace: writeWorkflowActionsWorkspace,
+  writeWorkspace: (directory, manifest, baseline = manifest, sourceWorkspace) =>
+    writeWorkflowActionsWorkspace(directory, manifest, baseline, {
+      preserveCodeSources: sourceWorkspace?.codeSources
+    }),
   filesDirectory: files => files.actionDirectory,
   stateFiles: files => ({ stateFile: files.stateFile }),
   validateManifest: (manifest, options = {}) =>
@@ -58,7 +107,8 @@ export const WORKFLOW_ACTIONS_RESOURCE: WorkflowActionsResource = {
   prerequisiteErrors: workspace =>
     workflowActionPrerequisiteErrors(workspace.allowedScopes, workspace.manifest.actions.length),
   fetchSnapshot: fetchWorkflowActionsSnapshot,
-  planSync: planWorkflowActionsSync,
+  planSync: (baseline, local, remote, workspace) =>
+    planWorkflowActionsSync(baseline, local, remote, { codeSources: workspace?.codeSources }),
   listSummaries: (client, appId) => client.listWorkflowActionSummaries(appId),
   summaryRow: summary => ({
     id: summary.actionId,

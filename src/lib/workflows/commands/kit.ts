@@ -36,7 +36,7 @@ export function workflowResourceCommands<
   const diffFlags = workflowDiffFlags()
   const newVersionFlags = workflowNewVersionFlags()
   const publishFlags = workflowPublishFlags(resource)
-  const pullFlags = workflowPullFlags()
+  const pullFlags = workflowPullFlags(resource)
   const pushFlags = workflowPushFlags(resource)
   const validateFlags = workflowValidateFlags(resource)
   const selector = (args: Record<string, string | undefined>): string | undefined => args[resource.singular]
@@ -58,7 +58,13 @@ export function workflowResourceCommands<
       protected readonly resource = resource
       protected async execute(): Promise<unknown> {
         const { args, flags } = await this.parse({ args: createArgs, flags: createFlags, enableJsonFlag: true })
-        return this.create({ name: args.name, key: flags.key, directory: flags.directory })
+        const values = flags as typeof flags & { typescript?: boolean }
+        return this.create({
+          name: args.name,
+          key: flags.key,
+          directory: flags.directory,
+          typescript: values.typescript
+        })
       }
     },
     Delete: class extends WorkflowDeleteCommand<M, P, W, F, S> {

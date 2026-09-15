@@ -78,6 +78,10 @@ export interface WorkflowResourceStagedFiles {
   files: string[]
 }
 
+export interface WorkflowResourceCreateOptions {
+  typescript?: boolean
+}
+
 export interface WorkflowResourceValidationOptions {
   publishable?: boolean
   key?: string
@@ -91,6 +95,7 @@ export interface WorkflowResourceNaming {
   plural: string
   /* Sentence-case label for messages: "Workflow action". */
   label: string
+  preserveSourceWorkspace?: boolean
 }
 
 /* Everything the shared `ghl app <actions|triggers> ...` commands need to know
@@ -106,20 +111,25 @@ export interface WorkflowResource<
   S
 > extends WorkflowResourceNaming {
   items(manifest: M): WorkflowResourceDefinition[]
-  withScaffold(manifest: M, name: string, key: string): M
+  withScaffold(manifest: M, name: string, key: string, options?: WorkflowResourceCreateOptions): M
   withoutItem(manifest: M, key: string): M
   filenameFromKey(key: string): string
   loadWorkspace(directory: string): Promise<W>
   /* Writes the JSON sources while keeping the last-pull baseline untouched. */
-  writeStagedSources(workspace: W, manifest: M): Promise<WorkflowResourceStagedFiles>
-  writeWorkspace(directory: string, manifest: M, baseline?: M): Promise<F>
+  writeStagedSources(
+    workspace: W,
+    manifest: M,
+    options?: WorkflowResourceCreateOptions
+  ): Promise<WorkflowResourceStagedFiles>
+  writeWorkspace(directory: string, manifest: M, baseline?: M, sourceWorkspace?: W): Promise<F>
+  loadWorkspaceIfPresent?(directory: string): Promise<W | undefined>
   filesDirectory(files: F): string
   /* The subset of written files reported when the resource has no items. */
   stateFiles(files: F): Partial<F>
   validateManifest(manifest: M, options?: WorkflowResourceValidationOptions): string[]
   prerequisiteErrors(workspace: W): string[]
   fetchSnapshot(client: ApiClient, appId: string): Promise<WorkflowResourceSnapshot<M, S>>
-  planSync(baseline: M, local: M, remote: M): P
+  planSync(baseline: M, local: M, remote: M, workspace?: W): P
   listSummaries(client: ApiClient, appId: string): Promise<S[]>
   summaryRow(summary: S): WorkflowResourceSummaryRow
   publishCandidates(manifest: M, summaries: S[], version?: string): WorkflowResourcePublishCandidate[]

@@ -113,7 +113,9 @@ export abstract class WorkflowPushCommand<
       )
       const failedKeys = new Set(verified.results.filter(result => !result.success).map(result => result.key))
       const local = this.resource.reconcileAfterPush(context.local.manifest, remote, failedKeys)
-      const files = await this.resource.writeWorkspace(context.directory, local, remote)
+      const files = this.resource.preserveSourceWorkspace
+        ? await this.resource.writeWorkspace(context.directory, local, remote, context.local)
+        : await this.resource.writeWorkspace(context.directory, local, remote)
       const result = { appId: context.appId, ...verified, files }
       if (verified.failed > 0) process.exitCode = 1
       if (this.jsonEnabled()) return result

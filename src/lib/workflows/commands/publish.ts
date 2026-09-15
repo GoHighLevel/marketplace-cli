@@ -115,7 +115,9 @@ export abstract class WorkflowPublishCommand<
       this.spinnerOptions
     )
     const remote = await this.fetchManifest(context.client, context.appId)
-    const files = await this.resource.writeWorkspace(context.directory, remote)
+    const files = this.resource.preserveSourceWorkspace
+      ? await this.resource.writeWorkspace(context.directory, remote, remote, context.local)
+      : await this.resource.writeWorkspace(context.directory, remote)
     const result = {
       appId: context.appId,
       key: item.key,
