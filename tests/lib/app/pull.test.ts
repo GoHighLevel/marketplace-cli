@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildPullFilesOutput,
   loadAppVersionForExport,
+  pullArtifactPlan,
   readPullWorkspaceBinding,
   resolvePullWorkspaceBinding,
   resolveVersionId
@@ -19,6 +20,13 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true })
+})
+
+describe('pull artifact plan', () => {
+  it('always enables JSON Schema artifacts and keeps TypeScript declarations opt-in', () => {
+    expect(pullArtifactPlan(false)).toEqual({ includeJsonSchema: true, includeTypeDeclarations: false })
+    expect(pullArtifactPlan(true)).toEqual({ includeJsonSchema: true, includeTypeDeclarations: true })
+  })
 })
 
 describe('pull workspace binding', () => {

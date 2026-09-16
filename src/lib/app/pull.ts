@@ -21,6 +21,15 @@ export interface AppExportClient {
   getVersion(appId: string, versionId: string): Promise<AppVersion>
 }
 
+export interface PullArtifactPlan {
+  includeJsonSchema: true
+  includeTypeDeclarations: boolean
+}
+
+export function pullArtifactPlan(withTypes: boolean): PullArtifactPlan {
+  return { includeJsonSchema: true, includeTypeDeclarations: withTypes }
+}
+
 export function buildPullFilesOutput(options: {
   app: AppWorkspaceResult
   actions?: WorkflowActionsWorkspaceResult

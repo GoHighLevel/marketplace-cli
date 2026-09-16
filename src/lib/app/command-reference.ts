@@ -53,7 +53,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app pull [appId]',
         description:
-          'Refresh generated JSON from the portal. Inside a workspace, app and version IDs come from `ghl-app.json`. Add `--with-types` for declarations, project integration, schemas, and editor associations. Workflow-action conflicts stop refresh; `--force` replaces local action changes with portal JavaScript.'
+          'Refresh generated JSON from the portal with local JSON Schemas and editor associations. Inside a workspace, app and version IDs come from `ghl-app.json`. Add `--with-types` for declarations and TypeScript project integration. Workflow-action conflicts stop refresh; `--force` replaces local action changes with portal JavaScript.'
       },
       {
         command: 'ghl app types',

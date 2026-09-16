@@ -123,6 +123,8 @@ describe('public command contracts', () => {
         force: expect.objectContaining({ type: 'boolean', default: false })
       })
     )
+    expect(AppPull.flags['with-types'].description).toMatch(/TypeScript declarations/i)
+    expect(AppPull.flags['with-types'].description).not.toMatch(/schema|editor/i)
     expect(commandIds).toContain('app:pull')
   })
 

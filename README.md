@@ -37,7 +37,8 @@ ghl login                                 # authenticate via the browser
 ghl account                               # list accessible developer accounts
 ghl account switch                        # switch account using an interactive picker
 ghl app create                            # create the remote app + local JSON folder, then select it
-ghl app pull --with-types                 # refresh JSON and opt into generated editor/type support
+ghl app pull                              # refresh JSON with local schemas and editor validation
+ghl app pull --with-types                 # also generate TypeScript declarations and project integration
 ghl app types                             # regenerate types and schemas without an API call
 # edit ghl-app.json, webhooks, actions, and triggers under src/modules/workflows/
 ghl app validate                          # validate local JSON without an API call
@@ -90,7 +91,7 @@ Local workspace files are written atomically. User-editable files use mode 0644;
 
 Inside a directory containing `ghl-app.json`, run `ghl app pull` with no app or destination arguments. The CLI reads `appId` and `versionId` from that manifest and refreshes the current workspace directly without asking for a parent directory or folder. An explicit app ID must match the workspace. Passing `--directory` or `--folder` intentionally switches to the new-destination flow.
 
-Type and editor support is opt-in. Run `ghl app pull --with-types` while refreshing portal data, or run `ghl app types` in an existing workspace without an API call. The CLI then writes `ghl-app.d.ts`, adds local `$schema` references to files written by that pull, writes deterministic draft-07 schemas under `.ghl/schemas/`, and creates `.vscode/settings.json` only when that file does not already exist. It also creates `tsconfig.json`, or safely adds the declaration path to an existing `tsconfig.json`/`jsconfig.json` `include` or `files` list while preserving comments and developer settings. When actions exist, their isolated code directory is excluded from broad root-project discovery so the sandbox and application compiler environments do not overlap. Existing editor settings are never replaced. Contextual and cross-file business rules remain enforced by the CLI validators.
+JSON Schema editor support is automatic on every pull. The CLI adds local `$schema` references to generated JSON, writes deterministic draft-07 schemas under `.ghl/schemas/`, and creates `.vscode/settings.json` only when that file does not already exist. Add `--with-types` to also generate `ghl-app.d.ts`, action declarations, and TypeScript project integration. Type generation creates `tsconfig.json`, or safely adds the declaration path to an existing `tsconfig.json`/`jsconfig.json` `include` or `files` list while preserving comments and developer settings. When actions exist, their isolated code directory is excluded from broad root-project discovery so the sandbox and application compiler environments do not overlap. Existing editor settings are never replaced. Contextual and cross-file business rules remain enforced by the CLI validators.
 
 VS Code uses the JSON Schemas and schema associations to validate JSON automatically. The TypeScript project configuration makes the declaration file available to the compiler, while application code imports the interface it uses:
 
@@ -115,8 +116,8 @@ import type { GhlAppManifest } from './ghl-app.js'
 | `src/billing/subscription.json` | App-level marketplace subscription plans, created only when the app has a plan. |
 | `src/billing/usage-based.json` | App-level fixed or dynamic usage meters and their price tiers, created only when the app has a meter. |
 | `src/billing/HIGHLEVEL_BILLING.md` | Generated key-by-key billing reference created only when billing source configuration exists. |
-| `.ghl/schemas/*.schema.json` | Optional offline schemas for app, webhook, workflow action/trigger, subscription, and usage-based JSON. |
-| `.vscode/settings.json` | Optional VS Code schema associations, created only when type/schema generation is requested and no settings file exists. |
+| `.ghl/schemas/*.schema.json` | Offline schemas generated on every pull for app, webhook, workflow action/trigger, subscription, and usage-based JSON. |
+| `.vscode/settings.json` | VS Code schema associations created on pull when no settings file exists; existing settings are preserved. |
 | `.ghl/state.json` | Sanitized last-pull baseline used for three-way conflict detection. Keep it with the workspace and do not edit it. |
 | `.ghl/workflow-actions-state.json` | Sanitized workflow-action baseline used for separate three-way conflict detection. Do not edit it. |
 | `.ghl/workflow-triggers-state.json` | Sanitized workflow-trigger baseline used for separate three-way conflict detection. Do not edit it. |
@@ -168,7 +169,7 @@ Subscription plans and usage meters are app-scoped rather than tied to one app v
 |---|---|
 | `ghl app list` | List apps. Flags: `--search <text>`, `--limit <n>` (default 50), `--skip <n>`, `--json`. |
 | `ghl app create` | Create an app in the portal, create its local JSON folder, and select it. Interactive, or provide `--name`, `--type public\|private`, `--target sub-account\|agency`, and `--listing white-label\|standard`; sub-account targets also require `--installer everyone\|agency-only`. Local flags: `--directory <parent>`, `--folder <name>`. |
-| `ghl app pull [appId]` | Refresh the current workspace using its `ghl-app.json`, or create one for an existing app. Generated type/schema support is opt-in with `--with-types`. Action conflicts stop refresh; `--force` accepts portal JavaScript. Other flags: `--version <versionId\|semver>`, `--directory <parent>`, `--folder <name>`, `--json`. |
+| `ghl app pull [appId]` | Refresh the current workspace using its `ghl-app.json`, or create one for an existing app. JSON Schemas and editor associations are always generated; `--with-types` additionally generates TypeScript declarations and project integration. Action conflicts stop refresh; `--force` accepts portal JavaScript. Other flags: `--version <versionId\|semver>`, `--directory <parent>`, `--folder <name>`, `--json`. |
 | `ghl app types` | Generate `ghl-app.d.ts`, workflow-action sandbox/version declarations when actions exist, project integration, all six JSON Schemas, and VS Code associations without authentication. Flags: `--directory <app-folder>`, `--output <file.d.ts>`, `--json`. |
 | `ghl app validate` | Validate the local workspace without authentication or API calls. Use `--directory <app-folder>`; `--json-schema` prints the app draft-07 schema, with `--schema <config>` selecting another supported configuration; `--remote` runs the separate server publish-readiness checklist. |
 | `ghl app diff` | Read the current portal version and show local changes, portal-only changes, conflicts, and the minimal API section plan. Flags: `--directory <app-folder>`, `--json`. |

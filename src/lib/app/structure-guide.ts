@@ -54,7 +54,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
 \`\`\`
 
 - The \`billing\`, \`webhooks\`, \`actions\`, \`triggers\`, and action \`code\` directories are created only when their corresponding configuration exists.
-- \`ghl-app.d.ts\`, \`.ghl/schemas/\`, and \`.vscode/settings.json\` are optional; generate them with \`ghl app types\` or \`ghl app pull --with-types\`. The command creates or safely updates the TypeScript project configuration.
+- Every pull writes \`.ghl/schemas/\`, adds \`$schema\` references to generated JSON, and creates \`.vscode/settings.json\` when absent. Add \`--with-types\` to generate \`ghl-app.d.ts\`, action declarations, and TypeScript project integration.
 - **\`ghl-app.json\`**: Supported app metadata and the app/version binding used by local commands.
 - **\`ghl-app.d.ts\`**: Readonly declarations for TypeScript or JavaScript tooling that explicitly imports the generated interfaces; JSON files are validated by the schemas instead.
 - **\`tsconfig.json\` / \`jsconfig.json\`**: Developer-owned project settings. Type generation creates \`tsconfig.json\` when neither exists, or adds the declaration to an existing \`include\` or \`files\` list without replacing other settings. When actions exist, broad root projects exclude the isolated action-code directory.

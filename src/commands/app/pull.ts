@@ -9,6 +9,7 @@ import { findAppItemById, persistSelection, toSelectedApp } from '../../lib/app/
 import {
   loadAppVersionForExport,
   buildPullFilesOutput,
+  pullArtifactPlan,
   readPullWorkspaceBinding,
   resolvePullWorkspaceBinding,
   resolveVersionId
@@ -65,7 +66,7 @@ export default class AppPull extends GhlCommand {
     directory: Flags.string({ description: 'Parent directory for the app folder (default: current directory)' }),
     folder: Flags.string({ description: 'App folder name (default: app-name slug)' }),
     'with-types': Flags.boolean({
-      description: 'Generate TypeScript declarations, JSON Schemas, and editor associations',
+      description: 'Generate TypeScript declarations and project configuration',
       default: false
     }),
     force: Flags.boolean({
@@ -157,10 +158,11 @@ export default class AppPull extends GhlCommand {
         assertBillingWorkspaceWritable(directory, pulled.billing.subscriptions, pulled.billing.usage)
       ])
     }
+    const artifactPlan = pullArtifactPlan(flags['with-types'])
     const workspace = await withSpinner(
       'Writing app files...',
       async () => {
-        const includeJsonSchema = flags['with-types'] === true
+        const { includeJsonSchema } = artifactPlan
         const appFiles = await writeAppWorkspace({
           directory,
           version: pulled.version,
@@ -199,7 +201,7 @@ export default class AppPull extends GhlCommand {
             ? { billing: billingFiles }
             : {})
         })
-        if (!flags['with-types']) return files
+        if (!artifactPlan.includeTypeDeclarations) return files
         return {
           ...files,
           ...(await writeTypesWorkspace(directory))
@@ -239,11 +241,11 @@ export default class AppPull extends GhlCommand {
     if (pulled.workflowTriggers.triggers.length > 0) this.log(`  Triggers: ${workspace.triggerDirectory}`)
     if (pulled.billing.subscriptions.plans.length > 0) this.log(`  Plans:    ${workspace.subscriptionFile}`)
     if (pulled.billing.usage.meters.length > 0) this.log(`  Meters:   ${workspace.usageFile}`)
-    if (flags['with-types']) {
+    this.log(`  Schemas:  ${path.join(workspace.directory as string, '.ghl', 'schemas')}`)
+    if (artifactPlan.includeTypeDeclarations) {
       const typescriptConfig = workspace.typescriptConfig as TypeScriptConfigResult
       this.log(`  Types:    ${workspace.declarationFile}`)
       this.log(`  TSConfig: ${typescriptConfig.file}`)
-      this.log(`  Schemas:  ${path.join(workspace.directory as string, '.ghl', 'schemas')}`)
     }
     this.log(`Selected version ${selected.versionId}; subsequent commands will target it.`)
   }

@@ -75,7 +75,7 @@ describe('app workspace paths', () => {
 })
 
 describe('writeAppWorkspace', () => {
-  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+  it('can omit JSON Schema artifacts when an internal caller explicitly disables them', async () => {
     const target = resolveAppDirectory(directory, 'without-types')
     const result = await writeAppWorkspace({
       directory: target,
