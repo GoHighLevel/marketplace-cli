@@ -107,7 +107,7 @@ import type { GhlAppManifest } from './ghl-app.js'
 | `src/modules/workflows/actions/<action-name>.json` | One app-scoped workflow action per file. A name such as `send-contact-sync-payload.json` requires the JSON key `send_contact_sync_payload`. |
 | `src/modules/workflows/actions/code/<action-key>.<version>.js` | Portal JavaScript source for one code-backed action version, referenced by `executionConfig.codeFile`. |
 | `src/modules/workflows/actions/code/<action-key>.<version>.ts` | Optional typed handler created with `ghl app actions create --typescript`; the CLI type-checks and transpiles it in memory. |
-| `.ghl/types/actions/sandbox.d.ts` / `.ghl/types/actions/<key>.d.ts` | Generated sandbox, input, output, and versioned handler declarations for TypeScript actions. |
+| `.ghl/types/actions/workflow-action.d.ts` / `.ghl/types/actions/<key>.d.ts` | Generated shared runtime, input, output, and versioned handler declarations for TypeScript actions. |
 | `src/modules/workflows/actions/code/tsconfig.json` | Generated isolated TypeScript project that excludes unavailable browser and Node globals without changing the app's root TypeScript environment. |
 | `src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md` | Generated reference created with the actions directory only when the app has an action. |
 | `src/modules/workflows/triggers/<trigger-name>.json` | One app-scoped workflow trigger per file. A name such as `contact-status-updated.json` requires the JSON key `contact_status_updated`. |

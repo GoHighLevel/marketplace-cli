@@ -7,7 +7,7 @@ import type { WorkflowActionDefinition, WorkflowActionVersion } from './manifest
 import {
   generateWorkflowActionDeclaration,
   generateWorkflowActionSandboxDeclarations,
-  WORKFLOW_ACTION_SANDBOX_TYPES_FILENAME,
+  WORKFLOW_ACTION_DECLARATION_FILENAME,
   WORKFLOW_ACTION_TYPES_RELATIVE_DIRECTORY,
   workflowActionTypeFilename,
   workflowActionVersionTypePrefix
@@ -146,7 +146,7 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
   const sandboxFile = path.join(
     input.directory,
     WORKFLOW_ACTION_TYPES_RELATIVE_DIRECTORY,
-    WORKFLOW_ACTION_SANDBOX_TYPES_FILENAME
+    WORKFLOW_ACTION_DECLARATION_FILENAME
   )
   const actionTypeFile = path.join(
     input.directory,
@@ -168,8 +168,8 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
   if (!typesImport.startsWith('.')) typesImport = `./${typesImport}`
   sourceImport = sourceImport.replace(/\.ts$/, '')
   typesImport = typesImport.replace(/\.d\.ts$/, '')
-  const sandboxDeclaration = generateWorkflowActionSandboxDeclarations(new Date(0))
-  const actionDeclaration = generateWorkflowActionDeclaration(input.action, new Date(0))
+  const sandboxDeclaration = generateWorkflowActionSandboxDeclarations()
+  const actionDeclaration = generateWorkflowActionDeclaration(input.action)
   const files = new Map<string, string>([
     [filename, input.source],
     [normalizedFilename(sandboxFile), sandboxDeclaration],
@@ -177,7 +177,7 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
     [normalizedFilename(legacySandboxFile), sandboxDeclaration],
     [
       normalizedFilename(legacyActionTypeFile),
-      actionDeclaration.replace("from './sandbox'", "from './ghl-action-sandbox'")
+      actionDeclaration.replace("from './workflow-action'", "from './ghl-action-sandbox'")
     ],
     [
       normalizedFilename(checkFile),

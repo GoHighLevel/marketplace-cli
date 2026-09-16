@@ -62,7 +62,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
 - **\`src/modules/workflows/actions/<action-name>.json\`**: One JSON file per action, including every action-owned version. Its required \`key\` must match the key derived from the filename.
 - **\`src/modules/workflows/actions/code/<action-key>.<version>.(js|ts)\`**: JavaScript body or typed handler for one code-backed action version, referenced by \`executionConfig.codeFile\`.
-- **\`.ghl/types/actions/sandbox.d.ts\` / \`.ghl/types/actions/<key>.d.ts\`**: Generated declarations for verified sandbox helpers and version-specific inputs and outputs.
+- **\`.ghl/types/actions/workflow-action.d.ts\` / \`.ghl/types/actions/<key>.d.ts\`**: Generated declarations for verified sandbox helpers and version-specific inputs and outputs.
 - **\`src/modules/workflows/actions/code/tsconfig.json\`**: Isolated generated settings that prevent unavailable browser and Node globals from appearing valid.
 - **\`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\`**: Detailed action schema, naming, validation, and synchronization reference.
 - **\`src/modules/workflows/triggers/<trigger-name>.json\`**: One JSON file per trigger, including every trigger-owned version and the filename-derived \`key\`.

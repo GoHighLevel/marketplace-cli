@@ -517,7 +517,7 @@ ${audience}
 - \`src/webhooks/ghl-webhooks.json\` contains configured webhook settings and is omitted when unused.
 - \`src/modules/workflows/actions/<action-name>.json\` contains one app-scoped action and all of its versions; its required underscore \`key\` must match the hyphenated filename.
 - \`src/modules/workflows/actions/code/<action-key>.<version>.(js|ts)\` contains one code-backed action version and is referenced through \`executionConfig.codeFile\`.
-- \`.ghl/types/actions/sandbox.d.ts\` and \`.ghl/types/actions/<key>.d.ts\` describe TypeScript action inputs, outputs, and verified runtime helpers.
+- \`.ghl/types/actions/workflow-action.d.ts\` and \`.ghl/types/actions/<key>.d.ts\` describe TypeScript action inputs, outputs, and verified runtime helpers.
 - \`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\` documents action fields, naming, validation, and synchronization when actions exist.
 - \`src/modules/workflows/triggers/<trigger-name>.json\` contains one app-scoped trigger and all of its versions; its \`key\` must match the hyphenated filename.
 - \`src/modules/workflows/triggers/HIGHLEVEL_WORKFLOW_TRIGGERS.md\` documents trigger data, filters, custom variables, callbacks, execution, validation, and synchronization when triggers exist.

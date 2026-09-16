@@ -4,6 +4,7 @@ import path from 'node:path'
 import { applyEdits, modify, parse, printParseErrorCode, type FormattingOptions, type ParseError } from 'jsonc-parser'
 
 import { writeTextFileAtomic } from '../shared/atomic-file.js'
+import { generatedFileHeader, hasGeneratedFileMarker } from '../shared/generated-file.js'
 
 const CONFIG_FILENAMES = ['tsconfig.json', 'jsconfig.json'] as const
 
@@ -103,6 +104,24 @@ function updateConfigContents(
   return updated
 }
 
+function isCliManagedConfig(contents: string, file: string, declarationPath: string): boolean {
+  if (hasGeneratedFileMarker(contents)) return true
+  const config = parseConfig(contents, file)
+  if (Object.keys(config).some(property => property !== 'exclude' && property !== 'include')) return false
+  if (!Object.hasOwn(config, 'include')) return false
+
+  const include = stringList(config.include, 'include', file).map(normalizedConfigPath)
+  const expected = [declarationPath, 'src/**/*'].map(normalizedConfigPath)
+  return include.length === expected.length && expected.every(value => include.includes(value))
+}
+
+function withGeneratedHeader(contents: string): string {
+  const leadingComment = contents.match(/^\/\*[\s\S]*?\*\/\r?\n?/u)?.[0]
+  const configContents =
+    leadingComment && hasGeneratedFileMarker(leadingComment) ? contents.slice(leadingComment.length) : contents
+  return `${generatedFileHeader()}\n${configContents}`
+}
+
 async function findConfigFile(
   directory: string
 ): Promise<{ file: string; stat?: Awaited<ReturnType<typeof fs.lstat>> }> {
@@ -127,7 +146,7 @@ export async function synchronizeTypeScriptConfig(
       include: [declarationPath, 'src/**/*'],
       ...((options.exclude?.length ?? 0) > 0 ? { exclude: [...(options.exclude ?? [])] } : {})
     }
-    const contents = `${JSON.stringify(config, null, 2)}\n`
+    const contents = `${generatedFileHeader()}\n${JSON.stringify(config, null, 2)}\n`
     await writeTextFileAtomic(file, contents, 0o644)
     return { file, status: 'created' }
   }
@@ -136,7 +155,9 @@ export async function synchronizeTypeScriptConfig(
   if (!stat.isFile()) throw new Error(`${path.basename(file)} is not a regular file.`)
 
   const contents = await fs.readFile(file, 'utf8')
-  const updatedContents = updateConfigContents(contents, file, declarationPath, options)
+  const managed = isCliManagedConfig(contents, file, declarationPath)
+  const configContents = updateConfigContents(contents, file, declarationPath, options)
+  const updatedContents = managed ? withGeneratedHeader(configContents) : configContents
   if (updatedContents === contents) return { file, status: 'unchanged' }
 
   await writeTextFileAtomic(file, updatedContents, Number(stat.mode) & 0o777)
