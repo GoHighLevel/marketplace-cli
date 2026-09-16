@@ -132,24 +132,18 @@ export function withWorkflowTriggers<TBase extends ApiClientConstructor>(Base: T
       appId: string,
       templateId: string,
       body: { name?: string; version?: string; status?: string }
-    ): Promise<WorkflowTriggerSummary> {
+    ): Promise<void> {
       await this.ensureTeam()
       const response = await this.request<unknown>(`/clients/${appId}/triggers/${templateId}/update`, {
         method: 'POST',
         body,
         baseUrl: this.config.oauthUrl
       })
-      if (
-        !isRecord(response) ||
-        response.success !== true ||
-        !isRecord(response.trigger) ||
-        !isWorkflowTriggerSummary(response.trigger)
-      ) {
+      if (!isRecord(response) || response.success !== true) {
         throw new Error(
           'Workflow trigger registry update API returned an unexpected response. Run `ghl app triggers pull`.'
         )
       }
-      return response.trigger
     }
 
     async deleteWorkflowTrigger(appId: string, templateId: string): Promise<void> {

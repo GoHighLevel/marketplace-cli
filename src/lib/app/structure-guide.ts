@@ -57,7 +57,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
 - \`ghl-app.d.ts\`, \`.ghl/schemas/\`, and \`.vscode/settings.json\` are optional; generate them with \`ghl app types\` or \`ghl app pull --with-types\`. The command creates or safely updates the TypeScript project configuration.
 - **\`ghl-app.json\`**: Supported app metadata and the app/version binding used by local commands.
 - **\`ghl-app.d.ts\`**: Readonly declarations for TypeScript or JavaScript tooling that explicitly imports the generated interfaces; JSON files are validated by the schemas instead.
-- **\`tsconfig.json\` / \`jsconfig.json\`**: Developer-owned project settings. Type generation creates \`tsconfig.json\` when neither exists, or adds the declaration to an existing \`include\` or \`files\` list without replacing other settings.
+- **\`tsconfig.json\` / \`jsconfig.json\`**: Developer-owned project settings. Type generation creates \`tsconfig.json\` when neither exists, or adds the declaration to an existing \`include\` or \`files\` list without replacing other settings. When actions exist, broad root projects exclude the isolated action-code directory.
 - **\`src/webhooks/ghl-webhooks.json\`**: Configured app-level webhook URL and event subscriptions, kept separate from app metadata.
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
 - **\`src/modules/workflows/actions/<action-name>.json\`**: One JSON file per action, including every action-owned version. Its required \`key\` must match the key derived from the filename.
@@ -134,7 +134,7 @@ The filename uses lowercase letters, numbers, and hyphens ending in \`.json\`. T
 
 For \`CODE\` execution, JSON stores only a deterministic \`codeFile\` reference. JavaScript uses the portal's async-function-body format. TypeScript exports a typed default handler and is type-checked and transpiled in memory before the CLI sends inline JavaScript. The CLI never writes a compiled file or attempts lossy JavaScript-to-TypeScript conversion.
 
-The generated \`code/tsconfig.json\` is intentionally separate from the root TypeScript project. Sandbox code must exclude browser and Node ambient globals, while the rest of the app may require them; TypeScript cannot apply both environments from one project configuration.
+The generated \`code/tsconfig.json\` is intentionally separate from the root TypeScript project. Sandbox code must exclude browser and Node ambient globals, while the rest of the app may require them; TypeScript cannot apply both environments from one project configuration. Type generation excludes the action-code directory from broad root-project discovery so each file is checked only by its intended project.
 
 Pull preserves TypeScript when its compiled JavaScript still matches the portal. Local or portal edits stop pull with conflict paths; \`--force\` explicitly replaces conflicted TypeScript with portal JavaScript. A server-created version inherits TypeScript only when recompilation remains exactly equivalent.
 

@@ -30,7 +30,7 @@ export interface WorkflowTriggersApi {
     appId: string,
     templateId: string,
     body: { name?: string; version?: string; status?: string }
-  ): Promise<WorkflowTriggerSummary>
+  ): Promise<void>
   deleteWorkflowTrigger(appId: string, templateId: string): Promise<void>
 }
 

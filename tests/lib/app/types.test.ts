@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { DEFAULT_TYPES_FILENAME, generateTypeDeclarations, writeTypesWorkspace } from '../../../src/lib/app/types.js'
 import { JSON_SCHEMA_NAMES, JSON_SCHEMA_RELATIVE_PATHS } from '../../../src/lib/app/json-schema.js'
+import type { WorkflowActionsManifest } from '../../../src/lib/workflows/actions/manifest.js'
+import { writeWorkflowActionsWorkspace } from '../../../src/lib/workflows/actions/workspace.js'
 
 const directories: string[] = []
 const GENERATED_AT = new Date('2026-09-08T21:54:32.000Z')
@@ -116,6 +118,65 @@ describe('writeTypesWorkspace', () => {
       expect.arrayContaining([path.join(directory, DEFAULT_TYPES_FILENAME), path.join(sourceDirectory, 'manifest.ts')])
     )
     expect(ts.getPreEmitDiagnostics(ts.createProgram(parsed?.fileNames ?? [], parsed?.options ?? {}))).toEqual([])
+  })
+
+  it('keeps the isolated workflow-action project out of the root TypeScript project', async () => {
+    const directory = await workspace()
+    await fs.writeFile(
+      path.join(directory, 'ghl-app.json'),
+      JSON.stringify({ schemaVersion: 1, appId: 'app-1', versionId: 'version-1' })
+    )
+    const manifest: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [
+        {
+          key: 'typed_action',
+          versions: [{ version: '1.0', status: 'draft', info: { name: 'Typed action' } }]
+        }
+      ]
+    }
+    await writeWorkflowActionsWorkspace(directory, manifest, manifest)
+
+    await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+
+    const config = JSON.parse(await fs.readFile(path.join(directory, 'tsconfig.json'), 'utf8')) as {
+      exclude: string[]
+    }
+    expect(config.exclude).toEqual(['src/modules/workflows/actions/code/**/*'])
+  })
+
+  it('migrates a broad root project once and preserves its existing exclusions', async () => {
+    const directory = await workspace()
+    await fs.writeFile(
+      path.join(directory, 'ghl-app.json'),
+      JSON.stringify({ schemaVersion: 1, appId: 'app-1', versionId: 'version-1' })
+    )
+    await fs.writeFile(
+      path.join(directory, 'tsconfig.json'),
+      `${JSON.stringify({ include: [DEFAULT_TYPES_FILENAME, 'src/**/*'], exclude: ['dist/**/*'] }, null, 2)}\n`
+    )
+    const manifest: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [
+        {
+          key: 'typed_action',
+          versions: [{ version: '1.0', status: 'draft', info: { name: 'Typed action' } }]
+        }
+      ]
+    }
+    await writeWorkflowActionsWorkspace(directory, manifest, manifest)
+
+    const first = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+    const second = await writeTypesWorkspace(directory, { generatedAt: GENERATED_AT })
+    const config = JSON.parse(await fs.readFile(path.join(directory, 'tsconfig.json'), 'utf8')) as {
+      exclude: string[]
+    }
+
+    expect(first.typescriptConfig.status).toBe('updated')
+    expect(second.typescriptConfig.status).toBe('unchanged')
+    expect(config.exclude).toEqual(['dist/**/*', 'src/modules/workflows/actions/code/**/*'])
   })
 
   it('updates a commented tsconfig without losing developer settings and is idempotent', async () => {

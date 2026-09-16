@@ -12,6 +12,10 @@ export interface TypeScriptConfigResult {
   status: 'created' | 'unchanged' | 'updated'
 }
 
+export interface TypeScriptConfigOptions {
+  exclude?: readonly string[]
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -54,28 +58,49 @@ function parseConfig(contents: string, file: string): Record<string, unknown> {
   return value
 }
 
-function stringList(value: unknown, property: 'files' | 'include', file: string): string[] {
+function stringList(value: unknown, property: 'exclude' | 'files' | 'include', file: string): string[] {
   if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) {
     throw new Error(`${path.basename(file)}.${property} must be an array of strings.`)
   }
   return value
 }
 
-function updateConfigContents(contents: string, file: string, declarationPath: string): string {
+function appendConfigPaths(
+  contents: string,
+  file: string,
+  property: 'exclude' | 'files' | 'include',
+  paths: readonly string[]
+): string {
+  if (paths.length === 0) return contents
   const config = parseConfig(contents, file)
-  const property = Object.hasOwn(config, 'files') ? 'files' : Object.hasOwn(config, 'include') ? 'include' : undefined
-  if (!property) return contents
+  const existing = Object.hasOwn(config, property) ? stringList(config[property], property, file) : []
+  const normalized = new Set(existing.map(normalizedConfigPath))
+  const missing = paths.filter(value => !normalized.has(normalizedConfigPath(value)))
+  if (missing.length === 0) return contents
 
-  const existing = stringList(config[property], property, file)
-
-  if (existing.some(value => normalizedConfigPath(value) === normalizedConfigPath(declarationPath))) {
-    return contents
-  }
-
-  const edits = modify(contents, [property], [...existing, declarationPath], {
+  const edits = modify(contents, [property], [...existing, ...missing], {
     formattingOptions: formattingOptions(contents)
   })
   return applyEdits(contents, edits)
+}
+
+function updateConfigContents(
+  contents: string,
+  file: string,
+  declarationPath: string,
+  options: TypeScriptConfigOptions
+): string {
+  const config = parseConfig(contents, file)
+  const sourceProperty = Object.hasOwn(config, 'files')
+    ? 'files'
+    : Object.hasOwn(config, 'include')
+      ? 'include'
+      : undefined
+  let updated = sourceProperty ? appendConfigPaths(contents, file, sourceProperty, [declarationPath]) : contents
+
+  /* Explicit files are developer-owned and are not affected by exclude. */
+  if (sourceProperty !== 'files') updated = appendConfigPaths(updated, file, 'exclude', options.exclude ?? [])
+  return updated
 }
 
 async function findConfigFile(
@@ -91,13 +116,18 @@ async function findConfigFile(
 
 export async function synchronizeTypeScriptConfig(
   directory: string,
-  declarationFile: string
+  declarationFile: string,
+  options: TypeScriptConfigOptions = {}
 ): Promise<TypeScriptConfigResult> {
   const { file, stat } = await findConfigFile(directory)
   const declarationPath = configPath(path.relative(directory, declarationFile))
 
   if (!stat) {
-    const contents = `${JSON.stringify({ include: [declarationPath, 'src/**/*'] }, null, 2)}\n`
+    const config = {
+      include: [declarationPath, 'src/**/*'],
+      ...((options.exclude?.length ?? 0) > 0 ? { exclude: [...(options.exclude ?? [])] } : {})
+    }
+    const contents = `${JSON.stringify(config, null, 2)}\n`
     await writeTextFileAtomic(file, contents, 0o644)
     return { file, status: 'created' }
   }
@@ -106,7 +136,7 @@ export async function synchronizeTypeScriptConfig(
   if (!stat.isFile()) throw new Error(`${path.basename(file)} is not a regular file.`)
 
   const contents = await fs.readFile(file, 'utf8')
-  const updatedContents = updateConfigContents(contents, file, declarationPath)
+  const updatedContents = updateConfigContents(contents, file, declarationPath, options)
   if (updatedContents === contents) return { file, status: 'unchanged' }
 
   await writeTextFileAtomic(file, updatedContents, Number(stat.mode) & 0o777)

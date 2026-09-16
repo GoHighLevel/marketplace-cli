@@ -10,7 +10,11 @@ import {
   JSON_SCHEMA_NAMES,
   writeJsonSchemaWorkspace
 } from './json-schema.js'
-import { synchronizeTypeScriptConfig, type TypeScriptConfigResult } from './typescript-config.js'
+import {
+  synchronizeTypeScriptConfig,
+  type TypeScriptConfigOptions,
+  type TypeScriptConfigResult
+} from './typescript-config.js'
 import { loadWorkflowActionsWorkspaceIfPresent } from '../workflows/actions/workspace.js'
 import {
   assertWorkflowActionTypesWorkspaceWritable,
@@ -21,6 +25,7 @@ import {
 export type { TypeScriptConfigResult } from './typescript-config.js'
 
 export const DEFAULT_TYPES_FILENAME = 'ghl-app.d.ts'
+const WORKFLOW_ACTION_CODE_CONFIG_GLOB = 'src/modules/workflows/actions/code/**/*'
 
 const ROOT_TYPE_NAMES: Readonly<Record<JsonSchemaName, string>> = {
   app: 'GhlAppManifest',
@@ -306,7 +311,9 @@ export async function writeTypesWorkspace(
   if (actions && actions.manifest.actions.length > 0) {
     await assertWorkflowActionTypesWorkspaceWritable(directory, actions.manifest)
   }
-  const typeDeclaration = await writeTypeDeclarationWorkspace(directory, options)
+  const typeDeclaration = await writeTypeDeclarationWorkspace(directory, options, {
+    exclude: actions && actions.manifest.actions.length > 0 ? [WORKFLOW_ACTION_CODE_CONFIG_GLOB] : []
+  })
   const schemaResult = await writeJsonSchemaWorkspace(directory)
   const actionTypes =
     actions && actions.manifest.actions.length > 0
@@ -317,10 +324,11 @@ export async function writeTypesWorkspace(
 
 export async function writeTypeDeclarationWorkspace(
   inputDirectory: string,
-  options: TypeDeclarationOptions = {}
+  options: TypeDeclarationOptions = {},
+  typescriptConfigOptions: TypeScriptConfigOptions = {}
 ): Promise<TypeDeclarationWorkspaceResult> {
   const directory = path.resolve(inputDirectory)
   const declarationFile = await writeTypeDeclarationFile(directory, options)
-  const typescriptConfig = await synchronizeTypeScriptConfig(directory, declarationFile)
+  const typescriptConfig = await synchronizeTypeScriptConfig(directory, declarationFile, typescriptConfigOptions)
   return { declarationFile, typescriptConfig }
 }

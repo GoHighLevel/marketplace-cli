@@ -30,7 +30,7 @@ export interface WorkflowActionsApi {
     appId: string,
     templateId: string,
     body: { name?: string; version?: string; status?: string; isHidden?: boolean }
-  ): Promise<WorkflowActionSummary>
+  ): Promise<void>
   deleteWorkflowAction(appId: string, templateId: string): Promise<void>
 }
 

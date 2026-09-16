@@ -124,19 +124,18 @@ export function withWorkflowActions<TBase extends ApiClientConstructor>(Base: TB
       appId: string,
       templateId: string,
       body: { name?: string; version?: string; status?: string; isHidden?: boolean }
-    ): Promise<WorkflowActionSummary> {
+    ): Promise<void> {
       await this.ensureTeam()
       const response = await this.request<unknown>(`/clients/${appId}/actions/${templateId}/update`, {
         method: 'POST',
         body,
         baseUrl: this.config.oauthUrl
       })
-      if (!isRecord(response) || response.success !== true || !isWorkflowActionSummary(response.action)) {
+      if (!isRecord(response) || response.success !== true) {
         throw new Error(
           'Workflow action registry update API returned an unexpected response. Run `ghl app actions pull`.'
         )
       }
-      return response.action
     }
 
     async deleteWorkflowAction(appId: string, templateId: string): Promise<void> {
