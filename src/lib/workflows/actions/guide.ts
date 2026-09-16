@@ -19,11 +19,16 @@ The sub-account must have the marketplace app installed and LC Premium Triggers 
 ## Local structure
 
 \`\`\`text
+tsconfig.actions.json
+eslint.config.mjs
+.ghl/types/actions/
+├── workflow-action.d.ts
+├── <action-key>.d.ts
+└── eslint.config.actions.mjs
 src/modules/workflows/
 ├── actions/
 │   ├── HIGHLEVEL_WORKFLOW_ACTIONS.md
 │   ├── code/
-│   │   ├── tsconfig.json
 │   │   ├── calculate_score.1.0.js
 │   │   └── calculate_score.1.1.ts
 │   ├── calculate-score.json
@@ -356,11 +361,17 @@ The default execution payload contains configured \`data\`, workflow/location/co
 }
 \`\`\`
 
-The local-only \`codeFile\` path must be exactly \`code/<action-key>.<major>.<minor>.js\` or \`.ts\`. JavaScript is the async-function body accepted by the portal editor, where top-level \`await\` and \`return\` are valid. TypeScript exports one typed default handler. The CLI type-checks and transpiles it in memory; no compiled file is written.
+The local-only \`codeFile\` path must be exactly \`code/<action-key>.<major>.<minor>.js\` or \`.ts\`. JavaScript is a checked module wrapper whose default handler receives the verified sandbox context; only its body is sent to the portal, where top-level \`await\` and \`return\` remain valid. TypeScript exports one typed default handler and is transpiled in memory. No compiled file is written.
 
-Create a typed action with \`ghl app actions create "Calculate score" --key calculate_score --typescript\`. The CLI generates \`.ghl/types/actions/workflow-action.d.ts\`, \`.ghl/types/actions/calculate_score.d.ts\`, and a dedicated \`code/tsconfig.json\`. Inputs and outputs come from the matching action version, while the shared workflow-action declaration exposes only capabilities verified in the backend runtime.
+Create a checked JavaScript action with \`ghl app actions create "Calculate score" --key calculate_score\`, or add \`--typescript\` for native TypeScript. The CLI generates \`.ghl/types/actions/workflow-action.d.ts\`, \`.ghl/types/actions/calculate_score.d.ts\`, \`tsconfig.actions.json\`, and an ESLint action override. Inputs and outputs come from the matching action version, while the shared declaration exposes only capabilities verified in the backend runtime.
 
-The action project remains separate from the root \`tsconfig.json\` because sandbox code must exclude browser and Node ambient globals. TypeScript cannot apply different \`lib\` and \`types\` settings to one folder inside a single project; merging these settings into the root would break application code that needs DOM or Node types.
+## Toolchain integration
+
+\`tsconfig.actions.json\` enables \`allowJs\`, \`checkJs\`, strict checking, and ES2022 without DOM or Node types. Run \`tsc -p tsconfig.actions.json\` in CI. JavaScript scaffolds contain \`// @ts-check\`, action-specific triple-slash references, and a JSDoc handler type, so VS Code validates input fields and sandbox helpers immediately.
+
+\`.ghl/types/actions/eslint.config.actions.mjs\` contains the sandbox globals and \`no-undef\` rule. When no ESLint config exists, the CLI creates \`eslint.config.mjs\` that loads this override. A developer-owned ESLint config is preserved; import the generated override and add it to that config's exported array.
+
+The action project remains separate from the root \`tsconfig.json\` because sandbox code must exclude browser and Node ambient globals. TypeScript cannot apply different \`lib\` and \`types\` settings to one folder inside a single project; merging these settings into the root would break application code that needs DOM or Node types. The issue proposal's \`module: "None"\` setting is not used because it does not make a standalone file's top-level \`return\` legal; the local wrapper provides valid module syntax while preserving the uploaded body.
 
 The runtime provides:
 
@@ -375,19 +386,24 @@ The sandbox does not expose \`fetch\`, Node modules, timers, \`crypto\`, \`URL\`
 Code must return a JavaScript object or array. A synchronous branching action returns an object containing \`branchId\`.
 
 \`\`\`js
-const response = await customRequest.post('https://api.example.com/sync', {
-  data: {
-    contactId: inputData.extras.contactId,
-    payload: inputData.data
-  }
-})
+// @ts-check
+/// <reference path="../../../../../.ghl/types/actions/workflow-action.d.ts" />
+/// <reference path="../../../../../.ghl/types/actions/calculate_score.d.ts" />
 
-return { status: response.status, result: response.data }
+/** @type {import('../../../../../.ghl/types/actions/calculate_score').GhlActionCalculateScoreV1_0Handler} */
+const action = async ({ inputData, customRequest }) => {
+  const response = await customRequest.post('https://api.example.com/sync', {
+    data: { contactId: inputData.extras.contactId, payload: inputData.data }
+  })
+  return { status: response.status, result: response.data }
+}
+
+export default action
 \`\`\`
 
 Code is limited to 1 MiB of UTF-8 text. Symlinks, path traversal, inline JSON \`code\`, duplicate code references, and unreferenced JavaScript or TypeScript files are rejected. Push sends compiled JavaScript inline and never sends \`codeFile\`.
 
-The portal stores only JavaScript, so the CLI does not attempt an unreliable JavaScript-to-TypeScript conversion. Pull preserves TypeScript while its compiled output matches the portal. Local edits, portal code edits, or incompatible action-shape changes stop pull. Resolve those paths manually, or pass \`--force\` to replace the local TypeScript with portal JavaScript. A new server version inherits TypeScript only when it recompiles to equivalent JavaScript.
+The portal stores only JavaScript, so the CLI does not attempt an unreliable JavaScript-to-TypeScript conversion. Pull preserves checked JavaScript wrappers and TypeScript while their uploaded JavaScript matches the portal. Generating types wraps raw portal JavaScript locally without changing its uploaded body. Local and portal edits to the same code stop pull; \`--force\` accepts portal JavaScript. A new server version inherits a compatible local wrapper or TypeScript handler when it produces equivalent JavaScript.
 
 API and CODE configuration are mutually exclusive. CODE cannot contain \`url\`, \`method\`, or saved \`headers\`.
 
@@ -405,7 +421,7 @@ ghl app actions test calculate_score --input-file ./test-input.json --location L
 - \`--input\` and \`--input-file\` are mutually exclusive and must contain a JSON object keyed by input \`field\`.
 - The CLI injects predefined branches as the reserved \`inputData.data.branches\` value so branch-selection code receives production-equivalent metadata.
 - \`--location\` is optional. Provide an installed location ID when code/API execution needs location context or external-auth values.
-- The command validates local JSON and compiles JavaScript or TypeScript first, resolves \`\${remote}\` and \`\${env:NAME}\` headers, then calls the portal \`/run-code-test\` endpoint.
+- The command validates local JSON, prepares JavaScript or type-checks and transpiles TypeScript first, resolves \`\${remote}\` and \`\${env:NAME}\` headers, then calls the portal \`/run-code-test\` endpoint.
 - API tests call the configured external endpoint and can have real side effects. Use a dedicated test URL and test credentials.
 - A failed runner response exits non-zero. CODE output must be an object or array; successful output and console logs are printed, or returned structurally with \`--json\`.
 
@@ -516,10 +532,10 @@ Credential-like header names such as Authorization and API-key headers must use 
 
 The portal is the remote source of truth. \`.ghl/workflow-actions-state.json\` stores the last-pull baseline for three-way diffing and must not be edited.
 
-- \`ghl app actions create "Name" --key stable_key\` adds a local \`1.0\` draft file.
-- \`ghl app actions create "Name" --key stable_key --typescript\` also creates a typed handler and generated sandbox declarations.
-- \`ghl app actions pull\` preserves compatible TypeScript and stops before overwriting local or portal conflicts; \`--force\` accepts portal JavaScript.
-- \`ghl app actions validate\` validates every file, compiles JavaScript or TypeScript without execution, and checks the app's \`workflows.readonly\` scope without authentication.
+- \`ghl app actions create "Name" --key stable_key\` adds a local \`1.0\` draft with a checked JavaScript handler and generated sandbox declarations.
+- \`ghl app actions create "Name" --key stable_key --typescript\` creates the same action with a native TypeScript handler.
+- \`ghl app actions pull\` preserves compatible checked JavaScript and TypeScript and stops before overwriting local or portal conflicts; \`--force\` accepts portal JavaScript.
+- \`ghl app actions validate\` validates JavaScript wrapper/sandbox syntax, fully type-checks and transpiles TypeScript without execution, and checks the app's \`workflows.readonly\` scope without authentication. Run \`tsc -p tsconfig.actions.json\` for strict JavaScript checks.
 - \`ghl app actions validate --publishable --action stable_key --version 1.0\` adds review requirements.
 - \`ghl app actions test stable_key --input-file ./test-input.json\` executes one local configuration through the portal test runner.
 - \`ghl app actions diff\` reports local changes, remote changes, conflicts, and minimal API operations.

@@ -24,7 +24,11 @@ import { validateWorkflowActionsManifest } from './schema.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
 import { isWorkflowVersion } from '../shared/value-validation.js'
 import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
-import { compileWorkflowActionTypeScript } from './typescript.js'
+import {
+  compileWorkflowActionTypeScript,
+  isWorkflowActionJavaScriptScaffold,
+  prepareWorkflowActionJavaScript
+} from './typescript.js'
 import {
   assertWorkflowActionTypesWorkspaceWritable,
   removeWorkflowActionTypesWorkspace,
@@ -275,14 +279,14 @@ function resolveCodeSources(
         const compatible = preserved.find(
           source =>
             source.actionKey === action.key &&
-            source.language === 'typescript' &&
+            (source.language === 'typescript' || isWorkflowActionJavaScriptScaffold(source.source)) &&
             source.compiledCode === version.executionConfig?.code
         )
         if (compatible) {
           sourceByVersion.set(id, {
             actionKey: action.key,
             version: version.version,
-            language: 'typescript',
+            language: compatible.language,
             source: replaceHandlerVersion(compatible, action.key, version.version),
             compiledCode: compatible.compiledCode
           })
@@ -293,22 +297,20 @@ function resolveCodeSources(
         sourceByVersion.delete(id)
         continue
       }
-      if (selected.language !== 'typescript') continue
+      if (selected.language !== 'typescript' && !isWorkflowActionJavaScriptScaffold(selected.source)) continue
       const filename = path.join(
         binding.directory,
         WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH,
-        workflowActionCodeFilename(action.key, version.version, 'typescript')
+        workflowActionCodeFilename(action.key, version.version, selected.language)
       )
-      const compiled = compileWorkflowActionTypeScript({
-        directory: binding.directory,
-        filename,
-        source: selected.source,
-        action,
-        version
-      })
+      const input = { directory: binding.directory, filename, source: selected.source, action, version }
+      const compiled =
+        selected.language === 'typescript'
+          ? compileWorkflowActionTypeScript(input)
+          : prepareWorkflowActionJavaScript(input)
       if (compiled.errors.length > 0) {
         throw new Error(
-          `TypeScript source for action "${action.key}" version ${version.version} conflicts with its definition:\n- ` +
+          `${selected.language === 'typescript' ? 'TypeScript' : 'JavaScript'} source for action "${action.key}" version ${version.version} conflicts with its definition:\n- ` +
             compiled.errors.join('\n- ')
         )
       }
@@ -498,16 +500,19 @@ async function hydrateCodeSources(
       return
     }
     const source = result.code ?? ''
+    const compileInput = {
+      directory: path.resolve(actionDirectory, '..', '..', '..', '..'),
+      filename: item.filePath,
+      source,
+      action: item.action,
+      version: item.version
+    }
     const compiled =
       item.language === 'typescript'
-        ? compileWorkflowActionTypeScript({
-            directory: path.resolve(actionDirectory, '..', '..', '..', '..'),
-            filename: item.filePath,
-            source,
-            action: item.action,
-            version: item.version
-          })
-        : { code: source, errors: [] }
+        ? compileWorkflowActionTypeScript(compileInput)
+        : isWorkflowActionJavaScriptScaffold(source)
+          ? prepareWorkflowActionJavaScript(compileInput)
+          : { code: source, errors: [] }
     if (compiled.errors.length > 0) {
       errors.push(...compiled.errors.map(error => `${item.propertyPath}.codeFile ${error}`))
       return
@@ -655,7 +660,9 @@ async function writeActionSources(
   const codeFiles = codeSources.map(item => path.join(codeDirectory, item.filename))
   const appTypesEnabled = (await stat(path.join(binding.directory, 'ghl-app.d.ts')))?.isFile() === true
   const actionTypesEnabled =
-    manifest.actions.length > 0 && (appTypesEnabled || codeSources.some(source => source.language === 'typescript'))
+    manifest.actions.length > 0 &&
+    (appTypesEnabled ||
+      codeSources.some(source => source.language === 'typescript' || isWorkflowActionJavaScriptScaffold(source.source)))
   if (actionTypesEnabled) await assertWorkflowActionTypesWorkspaceWritable(binding.directory, manifest)
   if (includeJsonSchema) await writeJsonSchemaWorkspace(binding.directory)
   if (desired.length > 0) {

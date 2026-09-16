@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { workflowActionCodeSyntaxError } from '../../../../src/lib/workflows/actions/code.js'
 import type { WorkflowActionDefinition } from '../../../../src/lib/workflows/actions/manifest.js'
 import {
+  compileWorkflowActionJavaScript,
   compileWorkflowActionTypeScript,
-  generateWorkflowActionTypeScriptScaffold
+  generateWorkflowActionJavaScriptScaffold,
+  generateWorkflowActionTypeScriptScaffold,
+  prepareWorkflowActionJavaScript
 } from '../../../../src/lib/workflows/actions/typescript.js'
 
 const directory = path.resolve('/virtual/workspace')
@@ -157,5 +160,112 @@ export default action
     const compiled = compileWorkflowActionTypeScript({ directory, filename, source, action: definition, version })
 
     expect(compiled.errors).toEqual([])
+  })
+})
+
+describe('workflow action JavaScript compiler', () => {
+  it('scaffolds a checked module and extracts only its sandbox-compatible handler body', () => {
+    const definition = action()
+    const version = definition.versions[0]
+    const source = generateWorkflowActionJavaScriptScaffold(definition, version)
+    const compiled = compileWorkflowActionJavaScript({
+      directory,
+      filename: filename.replace(/\.ts$/, '.js'),
+      source,
+      action: definition,
+      version
+    })
+
+    expect(source).toContain('// @ts-check')
+    expect(source).toContain('/// <reference path="../../../../../.ghl/types/actions/workflow-action.d.ts" />')
+    expect(source).toContain('/// <reference path="../../../../../.ghl/types/actions/calculate_score.d.ts" />')
+    expect(source).toContain(
+      "@type {import('../../../../../.ghl/types/actions/calculate_score').GhlActionCalculateScoreV1_0Handler}"
+    )
+    expect(compiled.errors).toEqual([])
+    expect(compiled.code).toContain('return {')
+    expect(compiled.code).not.toMatch(/@ts-check|reference path|export default|const action/)
+    expect(workflowActionCodeSyntaxError(compiled.code, 'calculate_score.1.0.js')).toBeUndefined()
+  })
+
+  it('round-trips an existing portal function body without changing it', () => {
+    const definition = action()
+    const version = definition.versions[0]
+    const body = 'const score = await Promise.resolve(inputData.data.score)\nreturn { result: Number(score) }'
+    const source = generateWorkflowActionJavaScriptScaffold(definition, version, body)
+    const compiled = compileWorkflowActionJavaScript({
+      directory,
+      filename: filename.replace(/\.ts$/, '.js'),
+      source,
+      action: definition,
+      version
+    })
+
+    expect(compiled.errors).toEqual([])
+    expect(compiled.code).toBe(body)
+  })
+
+  it('reports field mistakes, unavailable APIs, and unsupported module-level runtime code', () => {
+    const definition = action()
+    const version = definition.versions[0]
+    const source = generateWorkflowActionJavaScriptScaffold(
+      definition,
+      version,
+      "await fetch('https://example.com')\nreturn { result: inputData.data.missing }"
+    ).replace('\n\nexport default action', '\n\nconst helper = 1\n\nexport default action')
+    const compiled = compileWorkflowActionJavaScript({
+      directory,
+      filename: filename.replace(/\.ts$/, '.js'),
+      source,
+      action: definition,
+      version
+    })
+
+    expect(compiled.code).toBe('')
+    expect(compiled.errors.join('\n')).toMatch(/Cannot find name 'fetch'/)
+    expect(compiled.errors.join('\n')).toMatch(/Property 'missing' does not exist/)
+    expect(compiled.errors.join('\n')).toMatch(/runtime statements.*inside the default action handler/i)
+  })
+
+  it('prepares existing JavaScript for upload without making new editor diagnostics a breaking change', () => {
+    const definition = action()
+    const version = definition.versions[0]
+    const source = generateWorkflowActionJavaScriptScaffold(
+      definition,
+      version,
+      'return { result: Number(inputData.data.field_added_in_portal) }'
+    )
+    const input = {
+      directory,
+      filename: filename.replace(/\.ts$/, '.js'),
+      source,
+      action: definition,
+      version
+    }
+
+    expect(compileWorkflowActionJavaScript(input).errors.join('\n')).toMatch(/field_added_in_portal/)
+    expect(prepareWorkflowActionJavaScript(input)).toEqual({
+      code: 'return { result: Number(inputData.data.field_added_in_portal) }',
+      errors: []
+    })
+  })
+
+  it('requires the generated declaration references', () => {
+    const definition = action()
+    const version = definition.versions[0]
+    const source = generateWorkflowActionJavaScriptScaffold(definition, version).replace(
+      '/// <reference path="../../../../../.ghl/types/actions/workflow-action.d.ts" />\n',
+      ''
+    )
+    const compiled = compileWorkflowActionJavaScript({
+      directory,
+      filename: filename.replace(/\.ts$/, '.js'),
+      source,
+      action: definition,
+      version
+    })
+
+    expect(compiled.code).toBe('')
+    expect(compiled.errors.join('\n')).toMatch(/keep both generated declaration references/i)
   })
 })

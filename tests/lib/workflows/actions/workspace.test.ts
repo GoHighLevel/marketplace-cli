@@ -20,7 +20,9 @@ import {
   writeWorkflowActionsWorkspace
 } from '../../../../src/lib/workflows/actions/workspace.js'
 import {
+  compileWorkflowActionJavaScript,
   compileWorkflowActionTypeScript,
+  generateWorkflowActionJavaScriptScaffold,
   generateWorkflowActionTypeScriptScaffold
 } from '../../../../src/lib/workflows/actions/typescript.js'
 
@@ -397,6 +399,7 @@ describe('workflow action workspaces', () => {
       code: 'ENOENT'
     })
     await expect(fs.stat(path.join(replaced.codeDirectory, 'tsconfig.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(directory, 'tsconfig.actions.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('carries TypeScript into a cloned server version only when the compiled code remains equivalent', async () => {
@@ -453,6 +456,69 @@ describe('workflow action workspaces', () => {
       'calculate_score.1.1.ts'
     ])
     await expect(fs.readFile(result.codeFiles[1], 'utf8')).resolves.toMatch(/GhlActionCalculateScoreV1_1Handler/)
+  })
+
+  it('preserves checked JavaScript and updates its action type when the server clones a version', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      templateId: 'template-1',
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'published',
+          info: { name: 'Calculate score' },
+          inputs: [{ field: 'score', title: 'Score', fieldType: 'numerical', required: true }],
+          customVarsJson: { result: 42 },
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const source = generateWorkflowActionJavaScriptScaffold(
+      definition,
+      definition.versions[0],
+      'return { result: Number(inputData.data.score) }'
+    )
+    const filename = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.js')
+    const compiled = compileWorkflowActionJavaScript({
+      directory,
+      filename,
+      source,
+      action: definition,
+      version: definition.versions[0]
+    })
+    expect(compiled.errors).toEqual([])
+    definition.versions[0].executionConfig = { type: 'CODE', code: compiled.code }
+    const initial: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    await writeWorkflowActionsWorkspace(directory, initial, initial, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: '1.0',
+          language: 'javascript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+    const existing = await loadWorkflowActionsWorkspace(directory)
+    const refreshed = structuredClone(initial)
+    refreshed.actions[0].versions.unshift({
+      ...structuredClone(refreshed.actions[0].versions[0]),
+      version: '1.1',
+      status: 'draft'
+    })
+
+    const result = await writeWorkflowActionsWorkspace(directory, refreshed, refreshed, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    expect(result.codeFiles.map(file => path.basename(file))).toEqual([
+      'calculate_score.1.0.js',
+      'calculate_score.1.1.js'
+    ])
+    await expect(fs.readFile(result.codeFiles[1], 'utf8')).resolves.toMatch(/GhlActionCalculateScoreV1_1Handler/)
+    expect((await loadWorkflowActionsWorkspace(directory)).manifest).toEqual(refreshed)
   })
 
   it('round-trips malformed legacy code for immutable published versions', async () => {

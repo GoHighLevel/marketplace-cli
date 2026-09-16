@@ -314,7 +314,12 @@ describe('public command contracts', () => {
     await Promise.all([
       fs.writeFile(
         path.join(typedWorkspace, 'ghl-app.json'),
-        JSON.stringify({ schemaVersion: 1, appId: 'app-2', versionId: 'version-1' })
+        JSON.stringify({
+          schemaVersion: 1,
+          appId: 'app-2',
+          versionId: 'version-1',
+          oauth: { allowedScopes: ['workflows.readonly'] }
+        })
       ),
       fs.writeFile(
         path.join(typedWorkspace, '.ghl', 'workflow-actions-state.json'),
@@ -350,9 +355,37 @@ describe('public command contracts', () => {
     await expect(
       fs.readFile(path.join(typedWorkspace, '.ghl', 'types', 'actions', 'workflow-action.d.ts'), 'utf8')
     ).resolves.toMatch(/GhlActionContext/)
-    await expect(fs.readFile(path.join(path.dirname(typedCodeFile), 'tsconfig.json'), 'utf8')).resolves.toMatch(
+    await expect(fs.readFile(path.join(typedWorkspace, 'tsconfig.actions.json'), 'utf8')).resolves.toMatch(
       /"lib": \[\s*"ES2022"/
     )
+    const javascriptCreated = await runCommand(AppActionsCreate, [
+      'Checked JavaScript action',
+      '--key',
+      'checked_javascript_action',
+      '--directory',
+      typedWorkspace,
+      '--json'
+    ])
+    expect(javascriptCreated.exitCode).toBe(0)
+    expect(javascriptCreated.stderr).toBe('')
+    const javascriptCodeFile = path.join(
+      typedWorkspace,
+      'src',
+      'modules',
+      'workflows',
+      'actions',
+      'code',
+      'checked_javascript_action.1.0.js'
+    )
+    await expect(fs.readFile(javascriptCodeFile, 'utf8')).resolves.toMatch(
+      /\/\/ @ts-check[\s\S]*reference path=["']\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/\.ghl\/types\/actions\/checked_javascript_action\.d\.ts["'][\s\S]*export default action/
+    )
+    await expect(
+      fs.readFile(path.join(typedWorkspace, '.ghl', 'types', 'actions', 'eslint.config.actions.mjs'), 'utf8')
+    ).resolves.toContain("'no-undef': 'error'")
+    const checked = await runCommand(AppActionsValidate, ['--directory', typedWorkspace, '--json'])
+    expect(checked.exitCode, `${checked.stdout}\n${checked.stderr}`).toBe(0)
+    expect(checked.stderr).toBe('')
   })
 
   it('exposes the JSON-first workflow trigger lifecycle and validates local input before authentication', async () => {

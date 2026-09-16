@@ -58,7 +58,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app types',
         description:
-          'Generate app and workflow-action declarations, TypeScript project integration, local JSON Schemas, and VS Code associations without authentication. Action declarations cover versioned inputs, outputs, and the verified sandbox runtime.'
+          'Generate app and workflow-action declarations, checked JavaScript/TypeScript and ESLint integration, local JSON Schemas, and VS Code associations without authentication. Action declarations cover versioned inputs, outputs, and the verified sandbox runtime.'
       },
       {
         command: 'ghl app validate',
@@ -231,17 +231,17 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl app actions pull',
         description:
-          'Refresh action JSON/code while preserving TypeScript whose compiled JavaScript still matches. Local or portal conflicts stop the pull; `--force` replaces local sources with portal JavaScript.'
+          'Refresh action JSON/code while preserving checked JavaScript or TypeScript whose uploaded JavaScript still matches. Local or portal conflicts stop the pull; `--force` accepts portal JavaScript.'
       },
       {
         command: 'ghl app actions create [name]',
         description:
-          'Add a version 1.0 draft as a separate local action file. Use `--key <stable_key>` in automation; add `--typescript` to generate a typed default handler and sandbox declarations.'
+          'Add a version 1.0 draft with a checked JavaScript handler and sandbox declarations. Use `--key <stable_key>` in automation; add `--typescript` for native TypeScript.'
       },
       {
         command: 'ghl app actions validate',
         description:
-          'Validate JavaScript or type-check and transpile TypeScript without executing it, then validate the app scope and complete action contract locally. `--publishable`, `--action`, and `--version` add release checks.'
+          'Validate JavaScript wrapper/sandbox syntax or fully type-check and transpile TypeScript without executing it, then validate the app scope and complete action contract locally. Use `tsc -p tsconfig.actions.json` for strict JavaScript checks; `--publishable`, `--action`, and `--version` add release checks.'
       },
       {
         command: 'ghl app actions test [key]',
@@ -517,7 +517,7 @@ ${audience}
 - \`src/webhooks/ghl-webhooks.json\` contains configured webhook settings and is omitted when unused.
 - \`src/modules/workflows/actions/<action-name>.json\` contains one app-scoped action and all of its versions; its required underscore \`key\` must match the hyphenated filename.
 - \`src/modules/workflows/actions/code/<action-key>.<version>.(js|ts)\` contains one code-backed action version and is referenced through \`executionConfig.codeFile\`.
-- \`.ghl/types/actions/workflow-action.d.ts\` and \`.ghl/types/actions/<key>.d.ts\` describe TypeScript action inputs, outputs, and verified runtime helpers.
+- \`.ghl/types/actions/workflow-action.d.ts\` and \`.ghl/types/actions/<key>.d.ts\` describe JavaScript and TypeScript action inputs, outputs, and verified runtime helpers.
 - \`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\` documents action fields, naming, validation, and synchronization when actions exist.
 - \`src/modules/workflows/triggers/<trigger-name>.json\` contains one app-scoped trigger and all of its versions; its \`key\` must match the hyphenated filename.
 - \`src/modules/workflows/triggers/HIGHLEVEL_WORKFLOW_TRIGGERS.md\` documents trigger data, filters, custom variables, callbacks, execution, validation, and synchronization when triggers exist.
@@ -537,8 +537,8 @@ ${audience}
 - Keep webhook configuration out of \`ghl-app.json\` and out of the workspace root.
 - Keep each workflow action in its own JSON file under \`src/modules/workflows/actions/\`; include the matching \`key\` and do not copy actions into \`ghl-app.json\`.
 - Keep code execution in the exact versioned file referenced by \`codeFile\`. Do not inline code in action JSON or point outside the action \`code/\` directory.
-- TypeScript actions export one default handler. Runtime imports are unsupported; use the generated context instead of browser or Node globals.
-- Keep the generated action \`code/tsconfig.json\`; it isolates sandbox globals without changing the app's root TypeScript environment.
+- JavaScript and TypeScript actions export one default handler. Runtime imports are unsupported; use the generated context instead of browser or Node globals.
+- Keep \`tsconfig.actions.json\`; it checks action JavaScript and TypeScript without changing the app's root compiler environment. Import \`.ghl/types/actions/eslint.config.actions.mjs\` from a developer-owned ESLint flat config.
 - Never rewrite portal JavaScript as TypeScript automatically. Resolve pull conflicts manually or use \`--force\` to accept portal JavaScript.
 - Keep each workflow trigger in its own JSON file under \`src/modules/workflows/triggers/\`; include the filename-derived \`key\` and do not copy triggers into \`ghl-app.json\`.
 - Keep JSON valid and retain the documented field names and value types.

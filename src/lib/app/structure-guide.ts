@@ -16,6 +16,8 @@ This directory is the local, code-friendly representation of one HighLevel marke
 ├── ghl-app.json
 ├── ghl-app.d.ts
 ├── tsconfig.json
+├── tsconfig.actions.json
+├── eslint.config.mjs
 ├── AGENTS.md
 ├── CLAUDE.md
 ├── HIGHLEVEL_APP.md
@@ -29,6 +31,11 @@ This directory is the local, code-friendly representation of one HighLevel marke
 │   │   ├── ghl-workflow-trigger.schema.json
 │   │   ├── ghl-subscription.schema.json
 │   │   └── ghl-usage-based.schema.json
+│   ├── types/
+│   │   └── actions/
+│   │       ├── workflow-action.d.ts
+│   │       ├── <action-key>.d.ts
+│   │       └── eslint.config.actions.mjs
 │   ├── state.json
 │   ├── workflow-actions-state.json
 │   ├── workflow-triggers-state.json
@@ -45,7 +52,6 @@ This directory is the local, code-friendly representation of one HighLevel marke
             ├── actions/
             │   ├── HIGHLEVEL_WORKFLOW_ACTIONS.md
             │   ├── code/
-            │   │   ├── tsconfig.json
             │   │   └── <action-key>.<version>.(js|ts)
             │   └── <action-name>.json
             └── triggers/
@@ -61,9 +67,10 @@ This directory is the local, code-friendly representation of one HighLevel marke
 - **\`src/webhooks/ghl-webhooks.json\`**: Configured app-level webhook URL and event subscriptions, kept separate from app metadata.
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
 - **\`src/modules/workflows/actions/<action-name>.json\`**: One JSON file per action, including every action-owned version. Its required \`key\` must match the key derived from the filename.
-- **\`src/modules/workflows/actions/code/<action-key>.<version>.(js|ts)\`**: JavaScript body or typed handler for one code-backed action version, referenced by \`executionConfig.codeFile\`.
+- **\`src/modules/workflows/actions/code/<action-key>.<version>.(js|ts)\`**: Checked JavaScript or TypeScript handler for one code-backed action version, referenced by \`executionConfig.codeFile\`.
 - **\`.ghl/types/actions/workflow-action.d.ts\` / \`.ghl/types/actions/<key>.d.ts\`**: Generated declarations for verified sandbox helpers and version-specific inputs and outputs.
-- **\`src/modules/workflows/actions/code/tsconfig.json\`**: Isolated generated settings that prevent unavailable browser and Node globals from appearing valid.
+- **\`tsconfig.actions.json\`**: Isolated \`allowJs\`/ \`checkJs\` settings that prevent unavailable browser and Node globals from appearing valid in action code.
+- **\`.ghl/types/actions/eslint.config.actions.mjs\`**: Generated ESLint flat-config override for action JavaScript. A root \`eslint.config.mjs\` is created only when no developer config exists.
 - **\`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\`**: Detailed action schema, naming, validation, and synchronization reference.
 - **\`src/modules/workflows/triggers/<trigger-name>.json\`**: One JSON file per trigger, including every trigger-owned version and the filename-derived \`key\`.
 - **\`src/modules/workflows/triggers/HIGHLEVEL_WORKFLOW_TRIGGERS.md\`**: Complete trigger schema, callback, execution, validation, and synchronization reference.
@@ -132,11 +139,11 @@ Each JSON file directly under \`src/modules/workflows/actions/\` contains one ac
 
 The filename uses lowercase letters, numbers, and hyphens ending in \`.json\`. The CLI converts hyphens to underscores, so \`send-contact-sync-payload.json\` requires \`"key": "send_contact_sync_payload"\`. Each file has \`schemaVersion\`, the matching \`key\`, an API-owned \`templateId\` after creation, and a newest-first \`versions\` array. See \`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\` for the complete contract.
 
-For \`CODE\` execution, JSON stores only a deterministic \`codeFile\` reference. JavaScript uses the portal's async-function-body format. TypeScript exports a typed default handler and is type-checked and transpiled in memory before the CLI sends inline JavaScript. The CLI never writes a compiled file or attempts lossy JavaScript-to-TypeScript conversion.
+For \`CODE\` execution, JSON stores only a deterministic \`codeFile\` reference. JavaScript uses a checked module wrapper, and the CLI extracts only its handler body before sending it to the portal. TypeScript exports a typed default handler and is type-checked and transpiled in memory. The CLI never writes a compiled file or attempts lossy JavaScript-to-TypeScript conversion.
 
-The generated \`code/tsconfig.json\` is intentionally separate from the root TypeScript project. Sandbox code must exclude browser and Node ambient globals, while the rest of the app may require them; TypeScript cannot apply both environments from one project configuration. Type generation excludes the action-code directory from broad root-project discovery so each file is checked only by its intended project.
+The generated \`tsconfig.actions.json\` is intentionally separate from the root TypeScript project. Sandbox code must exclude browser and Node ambient globals, while the rest of the app may require them; TypeScript cannot apply both environments from one project configuration. Type generation excludes the action-code directory from broad root-project discovery so each file is checked only by its intended project.
 
-Pull preserves TypeScript when its compiled JavaScript still matches the portal. Local or portal edits stop pull with conflict paths; \`--force\` explicitly replaces conflicted TypeScript with portal JavaScript. A server-created version inherits TypeScript only when recompilation remains exactly equivalent.
+Pull preserves checked JavaScript and TypeScript when their uploaded JavaScript still matches the portal. Generating types wraps raw portal JavaScript without changing the body sent back to the server. Local or portal edits stop pull with conflict paths; \`--force\` explicitly accepts portal JavaScript.
 
 \`customVarsJson\` contains representative response data. Each item in \`customVars\` contains \`name\`, a dot-separated \`reference\` to a selectable value in that response, and its inferred \`fieldType\`: \`string\`, \`boolean\`, \`numerical\`, or \`array\`. Objects and empty arrays cannot be selected as variables.
 

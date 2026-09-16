@@ -19,7 +19,12 @@ describe('WORKFLOW_ACTIONS_RESOURCE', () => {
   it('adds scaffolds in key order without mutating the manifest', () => {
     const next = WORKFLOW_ACTIONS_RESOURCE.withScaffold(manifest, 'Archive', 'archive_contact')
     expect(next.actions.map(action => action.key)).toEqual(['archive_contact', 'send_message'])
-    expect(next.actions[0].versions[0]).toMatchObject({ version: '1.0', status: 'draft', info: { name: 'Archive' } })
+    expect(next.actions[0].versions[0]).toMatchObject({
+      version: '1.0',
+      status: 'draft',
+      info: { name: 'Archive' },
+      executionConfig: { type: 'CODE', code: '' }
+    })
     expect(manifest.actions).toHaveLength(1)
   })
 

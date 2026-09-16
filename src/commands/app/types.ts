@@ -5,7 +5,7 @@ import { DEFAULT_TYPES_FILENAME, writeTypesWorkspace } from '../../lib/app/types
 import { GhlCommand } from '../../lib/shared/command.js'
 
 export default class AppTypes extends GhlCommand {
-  static description = 'Generate TypeScript declarations and local JSON Schemas for an app workspace'
+  static description = 'Generate declarations, action toolchain configuration, and JSON Schemas for an app workspace'
 
   static examples = [
     '<%= config.bin %> app types',
@@ -47,6 +47,8 @@ export default class AppTypes extends GhlCommand {
     this.log(`Generated ${generated.schemaFiles.length} JSON Schema file(s) in ${generated.schemaDirectory}`)
     if (generated.actionTypes) {
       this.log(`Generated workflow-action types at ${generated.actionTypes.workflowActionDeclarationFile}`)
+      this.log(`Generated workflow-action project at ${generated.actionTypes.typescriptConfigFile}`)
+      this.log(`Generated workflow-action ESLint override at ${generated.actionTypes.eslintConfigFile}`)
     }
     if (generated.vscodeSettingsCreated)
       this.log(`Created VS Code schema associations at ${generated.vscodeSettingsFile}`)

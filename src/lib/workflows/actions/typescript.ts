@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import ts from 'typescript'
 
-import { WORKFLOW_ACTION_CODE_MAX_BYTES } from './code.js'
+import { WORKFLOW_ACTION_CODE_MAX_BYTES, workflowActionCodeSyntaxError } from './code.js'
 import type { WorkflowActionDefinition, WorkflowActionVersion } from './manifest.js'
 import {
   generateWorkflowActionDeclaration,
@@ -26,6 +26,19 @@ export interface CompileWorkflowActionTypeScriptResult {
   errors: string[]
 }
 
+const JAVASCRIPT_SCAFFOLD_MARKER = 'GHL workflow-action editor wrapper. Only the handler body is sent to the portal.'
+const ACTION_CONTEXT_PROPERTIES = new Set([
+  'inputData',
+  'customRequest',
+  'console',
+  '_',
+  'moment',
+  'fileDownloader',
+  '_csv',
+  '_base64',
+  '_uuid'
+])
+
 const COMPILER_OPTIONS: ts.CompilerOptions = {
   exactOptionalPropertyTypes: true,
   lib: ['lib.es2022.d.ts'],
@@ -40,6 +53,12 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
   types: []
 }
 
+const JAVASCRIPT_COMPILER_OPTIONS: ts.CompilerOptions = {
+  ...COMPILER_OPTIONS,
+  allowJs: true,
+  checkJs: true
+}
+
 function normalizedFilename(filename: string): string {
   return path.resolve(filename)
 }
@@ -51,8 +70,11 @@ function diagnosticText(diagnostic: ts.Diagnostic): string {
   return `${diagnostic.file.fileName}:${position.line + 1}:${position.character + 1} - ${message}`
 }
 
-function createVirtualCompilerHost(files: ReadonlyMap<string, string>): ts.CompilerHost {
-  const host = ts.createCompilerHost(COMPILER_OPTIONS)
+function createVirtualCompilerHost(
+  files: ReadonlyMap<string, string>,
+  compilerOptions: ts.CompilerOptions
+): ts.CompilerHost {
+  const host = ts.createCompilerHost(compilerOptions)
   const directoryExists = host.directoryExists?.bind(host)
   const fileExists = host.fileExists.bind(host)
   const getSourceFile = host.getSourceFile.bind(host)
@@ -92,13 +114,18 @@ function isDefaultFunctionDeclaration(node: ts.Node): node is ts.FunctionDeclara
   )
 }
 
-function moduleValidationErrors(sourceFile: ts.SourceFile): string[] {
+function moduleValidationErrors(
+  sourceFile: ts.SourceFile,
+  language: 'javascript' | 'typescript',
+  allowReferences = false
+): string[] {
   const errors: string[] = []
   let defaultExports = 0
   if (
-    sourceFile.referencedFiles.length > 0 ||
-    sourceFile.typeReferenceDirectives.length > 0 ||
-    sourceFile.libReferenceDirectives.length > 0
+    !allowReferences &&
+    (sourceFile.referencedFiles.length > 0 ||
+      sourceFile.typeReferenceDirectives.length > 0 ||
+      sourceFile.libReferenceDirectives.length > 0)
   ) {
     errors.push(`${sourceFile.fileName}: Triple-slash references are unavailable in action source.`)
   }
@@ -133,15 +160,38 @@ function moduleValidationErrors(sourceFile: ts.SourceFile): string[] {
   }
   visit(sourceFile)
   if (defaultExports !== 1) {
-    errors.push(`${sourceFile.fileName}: TypeScript action source must have exactly one default export handler.`)
+    errors.push(
+      `${sourceFile.fileName}: ${language === 'typescript' ? 'TypeScript' : 'JavaScript'} action source must have exactly one default export handler.`
+    )
   }
   return [...new Set(errors)]
 }
 
-function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
+function javascriptReferenceErrors(sourceFile: ts.SourceFile, actionKey: string): string[] {
+  const expected = new Set([
+    `../../../../../.ghl/types/actions/${WORKFLOW_ACTION_DECLARATION_FILENAME}`,
+    `../../../../../.ghl/types/actions/${workflowActionTypeFilename(actionKey)}`
+  ])
+  const actual = sourceFile.referencedFiles.map(reference => reference.fileName)
+  if (
+    actual.length !== expected.size ||
+    actual.some(reference => !expected.has(reference)) ||
+    sourceFile.typeReferenceDirectives.length > 0 ||
+    sourceFile.libReferenceDirectives.length > 0
+  ) {
+    return [`${sourceFile.fileName}: JavaScript actions must keep both generated declaration references.`]
+  }
+  return []
+}
+
+function typeCheckFiles(
+  input: CompileWorkflowActionTypeScriptInput,
+  language: 'javascript' | 'typescript'
+): {
   errors: string[]
   sourceFile?: ts.SourceFile
 } {
+  const compilerOptions = language === 'javascript' ? JAVASCRIPT_COMPILER_OPTIONS : COMPILER_OPTIONS
   const filename = normalizedFilename(input.filename)
   const sandboxFile = path.join(
     input.directory,
@@ -166,7 +216,7 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
   let typesImport = path.relative(path.dirname(checkFile), actionTypeFile).replaceAll(path.sep, '/')
   if (!sourceImport.startsWith('.')) sourceImport = `./${sourceImport}`
   if (!typesImport.startsWith('.')) typesImport = `./${typesImport}`
-  sourceImport = sourceImport.replace(/\.ts$/, '')
+  sourceImport = sourceImport.replace(/\.(?:js|ts)$/, '')
   typesImport = typesImport.replace(/\.d\.ts$/, '')
   const sandboxDeclaration = generateWorkflowActionSandboxDeclarations()
   const actionDeclaration = generateWorkflowActionDeclaration(input.action)
@@ -184,8 +234,8 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
       `import handler from '${sourceImport}'\nimport type { ${handlerName} } from '${typesImport}'\nconst checked: ${handlerName} = handler\nvoid checked\n`
     ]
   ])
-  const host = createVirtualCompilerHost(files)
-  const program = ts.createProgram([...files.keys()], COMPILER_OPTIONS, host)
+  const host = createVirtualCompilerHost(files, compilerOptions)
+  const program = ts.createProgram([...files.keys()], compilerOptions, host)
   const sourceFile = program.getSourceFile(filename)
   const diagnostics = ts.getPreEmitDiagnostics(program)
   const errors = diagnostics.map(diagnostic => {
@@ -194,8 +244,86 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
       ? `${filename}: The default export must satisfy the generated action handler type. ${text}`
       : text
   })
-  if (sourceFile) errors.push(...moduleValidationErrors(sourceFile))
+  if (sourceFile) {
+    errors.push(...moduleValidationErrors(sourceFile, language, language === 'javascript'))
+    if (language === 'javascript') errors.push(...javascriptReferenceErrors(sourceFile, input.action.key))
+  }
   return { sourceFile, errors: [...new Set(errors)] }
+}
+
+function javascriptHandler(sourceFile: ts.SourceFile): { body?: ts.Block; errors: string[] } {
+  const errors: string[] = []
+  let body: ts.Block | undefined
+  let actionDeclaration = 0
+  let defaultExport = 0
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isVariableStatement(statement)) {
+      const declarations = statement.declarationList.declarations
+      const declaration = declarations.length === 1 ? declarations[0] : undefined
+      if (
+        declaration &&
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === 'action' &&
+        declaration.initializer &&
+        (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))
+      ) {
+        actionDeclaration += 1
+        body =
+          declaration.initializer.body && ts.isBlock(declaration.initializer.body)
+            ? declaration.initializer.body
+            : undefined
+        const parameter = declaration.initializer.parameters[0]
+        if (!parameter || !ts.isObjectBindingPattern(parameter.name)) {
+          errors.push(
+            `${sourceFile.fileName}: JavaScript action handlers must destructure sandbox values from their first parameter.`
+          )
+        } else {
+          for (const element of parameter.name.elements) {
+            const property = element.propertyName ?? element.name
+            if (!ts.isIdentifier(property) || !ts.isIdentifier(element.name) || property.text !== element.name.text) {
+              errors.push(`${sourceFile.fileName}: JavaScript action sandbox values cannot be renamed.`)
+              continue
+            }
+            if (!ACTION_CONTEXT_PROPERTIES.has(property.text)) {
+              errors.push(`${sourceFile.fileName}: Unknown JavaScript action sandbox value "${property.text}".`)
+            }
+          }
+        }
+        if (!body) errors.push(`${sourceFile.fileName}: JavaScript action handlers must use a block body.`)
+        continue
+      }
+    }
+    if (
+      ts.isExportAssignment(statement) &&
+      !statement.isExportEquals &&
+      ts.isIdentifier(statement.expression) &&
+      statement.expression.text === 'action'
+    ) {
+      defaultExport += 1
+      continue
+    }
+    errors.push(
+      `${sourceFile.fileName}: Keep runtime statements inside the default action handler so the CLI can send them to the sandbox.`
+    )
+  }
+
+  if (actionDeclaration !== 1 || defaultExport !== 1) {
+    errors.push(
+      `${sourceFile.fileName}: JavaScript action source must keep one "action" handler and one default export.`
+    )
+  }
+  return { body, errors: [...new Set(errors)] }
+}
+
+function extractJavaScriptSandboxBody(source: string, sourceFile: ts.SourceFile, body: ts.Block): string {
+  const contents = source.slice(body.getStart(sourceFile) + 1, body.getEnd() - 1)
+  const start = contents.match(/^\r?\n/)?.[0].length ?? 0
+  const end = contents.match(/\r?\n$/)?.[0].length ?? 0
+  if (start === 0 || end === 0) {
+    throw new Error('The JavaScript action handler body must start and end on separate lines.')
+  }
+  return contents.slice(start, contents.length - end)
 }
 
 function emitSandboxBody(source: string, filename: string): string {
@@ -288,16 +416,85 @@ export default action
 `
 }
 
+export function isWorkflowActionJavaScriptScaffold(source: string): boolean {
+  return source.includes(JAVASCRIPT_SCAFFOLD_MARKER)
+}
+
+export function generateWorkflowActionJavaScriptScaffold(
+  action: WorkflowActionDefinition,
+  version: WorkflowActionVersion,
+  body?: string
+): string {
+  const handlerName = `${workflowActionVersionTypePrefix(action.key, version.version)}Handler`
+  const actionTypes = `../../../../../.ghl/types/actions/${workflowActionTypeFilename(action.key).replace(/\.d\.ts$/, '')}`
+  const generatedBody = `  void inputData
+  void customRequest
+  return ${scaffoldOutput(version)
+    .split('\n')
+    .map((line, index) => (index === 0 ? line : `  ${line}`))
+    .join('\n')}`
+  return `// @ts-check
+/// <reference path="../../../../../.ghl/types/actions/${WORKFLOW_ACTION_DECLARATION_FILENAME}" />
+/// <reference path="../../../../../.ghl/types/actions/${workflowActionTypeFilename(action.key)}" />
+
+/* ${JAVASCRIPT_SCAFFOLD_MARKER} */
+/** @type {import('${actionTypes}').${handlerName}} */
+const action = async ({ inputData, customRequest, console, _, moment, fileDownloader, _csv, _base64, _uuid }) => {
+${body ?? generatedBody}
+}
+
+export default action
+`
+}
+
 export function compileWorkflowActionTypeScript(
   input: CompileWorkflowActionTypeScriptInput
 ): CompileWorkflowActionTypeScriptResult {
-  const checked = typeCheckFiles(input)
+  const checked = typeCheckFiles(input, 'typescript')
   if (checked.errors.length > 0) return { code: '', errors: checked.errors }
   try {
     const code = emitSandboxBody(input.source, input.filename)
     if (Buffer.byteLength(code, 'utf8') > WORKFLOW_ACTION_CODE_MAX_BYTES) {
       return { code: '', errors: [`${input.filename}: Compiled action code must be at most 1 MiB.`] }
     }
+    return { code, errors: [] }
+  } catch (error) {
+    return { code: '', errors: [`${input.filename}: ${(error as Error).message}`] }
+  }
+}
+
+export function compileWorkflowActionJavaScript(
+  input: CompileWorkflowActionTypeScriptInput
+): CompileWorkflowActionTypeScriptResult {
+  const prepared = prepareWorkflowActionJavaScript(input)
+  const checked = typeCheckFiles(input, 'javascript')
+  const errors = [...new Set([...prepared.errors, ...checked.errors])]
+  if (errors.length > 0) return { code: '', errors }
+  return prepared
+}
+
+export function prepareWorkflowActionJavaScript(
+  input: CompileWorkflowActionTypeScriptInput
+): CompileWorkflowActionTypeScriptResult {
+  const sourceFile = ts.createSourceFile(input.filename, input.source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS)
+  const parseDiagnostics = (
+    sourceFile as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] }
+  ).parseDiagnostics.map(diagnosticText)
+  const handler = javascriptHandler(sourceFile)
+  const errors = [
+    ...parseDiagnostics,
+    ...moduleValidationErrors(sourceFile, 'javascript', true),
+    ...javascriptReferenceErrors(sourceFile, input.action.key),
+    ...handler.errors
+  ]
+  if (errors.length > 0 || !handler.body) return { code: '', errors: [...new Set(errors)] }
+  try {
+    const code = extractJavaScriptSandboxBody(input.source, sourceFile, handler.body)
+    if (Buffer.byteLength(code, 'utf8') > WORKFLOW_ACTION_CODE_MAX_BYTES) {
+      return { code: '', errors: [`${input.filename}: Action code must be at most 1 MiB.`] }
+    }
+    const syntaxError = workflowActionCodeSyntaxError(code, input.filename)
+    if (syntaxError) return { code: '', errors: [syntaxError] }
     return { code, errors: [] }
   } catch (error) {
     return { code: '', errors: [`${input.filename}: ${(error as Error).message}`] }

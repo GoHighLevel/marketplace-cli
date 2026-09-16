@@ -14,8 +14,17 @@ import type {
 
 export const WORKFLOW_ACTION_TYPES_RELATIVE_DIRECTORY = path.join('.ghl', 'types', 'actions')
 export const WORKFLOW_ACTION_DECLARATION_FILENAME = 'workflow-action.d.ts'
-export const WORKFLOW_ACTION_TYPESCRIPT_CONFIG_FILENAME = 'tsconfig.json'
-const WORKFLOW_ACTION_TYPESCRIPT_CONFIG_RELATIVE_DIRECTORY = path.join('src', 'modules', 'workflows', 'actions', 'code')
+export const WORKFLOW_ACTION_TYPESCRIPT_CONFIG_FILENAME = 'tsconfig.actions.json'
+export const WORKFLOW_ACTION_ESLINT_CONFIG_FILENAME = 'eslint.config.actions.mjs'
+const WORKFLOW_ACTION_ROOT_ESLINT_CONFIG_FILENAME = 'eslint.config.mjs'
+const LEGACY_WORKFLOW_ACTION_TYPESCRIPT_CONFIG_RELATIVE_PATH = path.join(
+  'src',
+  'modules',
+  'workflows',
+  'actions',
+  'code',
+  'tsconfig.json'
+)
 
 const ACTION_TYPES_PATTERN = /^[a-z][_a-z0-9]*\.d\.ts$/
 const LEGACY_ACTION_TYPES_PATTERN = /^ghl-action-[a-z][_a-z0-9]*\.d\.ts$/
@@ -26,6 +35,8 @@ export interface WorkflowActionTypesWorkspaceResult {
   workflowActionDeclarationFile: string
   actionDeclarationFiles: string[]
   typescriptConfigFile: string
+  eslintConfigFile: string
+  rootEslintConfigFile?: string
 }
 
 function pascalCase(value: string): string {
@@ -417,6 +428,8 @@ export type GhlActionHandler<
 function actionTypeScriptConfig(): string {
   const config = {
     compilerOptions: {
+      allowJs: true,
+      checkJs: true,
       exactOptionalPropertyTypes: true,
       lib: ['ES2022'],
       module: 'ESNext',
@@ -429,9 +442,47 @@ function actionTypeScriptConfig(): string {
       target: 'ES2022',
       types: []
     },
-    include: ['../../../../../.ghl/types/actions/*.d.ts', '*.ts']
+    include: [
+      '.ghl/types/actions/*.d.ts',
+      'src/modules/workflows/actions/code/**/*.js',
+      'src/modules/workflows/actions/code/**/*.ts'
+    ]
   }
   return `${generatedFileHeader()}\n${JSON.stringify(config, null, 2)}\n`
+}
+
+function actionEslintConfig(): string {
+  return `${generatedFileHeader()}
+
+export default {
+  files: ['src/modules/workflows/actions/code/**/*.js'],
+  languageOptions: {
+    ecmaVersion: 2022,
+    sourceType: 'module',
+    globals: {
+      inputData: 'readonly',
+      customRequest: 'readonly',
+      console: 'readonly',
+      _: 'readonly',
+      moment: 'readonly',
+      fileDownloader: 'readonly',
+      _csv: 'readonly',
+      _base64: 'readonly',
+      _uuid: 'readonly'
+    }
+  },
+  rules: { 'no-undef': 'error' }
+}
+`
+}
+
+function rootEslintConfig(): string {
+  return `${generatedFileHeader()}
+
+import workflowActions from './.ghl/types/actions/${WORKFLOW_ACTION_ESLINT_CONFIG_FILENAME}'
+
+export default [workflowActions]
+`
 }
 
 async function lstatIfPresent(target: string): Promise<Awaited<ReturnType<typeof fs.lstat>> | undefined> {
@@ -487,11 +538,8 @@ function workflowActionTypeWorkspacePaths(
   const typesDirectory = path.join(directory, WORKFLOW_ACTION_TYPES_RELATIVE_DIRECTORY)
   return {
     workflowActionDeclarationFile: path.join(typesDirectory, WORKFLOW_ACTION_DECLARATION_FILENAME),
-    typescriptConfigFile: path.join(
-      directory,
-      WORKFLOW_ACTION_TYPESCRIPT_CONFIG_RELATIVE_DIRECTORY,
-      WORKFLOW_ACTION_TYPESCRIPT_CONFIG_FILENAME
-    ),
+    typescriptConfigFile: path.join(directory, WORKFLOW_ACTION_TYPESCRIPT_CONFIG_FILENAME),
+    eslintConfigFile: path.join(typesDirectory, WORKFLOW_ACTION_ESLINT_CONFIG_FILENAME),
     actionDeclarationFiles: manifest.actions.map(action =>
       path.join(typesDirectory, workflowActionTypeFilename(action.key))
     )
@@ -518,10 +566,68 @@ export async function assertWorkflowActionTypesWorkspaceWritable(
   const files = workflowActionTypeWorkspacePaths(inputDirectory, manifest)
   await Promise.all([
     assertGeneratedDirectoryPathSafe(directory),
-    ...[files.workflowActionDeclarationFile, files.typescriptConfigFile, ...files.actionDeclarationFiles].map(
-      assertGeneratedFileWritable
-    )
+    ...[
+      files.workflowActionDeclarationFile,
+      files.typescriptConfigFile,
+      files.eslintConfigFile,
+      ...files.actionDeclarationFiles
+    ].map(assertGeneratedFileWritable)
   ])
+}
+
+async function writeRootEslintConfig(directory: string): Promise<string | undefined> {
+  const candidates = [
+    'eslint.config.js',
+    'eslint.config.mjs',
+    'eslint.config.cjs',
+    'eslint.config.ts',
+    'eslint.config.mts',
+    'eslint.config.cts'
+  ]
+  const existing = (
+    await Promise.all(
+      candidates.map(async filename => ({ filename, stat: await lstatIfPresent(path.join(directory, filename)) }))
+    )
+  ).find(candidate => candidate.stat)
+  if (existing && existing.filename !== WORKFLOW_ACTION_ROOT_ESLINT_CONFIG_FILENAME) {
+    await removeGeneratedFile(path.join(directory, WORKFLOW_ACTION_ROOT_ESLINT_CONFIG_FILENAME))
+    return undefined
+  }
+
+  const file = path.join(directory, WORKFLOW_ACTION_ROOT_ESLINT_CONFIG_FILENAME)
+  const stat = existing?.stat
+  if (stat) {
+    if (stat.isSymbolicLink() || !stat.isFile()) return undefined
+    const contents = await fs.readFile(file, 'utf8')
+    if (!hasGeneratedFileMarker(contents)) return undefined
+  }
+  await writeTextFileAtomic(file, rootEslintConfig(), 0o644)
+  return file
+}
+
+async function migrateJavaScriptActionSources(directory: string, manifest: WorkflowActionsManifest): Promise<void> {
+  const { generateWorkflowActionJavaScriptScaffold, isWorkflowActionJavaScriptScaffold } =
+    await import('./typescript.js')
+  await Promise.all(
+    manifest.actions.flatMap(action =>
+      action.versions.map(async version => {
+        if (version.executionConfig?.type !== 'CODE') return
+        const file = path.join(
+          directory,
+          WORKFLOW_ACTION_CODE_RELATIVE_DIRECTORY,
+          workflowActionCodeFilename(action.key, version.version, 'javascript')
+        )
+        const stat = await lstatIfPresent(file)
+        if (!stat) return
+        if (stat.isSymbolicLink()) throw new Error(`Workflow action code file "${file}" cannot be a symbolic link.`)
+        if (!stat.isFile()) throw new Error(`Workflow action code path "${file}" is not a regular file.`)
+        const source = await fs.readFile(file, 'utf8')
+        if (isWorkflowActionJavaScriptScaffold(source)) return
+        const scaffold = generateWorkflowActionJavaScriptScaffold(action, version, source)
+        await writeTextFileAtomic(file, scaffold, Number(stat.mode) & 0o777)
+      })
+    )
+  )
 }
 
 export async function writeWorkflowActionTypesWorkspace(
@@ -529,7 +635,7 @@ export async function writeWorkflowActionTypesWorkspace(
   manifest: WorkflowActionsManifest
 ): Promise<WorkflowActionTypesWorkspaceResult> {
   const directory = path.resolve(inputDirectory)
-  const { workflowActionDeclarationFile, typescriptConfigFile, actionDeclarationFiles } =
+  const { workflowActionDeclarationFile, typescriptConfigFile, eslintConfigFile, actionDeclarationFiles } =
     workflowActionTypeWorkspacePaths(directory, manifest)
   await assertWorkflowActionTypesWorkspaceWritable(directory, manifest)
   const typesDirectory = path.dirname(workflowActionDeclarationFile)
@@ -540,11 +646,17 @@ export async function writeWorkflowActionTypesWorkspace(
   await Promise.all([
     writeTextFileAtomic(workflowActionDeclarationFile, generateWorkflowActionSandboxDeclarations(), 0o644),
     writeTextFileAtomic(typescriptConfigFile, actionTypeScriptConfig(), 0o644),
+    writeTextFileAtomic(eslintConfigFile, actionEslintConfig(), 0o644),
     ...manifest.actions.map((action, index) =>
       writeTextFileAtomic(actionDeclarationFiles[index], generateWorkflowActionDeclaration(action), 0o644)
     )
   ])
-  await migrateLegacyActionTypeImports(directory, manifest)
+  const rootEslintConfigFile = await writeRootEslintConfig(directory)
+  await Promise.all([
+    migrateLegacyActionTypeImports(directory, manifest),
+    migrateJavaScriptActionSources(directory, manifest),
+    removeGeneratedFile(path.join(directory, LEGACY_WORKFLOW_ACTION_TYPESCRIPT_CONFIG_RELATIVE_PATH))
+  ])
 
   const desired = new Set(actionDeclarationFiles.map(file => path.basename(file)))
   const entries = await fs.readdir(typesDirectory, { withFileTypes: true })
@@ -569,7 +681,13 @@ export async function writeWorkflowActionTypesWorkspace(
       )
       .map(entry => removeGeneratedFile(path.join(directory, entry.name)))
   )
-  return { workflowActionDeclarationFile, actionDeclarationFiles, typescriptConfigFile }
+  return {
+    workflowActionDeclarationFile,
+    actionDeclarationFiles,
+    typescriptConfigFile,
+    eslintConfigFile,
+    ...(rootEslintConfigFile ? { rootEslintConfigFile } : {})
+  }
 }
 
 async function removeGeneratedFile(file: string): Promise<void> {
@@ -598,11 +716,15 @@ export async function removeWorkflowActionTypesWorkspace(inputDirectory: string)
         entry.isFile() && (entry.name === LEGACY_SANDBOX_TYPES_FILENAME || LEGACY_ACTION_TYPES_PATTERN.test(entry.name))
     )
     .map(entry => path.join(directory, entry.name))
-  const configFile = path.join(
-    directory,
-    WORKFLOW_ACTION_TYPESCRIPT_CONFIG_RELATIVE_DIRECTORY,
-    WORKFLOW_ACTION_TYPESCRIPT_CONFIG_FILENAME
-  )
-  await Promise.all([...declarationFiles, ...legacyDeclarationFiles, configFile].map(removeGeneratedFile))
+  const configFile = path.join(directory, WORKFLOW_ACTION_TYPESCRIPT_CONFIG_FILENAME)
+  const generatedFiles = [
+    ...declarationFiles,
+    ...legacyDeclarationFiles,
+    configFile,
+    path.join(typesDirectory, WORKFLOW_ACTION_ESLINT_CONFIG_FILENAME),
+    path.join(directory, WORKFLOW_ACTION_ROOT_ESLINT_CONFIG_FILENAME),
+    path.join(directory, LEGACY_WORKFLOW_ACTION_TYPESCRIPT_CONFIG_RELATIVE_PATH)
+  ]
+  await Promise.all(generatedFiles.map(removeGeneratedFile))
   if (typesDirectoryStat?.isDirectory()) await removeEmptyDirectoryTree(typesDirectory, directory)
 }

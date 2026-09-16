@@ -1,7 +1,7 @@
 import { WorkflowActionCommands } from '../../../lib/workflows/actions/commands.js'
 
 export default class AppActionsCreate extends WorkflowActionCommands.Create {
-  static description = 'Add a workflow action draft, optionally with a typed handler; push creates it remotely'
+  static description = 'Add a workflow action draft with checked JavaScript or TypeScript; push creates it remotely'
 
   static examples = [
     '<%= config.bin %> app actions create "Send message" --key send_message',
