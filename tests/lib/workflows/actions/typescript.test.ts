@@ -33,6 +33,7 @@ describe('workflow action TypeScript compiler', () => {
     const source = generateWorkflowActionTypeScriptScaffold(definition, version)
     const compiled = compileWorkflowActionTypeScript({ directory, filename, source, action: definition, version })
 
+    expect(source).toContain('../../../../../.ghl/types/actions/calculate_score')
     expect(compiled.errors).toEqual([])
     expect(compiled.code).not.toMatch(/\b(?:import|export|interface|type)\b/)
     expect(compiled.code).toContain('inputData')
@@ -44,7 +45,7 @@ describe('workflow action TypeScript compiler', () => {
     const definition = action()
     const version = definition.versions[0]
     const source = `
-import type { GhlActionCalculateScoreV1_0Handler } from '../../../../../ghl-action-calculate_score'
+import type { GhlActionCalculateScoreV1_0Handler } from '../../../../../.ghl/types/actions/calculate_score'
 
 const handler: GhlActionCalculateScoreV1_0Handler = async ({ inputData }) => ({
   result: Number(inputData.data.score)
@@ -62,11 +63,29 @@ export default async function action(context: Parameters<GhlActionCalculateScore
     expect(workflowActionCodeSyntaxError(compiled.code, 'calculate_score.1.0.js')).toBeUndefined()
   })
 
-  it('reports field mistakes and unavailable platform APIs before push', () => {
+  it('accepts the previous generated import while a workspace is being migrated', () => {
     const definition = action()
     const version = definition.versions[0]
     const source = `
 import type { GhlActionCalculateScoreV1_0Handler } from '../../../../../ghl-action-calculate_score'
+
+const action: GhlActionCalculateScoreV1_0Handler = async ({ inputData }) => ({
+  result: Number(inputData.data.score)
+})
+
+export default action
+`
+
+    const compiled = compileWorkflowActionTypeScript({ directory, filename, source, action: definition, version })
+
+    expect(compiled.errors).toEqual([])
+  })
+
+  it('reports field mistakes and unavailable platform APIs before push', () => {
+    const definition = action()
+    const version = definition.versions[0]
+    const source = `
+import type { GhlActionCalculateScoreV1_0Handler } from '../../../../../.ghl/types/actions/calculate_score'
 
 const action: GhlActionCalculateScoreV1_0Handler = async ({ inputData }) => {
   await fetch('https://example.com')
@@ -116,7 +135,7 @@ export default action
     const definition = action()
     const version = definition.versions[0]
     const source = `
-import type { GhlActionCalculateScoreV1_0Handler } from '../../../../../ghl-action-calculate_score'
+import type { GhlActionCalculateScoreV1_0Handler } from '../../../../../.ghl/types/actions/calculate_score'
 
 const action: GhlActionCalculateScoreV1_0Handler = async context => {
   const response = await context.customRequest.post<{ total: number }>('https://example.com', {

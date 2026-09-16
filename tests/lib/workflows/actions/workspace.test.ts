@@ -393,7 +393,9 @@ describe('workflow action workspaces', () => {
 
     expect(replaced.codeFiles.map(file => path.basename(file))).toEqual(['calculate_score.1.0.js'])
     await expect(fs.stat(typed.codeFiles[0])).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(fs.stat(path.join(directory, 'ghl-action-sandbox.d.ts'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(directory, '.ghl/types/actions/sandbox.d.ts'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
     await expect(fs.stat(path.join(replaced.codeDirectory, 'tsconfig.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 

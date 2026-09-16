@@ -517,7 +517,7 @@ ${audience}
 - \`src/webhooks/ghl-webhooks.json\` contains configured webhook settings and is omitted when unused.
 - \`src/modules/workflows/actions/<action-name>.json\` contains one app-scoped action and all of its versions; its required underscore \`key\` must match the hyphenated filename.
 - \`src/modules/workflows/actions/code/<action-key>.<version>.(js|ts)\` contains one code-backed action version and is referenced through \`executionConfig.codeFile\`.
-- \`ghl-action-sandbox.d.ts\` and \`ghl-action-<key>.d.ts\` describe TypeScript action inputs, outputs, and verified runtime helpers.
+- \`.ghl/types/actions/sandbox.d.ts\` and \`.ghl/types/actions/<key>.d.ts\` describe TypeScript action inputs, outputs, and verified runtime helpers.
 - \`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\` documents action fields, naming, validation, and synchronization when actions exist.
 - \`src/modules/workflows/triggers/<trigger-name>.json\` contains one app-scoped trigger and all of its versions; its \`key\` must match the hyphenated filename.
 - \`src/modules/workflows/triggers/HIGHLEVEL_WORKFLOW_TRIGGERS.md\` documents trigger data, filters, custom variables, callbacks, execution, validation, and synchronization when triggers exist.
@@ -538,6 +538,7 @@ ${audience}
 - Keep each workflow action in its own JSON file under \`src/modules/workflows/actions/\`; include the matching \`key\` and do not copy actions into \`ghl-app.json\`.
 - Keep code execution in the exact versioned file referenced by \`codeFile\`. Do not inline code in action JSON or point outside the action \`code/\` directory.
 - TypeScript actions export one default handler. Runtime imports are unsupported; use the generated context instead of browser or Node globals.
+- Keep the generated action \`code/tsconfig.json\`; it isolates sandbox globals without changing the app's root TypeScript environment.
 - Never rewrite portal JavaScript as TypeScript automatically. Resolve pull conflicts manually or use \`--force\` to accept portal JavaScript.
 - Keep each workflow trigger in its own JSON file under \`src/modules/workflows/triggers/\`; include the filename-derived \`key\` and do not copy triggers into \`ghl-app.json\`.
 - Keep JSON valid and retain the documented field names and value types.

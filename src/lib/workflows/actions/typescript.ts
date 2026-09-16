@@ -7,6 +7,8 @@ import type { WorkflowActionDefinition, WorkflowActionVersion } from './manifest
 import {
   generateWorkflowActionDeclaration,
   generateWorkflowActionSandboxDeclarations,
+  WORKFLOW_ACTION_SANDBOX_TYPES_FILENAME,
+  WORKFLOW_ACTION_TYPES_RELATIVE_DIRECTORY,
   workflowActionTypeFilename,
   workflowActionVersionTypePrefix
 } from './types.js'
@@ -141,8 +143,18 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
   sourceFile?: ts.SourceFile
 } {
   const filename = normalizedFilename(input.filename)
-  const sandboxFile = path.join(input.directory, 'ghl-action-sandbox.d.ts')
-  const actionTypeFile = path.join(input.directory, workflowActionTypeFilename(input.action.key))
+  const sandboxFile = path.join(
+    input.directory,
+    WORKFLOW_ACTION_TYPES_RELATIVE_DIRECTORY,
+    WORKFLOW_ACTION_SANDBOX_TYPES_FILENAME
+  )
+  const actionTypeFile = path.join(
+    input.directory,
+    WORKFLOW_ACTION_TYPES_RELATIVE_DIRECTORY,
+    workflowActionTypeFilename(input.action.key)
+  )
+  const legacySandboxFile = path.join(input.directory, 'ghl-action-sandbox.d.ts')
+  const legacyActionTypeFile = path.join(input.directory, `ghl-action-${input.action.key}.d.ts`)
   const handlerName = `${workflowActionVersionTypePrefix(input.action.key, input.version.version)}Handler`
   const checkFile = path.join(
     input.directory,
@@ -156,10 +168,17 @@ function typeCheckFiles(input: CompileWorkflowActionTypeScriptInput): {
   if (!typesImport.startsWith('.')) typesImport = `./${typesImport}`
   sourceImport = sourceImport.replace(/\.ts$/, '')
   typesImport = typesImport.replace(/\.d\.ts$/, '')
+  const sandboxDeclaration = generateWorkflowActionSandboxDeclarations(new Date(0))
+  const actionDeclaration = generateWorkflowActionDeclaration(input.action, new Date(0))
   const files = new Map<string, string>([
     [filename, input.source],
-    [normalizedFilename(sandboxFile), generateWorkflowActionSandboxDeclarations(new Date(0))],
-    [normalizedFilename(actionTypeFile), generateWorkflowActionDeclaration(input.action, new Date(0))],
+    [normalizedFilename(sandboxFile), sandboxDeclaration],
+    [normalizedFilename(actionTypeFile), actionDeclaration],
+    [normalizedFilename(legacySandboxFile), sandboxDeclaration],
+    [
+      normalizedFilename(legacyActionTypeFile),
+      actionDeclaration.replace("from './sandbox'", "from './ghl-action-sandbox'")
+    ],
     [
       normalizedFilename(checkFile),
       `import handler from '${sourceImport}'\nimport type { ${handlerName} } from '${typesImport}'\nconst checked: ${handlerName} = handler\nvoid checked\n`
@@ -257,7 +276,7 @@ export function generateWorkflowActionTypeScriptScaffold(
     .map((line, index) => (index === 0 ? line : `  ${line}`))
     .join('\n')
   return `/* Generated action scaffold. Keep the default handler export. */
-import type { ${handlerName} } from '../../../../../${workflowActionTypeFilename(action.key).replace(/\.d\.ts$/, '')}'
+import type { ${handlerName} } from '../../../../../.ghl/types/actions/${workflowActionTypeFilename(action.key).replace(/\.d\.ts$/, '')}'
 
 const action: ${handlerName} = async ({ inputData, customRequest }) => {
   void inputData

@@ -345,9 +345,9 @@ describe('public command contracts', () => {
     )
     await expect(fs.readFile(typedCodeFile, 'utf8')).resolves.toMatch(/export default action/)
     await expect(fs.stat(typedCodeFile.replace(/\.ts$/, '.js'))).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(fs.readFile(path.join(typedWorkspace, 'ghl-action-sandbox.d.ts'), 'utf8')).resolves.toMatch(
-      /GhlActionContext/
-    )
+    await expect(
+      fs.readFile(path.join(typedWorkspace, '.ghl', 'types', 'actions', 'sandbox.d.ts'), 'utf8')
+    ).resolves.toMatch(/GhlActionContext/)
     await expect(fs.readFile(path.join(path.dirname(typedCodeFile), 'tsconfig.json'), 'utf8')).resolves.toMatch(
       /"lib": \[\s*"ES2022"/
     )

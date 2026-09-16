@@ -358,7 +358,9 @@ The default execution payload contains configured \`data\`, workflow/location/co
 
 The local-only \`codeFile\` path must be exactly \`code/<action-key>.<major>.<minor>.js\` or \`.ts\`. JavaScript is the async-function body accepted by the portal editor, where top-level \`await\` and \`return\` are valid. TypeScript exports one typed default handler. The CLI type-checks and transpiles it in memory; no compiled file is written.
 
-Create a typed action with \`ghl app actions create "Calculate score" --key calculate_score --typescript\`. The CLI generates \`ghl-action-sandbox.d.ts\`, \`ghl-action-calculate_score.d.ts\`, and a dedicated \`code/tsconfig.json\`. Inputs and outputs come from the matching action version, while the sandbox declaration exposes only capabilities verified in the backend runtime.
+Create a typed action with \`ghl app actions create "Calculate score" --key calculate_score --typescript\`. The CLI generates \`.ghl/types/actions/sandbox.d.ts\`, \`.ghl/types/actions/calculate_score.d.ts\`, and a dedicated \`code/tsconfig.json\`. Inputs and outputs come from the matching action version, while the sandbox declaration exposes only capabilities verified in the backend runtime.
+
+The action project remains separate from the root \`tsconfig.json\` because sandbox code must exclude browser and Node ambient globals. TypeScript cannot apply different \`lib\` and \`types\` settings to one folder inside a single project; merging these settings into the root would break application code that needs DOM or Node types.
 
 The runtime provides:
 

@@ -107,8 +107,8 @@ import type { GhlAppManifest } from './ghl-app.js'
 | `src/modules/workflows/actions/<action-name>.json` | One app-scoped workflow action per file. A name such as `send-contact-sync-payload.json` requires the JSON key `send_contact_sync_payload`. |
 | `src/modules/workflows/actions/code/<action-key>.<version>.js` | Portal JavaScript source for one code-backed action version, referenced by `executionConfig.codeFile`. |
 | `src/modules/workflows/actions/code/<action-key>.<version>.ts` | Optional typed handler created with `ghl app actions create --typescript`; the CLI type-checks and transpiles it in memory. |
-| `ghl-action-sandbox.d.ts` / `ghl-action-<key>.d.ts` | Generated sandbox, input, output, and versioned handler declarations for TypeScript actions. |
-| `src/modules/workflows/actions/code/tsconfig.json` | Generated isolated TypeScript project that excludes browser and Node globals unavailable in the action sandbox. |
+| `.ghl/types/actions/sandbox.d.ts` / `.ghl/types/actions/<key>.d.ts` | Generated sandbox, input, output, and versioned handler declarations for TypeScript actions. |
+| `src/modules/workflows/actions/code/tsconfig.json` | Generated isolated TypeScript project that excludes unavailable browser and Node globals without changing the app's root TypeScript environment. |
 | `src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md` | Generated reference created with the actions directory only when the app has an action. |
 | `src/modules/workflows/triggers/<trigger-name>.json` | One app-scoped workflow trigger per file. A name such as `contact-status-updated.json` requires the JSON key `contact_status_updated`. |
 | `src/modules/workflows/triggers/HIGHLEVEL_WORKFLOW_TRIGGERS.md` | Generated key-by-key reference created with the triggers directory only when the app has a trigger. |
@@ -229,7 +229,7 @@ Workflow actions use one JSON file per action under `src/modules/workflows/actio
 
 Code execution is stored separately as `code/<action-key>.<version>.js` or `.ts`, and the matching version uses `executionConfig.codeFile`. JavaScript files contain the portal's async-function body. TypeScript files export one typed default handler; the CLI type-checks them against generated action and sandbox declarations, transpiles them only in memory, and sends JavaScript as inline `executionConfig.code`. No compiled `.js` file is written beside TypeScript. Source must be UTF-8, at most 1 MiB, canonical for the action key and version, and cannot be a symlink or unreferenced file.
 
-The action sandbox intentionally has no `fetch`, Node APIs, timers, `crypto`, `URL`, or module loading. Typed handlers receive `inputData`, `customRequest`, `console`, Lodash (`_`), Moment (`moment`), `fileDownloader`, `_csv`, `_base64`, and `_uuid` through their context. Runtime imports are rejected; type-only imports are erased before upload.
+The action sandbox intentionally has no `fetch`, Node APIs, timers, `crypto`, `URL`, or module loading. Typed handlers receive `inputData`, `customRequest`, `console`, Lodash (`_`), Moment (`moment`), `fileDownloader`, `_csv`, `_base64`, and `_uuid` through their context. Runtime imports are rejected; type-only imports are erased before upload. Action code has its own generated `tsconfig.json` because TypeScript cannot apply different ambient libraries to one folder from a single root project; merging the sandbox settings into the root config would remove DOM or Node types from the rest of the app.
 
 The portal stores JavaScript, so JavaScript-to-TypeScript reconstruction is not lossless. A normal pull preserves local TypeScript only while its compiled JavaScript still matches the portal. Local edits, portal code edits, or an incompatible portal input/output change stop pull with conflict paths. Review and reconcile those changes, or use `--force` to explicitly replace the TypeScript source with portal `.js`.
 

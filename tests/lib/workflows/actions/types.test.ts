@@ -112,13 +112,13 @@ describe('workflow action TypeScript declarations', () => {
       /declare\s+(?:const|function)\s+(?:fetch|crypto|setTimeout|URL|process|require|Buffer)\b/
     )
     expect(declaration).not.toContain('timeout?:')
-    expect(diagnostics({ '/virtual/ghl-action-sandbox.d.ts': declaration })).toEqual([])
+    expect(diagnostics({ '/virtual/.ghl/types/actions/sandbox.d.ts': declaration })).toEqual([])
   })
 
   it('derives versioned input and output types from the action manifest', () => {
     const declaration = generateWorkflowActionDeclaration(action(), GENERATED_AT)
 
-    expect(workflowActionTypeFilename('calculate_score')).toBe('ghl-action-calculate_score.d.ts')
+    expect(workflowActionTypeFilename('calculate_score')).toBe('calculate_score.d.ts')
     expect(declaration).toContain('export type GhlActionCalculateScoreV1_0Data =')
     expect(declaration).toContain('Readonly<Record<string, unknown>> &')
     expect(declaration).toContain('readonly score: number | string;')
@@ -130,8 +130,8 @@ describe('workflow action TypeScript declarations', () => {
     expect(declaration).toContain('export type GhlActionCalculateScoreV1_0Handler = GhlActionHandler<')
     expect(
       diagnostics({
-        '/virtual/ghl-action-sandbox.d.ts': generateWorkflowActionSandboxDeclarations(GENERATED_AT),
-        '/virtual/ghl-action-calculate_score.d.ts': declaration
+        '/virtual/.ghl/types/actions/sandbox.d.ts': generateWorkflowActionSandboxDeclarations(GENERATED_AT),
+        '/virtual/.ghl/types/actions/calculate_score.d.ts': declaration
       })
     ).toEqual([])
   })
@@ -155,6 +155,8 @@ describe('workflow action TypeScript declarations', () => {
       { schemaVersion: 1, appId: 'app-1', actions: [definition] },
       { generatedAt: GENERATED_AT }
     )
+    expect(generated.sandboxDeclarationFile).toBe(path.join(directory, '.ghl/types/actions/sandbox.d.ts'))
+    expect(generated.actionDeclarationFiles).toEqual([path.join(directory, '.ghl/types/actions/calculate_score.d.ts')])
     const codeFile = path.join(directory, 'src/modules/workflows/actions/code/calculate_score.1.0.ts')
     await fs.writeFile(codeFile, generateWorkflowActionTypeScriptScaffold(definition, definition.versions[0]))
     const parsed = ts.getParsedCommandLineOfConfigFile(
@@ -190,7 +192,8 @@ describe('workflow action TypeScript declarations', () => {
   it('does not overwrite a developer-owned declaration', async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-action-types-'))
     directories.push(directory)
-    const declarationFile = path.join(directory, 'ghl-action-calculate_score.d.ts')
+    const declarationFile = path.join(directory, '.ghl/types/actions/calculate_score.d.ts')
+    await fs.mkdir(path.dirname(declarationFile), { recursive: true })
     await fs.writeFile(declarationFile, 'export interface DeveloperOwned {}\n')
 
     await expect(
@@ -201,5 +204,36 @@ describe('workflow action TypeScript declarations', () => {
       })
     ).rejects.toThrow(/developer-owned.*will not be overwritten/i)
     await expect(fs.readFile(declarationFile, 'utf8')).resolves.toBe('export interface DeveloperOwned {}\n')
+  })
+
+  it('removes legacy generated declarations from the workspace root', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-action-types-'))
+    directories.push(directory)
+    const legacySandbox = path.join(directory, 'ghl-action-sandbox.d.ts')
+    const legacyAction = path.join(directory, 'ghl-action-calculate_score.d.ts')
+    const codeDirectory = path.join(directory, 'src/modules/workflows/actions/code')
+    const codeFile = path.join(codeDirectory, 'calculate_score.1.0.ts')
+    await fs.mkdir(codeDirectory, { recursive: true })
+    await Promise.all([
+      fs.writeFile(legacySandbox, generateWorkflowActionSandboxDeclarations(GENERATED_AT)),
+      fs.writeFile(legacyAction, generateWorkflowActionDeclaration(action(), GENERATED_AT)),
+      fs.writeFile(
+        codeFile,
+        "import type { GhlActionCalculateScoreV1_0Handler } from '../../../../../ghl-action-calculate_score'\n"
+      )
+    ])
+
+    await writeWorkflowActionTypesWorkspace(directory, {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [action()]
+    })
+
+    await expect(fs.stat(legacySandbox)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(legacyAction)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(directory, '.ghl/types/actions/sandbox.d.ts'))).resolves.toBeDefined()
+    await expect(fs.readFile(codeFile, 'utf8')).resolves.toContain(
+      "from '../../../../../.ghl/types/actions/calculate_score'"
+    )
   })
 })
