@@ -51,6 +51,20 @@ function usage(): BillingUsageManifest {
 }
 
 describe('subscription billing validation', () => {
+  it('validates editable manifests with the generated JSON Schema contract', () => {
+    const manifest = subscriptions() as unknown as Record<string, unknown>
+    manifest.unsupported = true
+
+    expect(
+      validateBillingSubscriptionManifest(manifest, {
+        billingType: 'paid',
+        status: 'draft',
+        userTypes: ['company'],
+        whiteLabel: false
+      })
+    ).toContain('subscription.json.unsupported is not a supported property.')
+  })
+
   it('accepts portal-compatible plans down to one cent', () => {
     const manifest = subscriptions()
     manifest.plans[0].amount = 0.01
@@ -141,6 +155,15 @@ describe('subscription billing validation', () => {
 })
 
 describe('usage billing validation', () => {
+  it('validates editable manifests with the generated JSON Schema contract', () => {
+    const manifest = usage() as unknown as Record<string, unknown>
+    manifest.unsupported = true
+
+    expect(validateBillingUsageManifest(manifest, { appType: 'standard', externalBilling: false })).toContain(
+      'usage-based.json.unsupported is not a supported property.'
+    )
+  })
+
   it('accepts dynamic custom pricing and public HTTPS pricing pages', () => {
     expect(validateBillingUsageManifest(usage(), { appType: 'standard', externalBilling: false })).toEqual([])
   })

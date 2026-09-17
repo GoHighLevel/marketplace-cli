@@ -13,15 +13,13 @@ import { type WorkflowTriggerDefinition, type WorkflowTriggersManifest } from '.
 import { validateWorkflowTriggersManifest } from './schema.js'
 import { workflowActionKeyValidationErrors, WORKFLOW_ACTION_KEY_MAX_LENGTH } from '../actions/key.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
-import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
+import { validateJsonSchema, withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
 
 export const WORKFLOW_TRIGGERS_DIRECTORY_RELATIVE_PATH = path.join('src', 'modules', 'workflows', 'triggers')
 export const WORKFLOW_TRIGGERS_STATE_RELATIVE_PATH = path.join('.ghl', 'workflow-triggers-state.json')
 export const LEGACY_WORKFLOW_TRIGGERS_RELATIVE_PATH = path.join('src', 'modules', 'workflows', 'workflow-triggers.json')
 
 const TRIGGER_FILENAME_PATTERN = /^[a-z](?:[a-z0-9-]*[a-z0-9])?\.json$/
-const TRIGGER_FILE_KEYS = new Set(['$schema', 'schemaVersion', 'key', 'templateId', 'versions'])
-
 interface WorkflowTriggerFile {
   $schema?: string
   schemaVersion: 1
@@ -202,24 +200,19 @@ async function triggerJsonEntries(triggerDirectory: string): Promise<string[]> {
 
 function validateTriggerFile(value: unknown, relativeFile: string, filenameKey?: string): string[] {
   if (!isRecord(value)) return [`${relativeFile} must contain a JSON object.`]
-  const errors: string[] = []
-  for (const key of Object.keys(value)) {
-    if (!TRIGGER_FILE_KEYS.has(key)) errors.push(`${relativeFile}.${key} is not supported.`)
-  }
-  if ('$schema' in value && typeof value.$schema !== 'string') {
-    errors.push(`${relativeFile}.$schema must be a string.`)
-  }
-  if (value.schemaVersion !== 1) errors.push(`${relativeFile}.schemaVersion must be 1.`)
+  const errors = validateJsonSchema('workflow-trigger', value, relativeFile)
   if (typeof value.key !== 'string' || !value.key.trim()) {
-    errors.push(`${relativeFile}.key must be a non-empty string.`)
+    const keyPath = `${relativeFile}.key`
+    errors.splice(
+      0,
+      errors.length,
+      ...errors.filter(error => !error.startsWith(keyPath)),
+      `${keyPath} must be a non-empty string.`
+    )
   } else if (filenameKey && value.key !== filenameKey) {
     errors.push(`${relativeFile}.key "${value.key}" must match the filename-derived key "${filenameKey}".`)
   }
-  if ('templateId' in value && (typeof value.templateId !== 'string' || !value.templateId.trim())) {
-    errors.push(`${relativeFile}.templateId must be a non-empty string when provided.`)
-  }
-  if (!Array.isArray(value.versions)) errors.push(`${relativeFile}.versions must be an array.`)
-  return errors
+  return [...new Set(errors)]
 }
 
 function mapManifestErrorToSourceFile(error: string, triggerFiles: Array<{ relativeFile: string }>): string {

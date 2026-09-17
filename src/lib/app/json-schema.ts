@@ -1,5 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import AjvModule, { type Ajv as AjvInstance, type ErrorObject, type Options, type ValidateFunction } from 'ajv'
+import addFormatsModule, { type FormatsPlugin } from 'ajv-formats'
 import { writeTextFileAtomic } from '../shared/atomic-file.js'
 import { appSchema } from './json-schemas/app.js'
 import { subscriptionSchema, usageBasedSchema } from './json-schemas/billing.js'
@@ -30,6 +32,26 @@ const JSON_SCHEMAS: Readonly<Record<JsonSchemaName, JsonSchema>> = {
   subscription: subscriptionSchema,
   'usage-based': usageBasedSchema
 }
+
+const Ajv = AjvModule as unknown as new (options?: Options) => AjvInstance
+const addFormats = addFormatsModule as unknown as FormatsPlugin
+
+/* Conditional subschemas intentionally inherit property declarations from their parent contract. */
+const schemaValidator = addFormats(
+  new Ajv({
+    allErrors: true,
+    allowUnionTypes: true,
+    coerceTypes: false,
+    multipleOfPrecision: 8,
+    removeAdditional: false,
+    strict: true,
+    strictNumbers: true,
+    strictRequired: false,
+    strictTypes: false,
+    useDefaults: false
+  })
+)
+const compiledValidators = new Map<JsonSchemaName, ValidateFunction>()
 
 const JSON_SCHEMA_FILE_MATCHES: Readonly<Record<JsonSchemaName, string[]>> = {
   app: ['ghl-app.json'],
@@ -65,6 +87,133 @@ export function withoutJsonSchemaReference<T>(value: T): T {
 
 export function getJsonSchema(name: JsonSchemaName): JsonSchema {
   return structuredClone(JSON_SCHEMAS[name])
+}
+
+function pathSegment(parent: string, segment: string): string {
+  if (/^(?:0|[1-9]\d*)$/.test(segment)) return `${parent}[${segment}]`
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(segment) ? `${parent}.${segment}` : `${parent}[${JSON.stringify(segment)}]`
+}
+
+function instancePath(rootPath: string, pointer: string): string {
+  return pointer
+    .split('/')
+    .slice(1)
+    .map(segment => segment.replaceAll('~1', '/').replaceAll('~0', '~'))
+    .reduce(pathSegment, rootPath)
+}
+
+function countLabel(value: number, noun: string): string {
+  return `${value.toLocaleString('en-US')} ${noun}${value === 1 ? '' : 's'}`
+}
+
+function errorPath(error: ErrorObject, rootPath: string): string {
+  const base = instancePath(rootPath, error.instancePath)
+  if (error.keyword === 'additionalProperties') {
+    return pathSegment(base, String(error.params.additionalProperty))
+  }
+  if (error.keyword === 'required') return pathSegment(base, String(error.params.missingProperty))
+  return base
+}
+
+function enumValues(error: ErrorObject): string {
+  const values = Array.isArray(error.params.allowedValues) ? error.params.allowedValues : []
+  return values.map(value => JSON.stringify(value)).join(', ')
+}
+
+function jsonSchemaError(error: ErrorObject, rootPath: string): string | undefined {
+  const path = errorPath(error, rootPath)
+  switch (error.keyword) {
+    case 'additionalProperties':
+      return `${path} is not a supported property.`
+    case 'required':
+      return `${path} is required.`
+    case 'type': {
+      const expected = String(error.params.type)
+      return `${path} must be ${['array', 'object'].includes(expected) ? 'an' : 'a'} ${expected}.`
+    }
+    case 'const':
+      return `${path} must be ${JSON.stringify(error.params.allowedValue)}.`
+    case 'enum':
+      return `${path} must be one of: ${enumValues(error)}.`
+    case 'minLength':
+      return `${path} must contain at least ${countLabel(Number(error.params.limit), 'character')}.`
+    case 'maxLength':
+      return `${path} must contain at most ${countLabel(Number(error.params.limit), 'character')}.`
+    case 'minItems':
+      return `${path} must contain at least ${countLabel(Number(error.params.limit), 'item')}.`
+    case 'maxItems':
+      return `${path} must contain at most ${countLabel(Number(error.params.limit), 'item')}.`
+    case 'uniqueItems':
+      return `${path} must not contain duplicate items.`
+    case 'minimum':
+      return `${path} must be at least ${error.params.limit}.`
+    case 'maximum':
+      return `${path} must be at most ${error.params.limit}.`
+    case 'exclusiveMinimum':
+      return `${path} must be greater than ${error.params.limit}.`
+    case 'exclusiveMaximum':
+      return `${path} must be less than ${error.params.limit}.`
+    case 'multipleOf':
+      return `${path} must be a multiple of ${error.params.multipleOf}.`
+    case 'pattern':
+      if (/\/properties\/(?:appId|versionId)\/pattern$/.test(error.schemaPath)) {
+        return `${path} must contain only letters, numbers, underscores, or hyphens and be 1 to 128 characters.`
+      }
+      return `${path} does not match the required format.`
+    case 'format':
+      return `${path} must use valid ${error.params.format} format.`
+    case 'oneOf':
+      return `${path} must match exactly one supported configuration.`
+    case 'anyOf':
+      return `${path} must match a supported configuration.`
+    case 'not':
+      return `${path} contains a value that is not supported here.`
+    case 'if':
+      return undefined
+    default:
+      return `${path} ${error.message ?? `failed ${error.keyword} validation`}.`
+  }
+}
+
+function validatorFor(name: JsonSchemaName): ValidateFunction {
+  const existing = compiledValidators.get(name)
+  if (existing) return existing
+  const compiled = schemaValidator.compile(JSON_SCHEMAS[name])
+  compiledValidators.set(name, compiled)
+  return compiled
+}
+
+export function validateJsonSchema(name: JsonSchemaName, value: unknown, rootPath: string): string[] {
+  const validator = validatorFor(name)
+  if (validator(value)) return []
+  return formatJsonSchemaErrors(validator.errors ?? [], rootPath)
+}
+
+function formatJsonSchemaErrors(errors: ErrorObject[], rootPath: string): string[] {
+  return [
+    ...new Set(
+      errors.flatMap(error => {
+        const message = jsonSchemaError(error, rootPath)
+        return message ? [message] : []
+      })
+    )
+  ]
+}
+
+function isConditionalSchemaPath(schemaPath: string): boolean {
+  return /\/(?:allOf|anyOf|oneOf|if|then|else|not)\//.test(schemaPath)
+}
+
+function isStructuralError(error: ErrorObject): boolean {
+  if (['additionalProperties', 'type'].includes(error.keyword)) return true
+  if (['const', 'enum', 'required'].includes(error.keyword)) return !isConditionalSchemaPath(error.schemaPath)
+  return error.keyword === 'pattern' && /\/properties\/(?:appId|versionId)\/pattern$/.test(error.schemaPath)
+}
+
+export function validateJsonSchemaStructure(name: JsonSchemaName, value: unknown, rootPath: string): string[] {
+  const validator = validatorFor(name)
+  if (validator(value)) return []
+  return formatJsonSchemaErrors((validator.errors ?? []).filter(isStructuralError), rootPath)
 }
 
 async function lstatIfPresent(target: string): Promise<Awaited<ReturnType<typeof fs.lstat>> | undefined> {

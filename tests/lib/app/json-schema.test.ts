@@ -9,6 +9,8 @@ import {
   JSON_SCHEMA_REFERENCES,
   JSON_SCHEMA_RELATIVE_PATHS,
   getJsonSchema,
+  validateJsonSchema,
+  validateJsonSchemaStructure,
   writeJsonSchemaWorkspace
 } from '../../../src/lib/app/json-schema.js'
 
@@ -140,6 +142,16 @@ function validWorkflowAction(): SchemaObject {
   }
 }
 
+function validWebhookManifest(): SchemaObject {
+  return {
+    schemaVersion: 1,
+    appId: 'app-1',
+    versionId: 'version-1',
+    webhookUrl: 'https://hooks.example.com/default',
+    subscribedEvents: [{ name: 'ContactCreate', url: 'https://hooks.example.com/contact' }]
+  }
+}
+
 function validWorkflowTrigger(): SchemaObject {
   return {
     schemaVersion: 1,
@@ -242,6 +254,60 @@ afterEach(async () => {
 })
 
 describe('JSON schema registry', () => {
+  it('compiles and validates every emitted contract with the production validator', () => {
+    const manifests = {
+      app: validAppManifest(),
+      webhooks: validWebhookManifest(),
+      'workflow-action': validWorkflowAction(),
+      'workflow-trigger': validWorkflowTrigger(),
+      subscription: validSubscription(),
+      'usage-based': validUsageMeter()
+    }
+
+    for (const name of JSON_SCHEMA_NAMES) {
+      expect(validateJsonSchema(name, manifests[name], name)).toEqual([])
+    }
+  })
+
+  it('uses the emitted contract for runtime validation without mutating input', () => {
+    const invalid = validAppManifest()
+    const before = structuredClone(invalid)
+    ;(invalid.basicInfo as SchemaObject).name = ''
+    invalid.unsupported = true
+
+    expect(validateJsonSchema('app', invalid, 'ghl-app.json')).toEqual(
+      expect.arrayContaining([
+        'ghl-app.json.unsupported is not a supported property.',
+        'ghl-app.json.basicInfo.name must contain at least 1 character.'
+      ])
+    )
+    expect(invalid).toEqual({
+      ...before,
+      basicInfo: { ...(before.basicInfo as SchemaObject), name: '' },
+      unsupported: true
+    })
+  })
+
+  it('derives compatibility-safe structural validation from the same contract', () => {
+    const legacy = validAppManifest()
+    ;(legacy.basicInfo as SchemaObject).name = ''
+    ;(legacy.profiles as SchemaObject).agency = {
+      ...((legacy.profiles as SchemaObject).agency as SchemaObject),
+      description: ''
+    }
+
+    expect(validateJsonSchemaStructure('app', legacy, 'ghl-app.json')).toEqual([])
+
+    legacy.appId = '../unsafe'
+    legacy.unsupported = true
+    expect(validateJsonSchemaStructure('app', legacy, 'ghl-app.json')).toEqual(
+      expect.arrayContaining([
+        'ghl-app.json.appId must contain only letters, numbers, underscores, or hyphens and be 1 to 128 characters.',
+        'ghl-app.json.unsupported is not a supported property.'
+      ])
+    )
+  })
+
   it('covers every user-editable JSON configuration surface with strict draft-07 schemas', () => {
     expect(JSON_SCHEMA_NAMES).toEqual([
       'app',
@@ -381,13 +447,7 @@ describe('JSON schema registry', () => {
   })
 
   it('enforces webhook, workflow, and billing relationships without rejecting valid manifests', () => {
-    const webhook = {
-      schemaVersion: 1,
-      appId: 'app-1',
-      versionId: 'version-1',
-      webhookUrl: 'https://hooks.example.com/default',
-      subscribedEvents: [{ name: 'ContactCreate', url: 'https://hooks.example.com/contact' }]
-    }
+    const webhook = validWebhookManifest()
     expect(schemaAccepts('webhooks', webhook)).toBe(true)
     expect(schemaAccepts('webhooks', { ...webhook, webhookUrl: '' })).toBe(false)
     expect(schemaAccepts('webhooks', { ...webhook, subscribedEvents: [{ name: 'not valid', url: '' }] })).toBe(false)

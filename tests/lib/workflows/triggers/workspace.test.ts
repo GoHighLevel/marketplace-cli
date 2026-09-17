@@ -144,6 +144,26 @@ describe('workflow trigger workspaces', () => {
     )
   })
 
+  it('validates editable trigger files with the generated JSON Schema contract', async () => {
+    const directory = await workspace()
+    const empty: WorkflowTriggersManifest = { schemaVersion: 1, appId: 'app-1', triggers: [] }
+    const result = await writeWorkflowTriggersWorkspace(directory, empty)
+    await fs.mkdir(result.triggerDirectory, { recursive: true })
+    await fs.writeFile(
+      path.join(result.triggerDirectory, 'order-created.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        key: 'order_created',
+        versions: [{ version: '1.0', status: 'draft', info: { name: 'Order created' } }],
+        unsupported: true
+      })
+    )
+
+    await expect(loadWorkflowTriggersWorkspace(directory)).rejects.toThrow(
+      /order-created\.json\.unsupported is not a supported property/i
+    )
+  })
+
   it('keeps only the hidden baseline when there are no workflow triggers', async () => {
     const directory = await workspace()
     const result = await writeWorkflowTriggersWorkspace(directory, {

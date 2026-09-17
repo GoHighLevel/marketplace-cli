@@ -2,6 +2,7 @@ import { isRecord } from '../api/response.js'
 import { type BillingSubscriptionPlan, type BillingUsageMeterDefinition } from './manifest.js'
 import { MAX_PLANS, MAX_PLAN_FEATURES, MAX_TEMPLATE_PLANS, requirePricingEditable } from './pricing.js'
 import { validateHttpsUrl, validateTextForWhiteLabel } from '../shared/validation.js'
+import { validateJsonSchema, validateJsonSchemaStructure } from '../app/json-schema.js'
 
 export interface BillingSubscriptionValidationOptions {
   billingType: 'free' | 'paid' | 'freemium'
@@ -26,42 +27,7 @@ export interface BillingUsageValidationOptions {
   contextual?: boolean
 }
 
-const SUBSCRIPTION_ROOT_KEYS = new Set(['schemaVersion', 'appId', 'plans'])
 const CUSTOM_PRODUCT_ID_MAX_LENGTH = 250
-const PLAN_KEYS = new Set([
-  'id',
-  'name',
-  'features',
-  'paymentTime',
-  'paymentType',
-  'amount',
-  'locationAmount',
-  'freePlan',
-  'freeForAgency',
-  'freeForLocation'
-])
-const USAGE_ROOT_KEYS = new Set(['schemaVersion', 'appId', 'meters'])
-const METER_KEYS = new Set([
-  'id',
-  'productType',
-  'productId',
-  'productName',
-  'customPriceType',
-  'usageUnit',
-  'direction',
-  'pricingPageUrl',
-  'tiers'
-])
-const TIER_KEYS = new Set([
-  'id',
-  'name',
-  'minVolume',
-  'maxVolume',
-  'pricePerUnit',
-  'minPricePerUnit',
-  'maxPricePerUnit',
-  'executionLimitPerCycle'
-])
 
 function isCustomProductId(value: string): boolean {
   if (!value.startsWith('custom_') || value.length === 7 || value.length > CUSTOM_PRODUCT_ID_MAX_LENGTH) return false
@@ -76,12 +42,6 @@ function isCustomProductId(value: string): boolean {
     if (!valid) return false
   }
   return true
-}
-
-function unknownKeyErrors(value: Record<string, unknown>, allowed: Set<string>, path: string): string[] {
-  return Object.keys(value)
-    .filter(key => !allowed.has(key))
-    .map(key => `${path}.${key} is not supported.`)
 }
 
 function hasAtMostDecimals(value: number, decimalPlaces: number): boolean {
@@ -104,7 +64,7 @@ function validateCurrency(value: unknown, path: string, allowZero = false): stri
 function validatePlan(value: unknown, index: number, options: BillingSubscriptionValidationOptions): string[] {
   const path = `subscription.json.plans[${index}]`
   if (!isRecord(value)) return [`${path} must be an object.`]
-  const errors = unknownKeyErrors(value, PLAN_KEYS, path)
+  const errors: string[] = []
   if ('id' in value && (typeof value.id !== 'string' || !value.id.trim())) {
     errors.push(`${path}.id must be a non-empty string when provided.`)
   }
@@ -193,25 +153,20 @@ export function validateBillingSubscriptionManifest(
   options: BillingSubscriptionValidationOptions
 ): string[] {
   if (!isRecord(value)) return ['subscription.json must contain an object.']
-  const errors = unknownKeyErrors(value, SUBSCRIPTION_ROOT_KEYS, 'subscription.json')
-  if (value.schemaVersion !== 1) errors.push('subscription.json.schemaVersion must be 1.')
-  if (typeof value.appId !== 'string' || !value.appId.trim()) {
-    errors.push('subscription.json.appId must be a non-empty string.')
-  }
-  if (!Array.isArray(value.plans)) {
-    errors.push('subscription.json.plans must be an array.')
-    return errors
-  }
+  const structuralErrors = validateJsonSchemaStructure('subscription', value, 'subscription.json')
+  if (structuralErrors.length > 0) return structuralErrors
+  const errors = options.contextual === false ? [] : validateJsonSchema('subscription', value, 'subscription.json')
+  const plans = value.plans as unknown[]
   if (options.contextual !== false) {
     const maxPlans = options.appType === 'template' ? MAX_TEMPLATE_PLANS : MAX_PLANS
-    if (value.plans.length > maxPlans) {
+    if (plans.length > maxPlans) {
       errors.push(`subscription.json.plans can contain at most ${maxPlans} plan${maxPlans === 1 ? '' : 's'}.`)
     }
   }
-  value.plans.forEach((plan, index) => errors.push(...validatePlan(plan, index, options)))
+  plans.forEach((plan, index) => errors.push(...validatePlan(plan, index, options)))
   const ids = new Set<string>()
   const names = new Set<string>()
-  value.plans.forEach((plan, index) => {
+  plans.forEach((plan, index) => {
     if (!isRecord(plan)) return
     if (typeof plan.id === 'string') {
       if (ids.has(plan.id)) errors.push(`subscription.json.plans[${index}].id duplicates plan id "${plan.id}".`)
@@ -249,7 +204,7 @@ function validateUnitPrice(value: unknown, path: string): string[] {
 function validateTier(value: unknown, meterIndex: number, tierIndex: number, dynamic: boolean): string[] {
   const path = `usage-based.json.meters[${meterIndex}].tiers[${tierIndex}]`
   if (!isRecord(value)) return [`${path} must be an object.`]
-  const errors = unknownKeyErrors(value, TIER_KEYS, path)
+  const errors: string[] = []
   if ('id' in value && (typeof value.id !== 'string' || !value.id.trim())) {
     errors.push(`${path}.id must be a non-empty string when provided.`)
   }
@@ -313,7 +268,7 @@ function validateTierRanges(meter: BillingUsageMeterDefinition, meterIndex: numb
 function validateMeter(value: unknown, index: number, options: BillingUsageValidationOptions): string[] {
   const path = `usage-based.json.meters[${index}]`
   if (!isRecord(value)) return [`${path} must be an object.`]
-  const errors = unknownKeyErrors(value, METER_KEYS, path)
+  const errors: string[] = []
   if ('id' in value && (typeof value.id !== 'string' || !value.id.trim())) {
     errors.push(`${path}.id must be a non-empty string when provided.`)
   }
@@ -409,25 +364,20 @@ function validateMeter(value: unknown, index: number, options: BillingUsageValid
 
 export function validateBillingUsageManifest(value: unknown, options: BillingUsageValidationOptions): string[] {
   if (!isRecord(value)) return ['usage-based.json must contain an object.']
-  const errors = unknownKeyErrors(value, USAGE_ROOT_KEYS, 'usage-based.json')
-  if (value.schemaVersion !== 1) errors.push('usage-based.json.schemaVersion must be 1.')
-  if (typeof value.appId !== 'string' || !value.appId.trim()) {
-    errors.push('usage-based.json.appId must be a non-empty string.')
-  }
-  if (!Array.isArray(value.meters)) {
-    errors.push('usage-based.json.meters must be an array.')
-    return errors
-  }
-  if (value.meters.length > 0 && options.mutationRequested && options.externalBilling) {
+  const structuralErrors = validateJsonSchemaStructure('usage-based', value, 'usage-based.json')
+  if (structuralErrors.length > 0) return structuralErrors
+  const errors = options.contextual === false ? [] : validateJsonSchema('usage-based', value, 'usage-based.json')
+  const meters = value.meters as unknown[]
+  if (meters.length > 0 && options.mutationRequested && options.externalBilling) {
     errors.push('Usage-based billing is not available while external billing is enabled.')
   }
-  if (value.meters.length > 0 && options.mutationRequested && options.appType === 'template') {
+  if (meters.length > 0 && options.mutationRequested && options.appType === 'template') {
     errors.push('Usage-based billing is not available for template apps.')
   }
-  value.meters.forEach((meter, index) => errors.push(...validateMeter(meter, index, options)))
+  meters.forEach((meter, index) => errors.push(...validateMeter(meter, index, options)))
   const ids = new Set<string>()
   const products = new Set<string>()
-  value.meters.forEach((meter, index) => {
+  meters.forEach((meter, index) => {
     if (!isRecord(meter)) return
     if (typeof meter.id === 'string') {
       if (ids.has(meter.id)) errors.push(`usage-based.json.meters[${index}].id duplicates meter id "${meter.id}".`)

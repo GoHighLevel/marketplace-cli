@@ -782,6 +782,29 @@ describe('workflow action workspaces', () => {
     )
   })
 
+  it('validates editable action files with the generated JSON Schema contract', async () => {
+    const directory = await workspace()
+    const result = await writeWorkflowActionsWorkspace(directory, {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: []
+    })
+    await fs.mkdir(result.actionDirectory, { recursive: true })
+    await fs.writeFile(
+      path.join(result.actionDirectory, 'send-message.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        key: 'send_message',
+        versions: [{ version: '1.0', status: 'draft', info: { name: 'Send message' } }],
+        unsupported: true
+      })
+    )
+
+    await expect(loadWorkflowActionsWorkspace(directory)).rejects.toThrow(
+      /send-message\.json\.unsupported is not a supported property/i
+    )
+  })
+
   it('requires the JSON key to match the filename-derived key', async () => {
     const directory = await workspace()
     const result = await writeWorkflowActionsWorkspace(directory, {

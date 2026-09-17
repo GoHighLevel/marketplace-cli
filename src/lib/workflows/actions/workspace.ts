@@ -23,7 +23,7 @@ import { type WorkflowActionDefinition, type WorkflowActionsManifest, type Workf
 import { validateWorkflowActionsManifest } from './schema.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../../shared/workspace-files.js'
 import { isWorkflowVersion } from '../shared/value-validation.js'
-import { withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
+import { validateJsonSchema, withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
 import {
   compileWorkflowActionTypeScript,
   isWorkflowActionJavaScriptScaffold,
@@ -47,8 +47,6 @@ export const WORKFLOW_ACTIONS_STATE_RELATIVE_PATH = path.join('.ghl', 'workflow-
 export const LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH = path.join('src', 'modules', 'workflows', 'workflow-actions.json')
 
 const ACTION_FILENAME_PATTERN = /^[a-z](?:[a-z0-9-]*[a-z0-9])?\.json$/
-const ACTION_FILE_KEYS = new Set(['$schema', 'schemaVersion', 'key', 'templateId', 'versions'])
-
 interface WorkflowActionFile {
   $schema?: string
   schemaVersion: 1
@@ -322,24 +320,19 @@ function resolveCodeSources(
 
 function validateActionFile(value: unknown, relativeFile: string, filenameKey?: string): string[] {
   if (!isRecord(value)) return [`${relativeFile} must contain a JSON object.`]
-  const errors: string[] = []
-  for (const key of Object.keys(value)) {
-    if (!ACTION_FILE_KEYS.has(key)) errors.push(`${relativeFile}.${key} is not supported.`)
-  }
-  if ('$schema' in value && typeof value.$schema !== 'string') {
-    errors.push(`${relativeFile}.$schema must be a string.`)
-  }
-  if (value.schemaVersion !== 1) errors.push(`${relativeFile}.schemaVersion must be 1.`)
+  const errors = validateJsonSchema('workflow-action', value, relativeFile)
   if (typeof value.key !== 'string' || !value.key.trim()) {
-    errors.push(`${relativeFile}.key must be a non-empty string.`)
+    const keyPath = `${relativeFile}.key`
+    errors.splice(
+      0,
+      errors.length,
+      ...errors.filter(error => !error.startsWith(keyPath)),
+      `${keyPath} must be a non-empty string.`
+    )
   } else if (filenameKey && value.key !== filenameKey) {
     errors.push(`${relativeFile}.key "${value.key}" must match the filename-derived key "${filenameKey}".`)
   }
-  if ('templateId' in value && (typeof value.templateId !== 'string' || !value.templateId.trim())) {
-    errors.push(`${relativeFile}.templateId must be a non-empty string when provided.`)
-  }
-  if (!Array.isArray(value.versions)) errors.push(`${relativeFile}.versions must be an array.`)
-  return errors
+  return [...new Set(errors)]
 }
 
 function mapManifestErrorToSourceFile(error: string, actionFiles: Array<{ relativeFile: string }>): string {
