@@ -28,6 +28,7 @@ import AppWebhookUrl from '../../src/commands/app/webhook/url.js'
 import AppWithdraw from '../../src/commands/app/withdraw.js'
 import SandboxDelete from '../../src/commands/sandbox/delete.js'
 import SecretsReveal from '../../src/commands/secrets/reveal.js'
+import Update from '../../src/commands/update.js'
 
 type CommandConstructor = new (argv: string[], config: Config) => Command
 
@@ -100,6 +101,27 @@ afterAll(async () => {
 })
 
 describe('public command contracts', () => {
+  it('exposes a safe self-update command with a machine-readable dry run', async () => {
+    expect(Update.flags).toEqual(
+      expect.objectContaining({
+        'dry-run': expect.objectContaining({ type: 'boolean', default: false }),
+        'package-manager': expect.objectContaining({ options: ['auto', 'npm', 'pnpm', 'yarn', 'bun', 'volta'] })
+      })
+    )
+
+    const result = await runCommand(Update, ['--dry-run', '--package-manager', 'npm', '--json'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      package: '@gohighlevel/marketplace-cli@latest',
+      packageManager: 'npm',
+      command: 'npm install --global @gohighlevel/marketplace-cli@latest',
+      dryRun: true
+    })
+    expect(commandIds).toContain('update')
+  })
+
   it('documents app-create choices and fails closed when automation omits them', async () => {
     expect(AppCreate.flags.type.options).toEqual(['public', 'private'])
     expect(AppCreate.flags.target.options).toEqual(['sub-account', 'agency'])

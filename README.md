@@ -28,6 +28,8 @@ ghl --version
 ghl login
 ```
 
+Run `ghl update` to install the latest published CLI with the detected global package manager. Use `--dry-run` to inspect the command or `--package-manager npm|pnpm|yarn|bun|volta` to override detection.
+
 Use `ghl login --no-browser` to print the approval URL instead of opening a browser, and `--profile <name>` to keep separate login identities. A login can belong to multiple developer accounts; use `ghl account` to list them and `ghl account switch` to change the active account without logging in again.
 
 ## Quick start
@@ -164,6 +166,7 @@ Subscription plans and usage meters are app-scoped rather than tied to one app v
 | `ghl account` | List every developer account available to the active login and mark the active account. Supports `--json`. |
 | `ghl account switch [accountId]` | Switch the `teamid` used by subsequent API calls without logging in again. Omitting the ID shows the current account and opens a picker with its entry marked active; scripts must provide the ID. The previous account's stored app selection is cleared; existing app folders remain bound to their original apps. |
 | `ghl logout` | Delete the stored tokens (`credentials.json`) and app selection (`config.json`). Every API command fails with `Not logged in` until the next `ghl login`. Unrevealed one-time secrets remain available in the local ledger. |
+| `ghl update` | Install the latest published CLI using the detected global package manager. Flags: `--dry-run`, `--package-manager auto\|npm\|pnpm\|yarn\|bun\|volta`, `--json`. |
 
 ### App selection
 

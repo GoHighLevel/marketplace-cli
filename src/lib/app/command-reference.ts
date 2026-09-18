@@ -34,6 +34,11 @@ const COMMAND_GROUPS: CommandGroup[] = [
         command: 'ghl logout',
         description:
           'Remove stored login tokens and the selected app for the active profile. The one-time secret ledger is deliberately preserved.'
+      },
+      {
+        command: 'ghl update',
+        description:
+          'Install the latest published CLI using the detected global package manager. Supports `--dry-run`, `--package-manager auto|npm|pnpm|yarn|bun|volta`, and `--json`.'
       }
     ]
   },
