@@ -403,7 +403,7 @@ export default action
 
 Code is limited to 1 MiB of UTF-8 text. Symlinks, path traversal, inline JSON \`code\`, duplicate code references, and unreferenced JavaScript or TypeScript files are rejected. Push sends compiled JavaScript inline and never sends \`codeFile\`.
 
-The portal stores only JavaScript, so the CLI does not attempt an unreliable JavaScript-to-TypeScript conversion. Pull preserves checked JavaScript wrappers and TypeScript while their uploaded JavaScript matches the portal. Generating types wraps raw portal JavaScript locally without changing its uploaded body. Local and portal edits to the same code stop pull; \`--force\` accepts portal JavaScript. A new server version inherits a compatible local wrapper or TypeScript handler when it produces equivalent JavaScript.
+The portal stores only JavaScript, so the CLI does not attempt an unreliable JavaScript-to-TypeScript conversion. Pull keeps checked JavaScript wrappers, rewrapping a portal edit around its new body, and preserves TypeScript while its uploaded JavaScript matches the portal. Generating types wraps raw portal JavaScript locally without changing its uploaded body. Local edits, and portal edits to TypeScript-backed code, stop pull; \`--force\` accepts portal JavaScript. A new server version inherits a compatible local wrapper or TypeScript handler when it produces equivalent JavaScript.
 
 API and CODE configuration are mutually exclusive. CODE cannot contain \`url\`, \`method\`, or saved \`headers\`.
 
@@ -534,7 +534,7 @@ The portal is the remote source of truth. \`.ghl/workflow-actions-state.json\` s
 
 - \`ghl app actions create "Name" --key stable_key\` adds a local \`1.0\` draft with a checked JavaScript handler and generated sandbox declarations.
 - \`ghl app actions create "Name" --key stable_key --typescript\` creates the same action with a native TypeScript handler.
-- \`ghl app actions pull\` preserves compatible checked JavaScript and TypeScript and stops before overwriting local or portal conflicts; \`--force\` accepts portal JavaScript.
+- \`ghl app actions pull\` keeps checked JavaScript wrappers, preserves matching TypeScript, and stops before overwriting local changes or TypeScript conflicts; \`--force\` accepts portal JavaScript.
 - \`ghl app actions validate\` validates JavaScript wrapper/sandbox syntax, fully type-checks and transpiles TypeScript without execution, and checks the app's \`workflows.readonly\` scope without authentication. Run \`tsc -p tsconfig.actions.json\` for strict JavaScript checks.
 - \`ghl app actions validate --publishable --action stable_key --version 1.0\` adds review requirements.
 - \`ghl app actions test stable_key --input-file ./test-input.json\` executes one local configuration through the portal test runner.

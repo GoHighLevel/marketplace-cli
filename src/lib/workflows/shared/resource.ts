@@ -122,7 +122,10 @@ export interface WorkflowResource<
     options?: WorkflowResourceCreateOptions
   ): Promise<WorkflowResourceStagedFiles>
   writeWorkspace(directory: string, manifest: M, baseline?: M, sourceWorkspace?: W): Promise<F>
-  loadWorkspaceIfPresent?(directory: string): Promise<W | undefined>
+  /* Loads the local workspace a pull must protect. Resolves to undefined when
+     no trustworthy baseline exists, so pull can repair the workspace instead
+     of refusing; invalid local sources still reject so nothing is lost. */
+  loadPullBaseline?(directory: string): Promise<W | undefined>
   filesDirectory(files: F): string
   /* The subset of written files reported when the resource has no items. */
   stateFiles(files: F): Partial<F>

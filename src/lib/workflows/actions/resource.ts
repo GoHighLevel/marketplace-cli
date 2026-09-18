@@ -12,8 +12,8 @@ import {
 } from './service.js'
 import { planWorkflowActionsSync, type WorkflowActionsSyncPlan } from './sync.js'
 import {
+  loadWorkflowActionsPullBaseline,
   loadWorkflowActionsWorkspace,
-  loadWorkflowActionsWorkspaceIfPresent,
   type WorkflowActionCodeSourceOverride,
   workflowActionFilenameFromKey,
   type WorkflowActionsWorkspace,
@@ -55,14 +55,20 @@ export const WORKFLOW_ACTIONS_RESOURCE: WorkflowActionsResource = {
   withoutItem: (manifest, key) => ({ ...manifest, actions: manifest.actions.filter(action => action.key !== key) }),
   filenameFromKey: workflowActionFilenameFromKey,
   loadWorkspace: loadWorkflowActionsWorkspace,
-  loadWorkspaceIfPresent: loadWorkflowActionsWorkspaceIfPresent,
+  loadPullBaseline: loadWorkflowActionsPullBaseline,
   writeStagedSources: async (workspace, manifest, options) => {
-    let stagedManifest = manifest
-    const codeSourceOverrides: WorkflowActionCodeSourceOverride[] = []
     const existingKeys = new Set(workspace.manifest.actions.map(action => action.key))
     const action = manifest.actions.find(candidate => !existingKeys.has(candidate.key))
-    const version = action?.versions[0]
-    if (!action || !version) throw new Error('The new workflow action could not be identified for code setup.')
+    if (!action) {
+      /* A staged deletion keeps every remaining action's editor source intact. */
+      const files = await writeLocalWorkflowActionsManifest(workspace.directory, manifest, {
+        preserveCodeSources: workspace.codeSources
+      })
+      return { directory: files.actionDirectory, files: files.actionFiles }
+    }
+    const version = action.versions[0]
+    if (!version) throw new Error(`The new workflow action "${action.key}" does not define a version.`)
+    const codeSourceOverrides: WorkflowActionCodeSourceOverride[] = []
     const language = options?.typescript ? 'typescript' : 'javascript'
     const source = options?.typescript
       ? generateWorkflowActionTypeScriptScaffold(action, version)
@@ -79,7 +85,7 @@ export const WORKFLOW_ACTIONS_RESOURCE: WorkflowActionsResource = {
         `Generated ${options?.typescript ? 'TypeScript' : 'JavaScript'} action is invalid:\n- ${compiled.errors.join('\n- ')}`
       )
     }
-    stagedManifest = structuredClone(manifest)
+    const stagedManifest = structuredClone(manifest)
     const stagedAction = stagedManifest.actions.find(candidate => candidate.key === action.key)
     const stagedVersion = stagedAction?.versions.find(candidate => candidate.version === version.version)
     if (!stagedVersion) throw new Error('The new workflow action version could not be staged.')

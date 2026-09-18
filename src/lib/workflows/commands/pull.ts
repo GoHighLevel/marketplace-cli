@@ -54,7 +54,7 @@ export abstract class WorkflowPullCommand<
       () => this.fetchManifest(context.client, context.appId),
       this.spinnerOptions
     )
-    const existing = options.force ? undefined : await this.resource.loadWorkspaceIfPresent?.(binding.directory)
+    const existing = options.force ? undefined : await this.resource.loadPullBaseline?.(binding.directory)
     if (existing && !options.force) {
       const plan = this.resource.preserveSourceWorkspace
         ? this.resource.planSync(existing.state.baseline, existing.manifest, manifest, existing)

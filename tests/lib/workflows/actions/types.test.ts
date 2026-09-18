@@ -369,3 +369,22 @@ describe('workflow action TypeScript declarations', () => {
     )
   })
 })
+
+describe('workflow action JavaScript migration', () => {
+  it('leaves portal JavaScript plain when the wrapper cannot hand it back unchanged', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-action-types-'))
+    directories.push(directory)
+    const definition = action()
+    definition.versions[0].status = 'published'
+    definition.versions[0].executionConfig = { type: 'CODE', code: '' }
+    const codeDirectory = path.join(directory, 'src/modules/workflows/actions/code')
+    const codeFile = path.join(codeDirectory, 'calculate_score.1.0.js')
+    const legacyCode = '{\n"legacy": true\n}'
+    await fs.mkdir(codeDirectory, { recursive: true })
+    await fs.writeFile(codeFile, legacyCode)
+
+    await writeWorkflowActionTypesWorkspace(directory, { schemaVersion: 1, appId: 'app-1', actions: [definition] })
+
+    await expect(fs.readFile(codeFile, 'utf8')).resolves.toBe(legacyCode)
+  })
+})

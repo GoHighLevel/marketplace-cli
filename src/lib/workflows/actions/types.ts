@@ -66,8 +66,10 @@ function stringLiteral(value: string): string {
 }
 
 function optionType(input: WorkflowActionInput): string {
-  const values = input.options?.map(option => option.value).filter((value, index, all) => all.indexOf(value) === index)
-  return values && values.length > 0 ? values.map(stringLiteral).join(' | ') : 'string'
+  const values = new Set(
+    input.options?.flatMap(option => (typeof option.value === 'string' ? [option.value] : [])) ?? []
+  )
+  return values.size > 0 ? [...values].map(stringLiteral).join(' | ') : 'string'
 }
 
 function inputType(input: WorkflowActionInput): string {
@@ -605,9 +607,15 @@ async function writeRootEslintConfig(directory: string): Promise<string | undefi
   return file
 }
 
+/* Wraps plain portal JavaScript in the checked editor wrapper. Only code that
+   the wrapper hands back byte-for-byte is migrated; anything else stays as
+   plain JavaScript so the workspace keeps loading. */
 async function migrateJavaScriptActionSources(directory: string, manifest: WorkflowActionsManifest): Promise<void> {
-  const { generateWorkflowActionJavaScriptScaffold, isWorkflowActionJavaScriptScaffold } =
-    await import('./typescript.js')
+  const {
+    generateWorkflowActionJavaScriptScaffold,
+    isWorkflowActionJavaScriptScaffold,
+    prepareWorkflowActionJavaScript
+  } = await import('./typescript.js')
   await Promise.all(
     manifest.actions.flatMap(action =>
       action.versions.map(async version => {
@@ -624,6 +632,14 @@ async function migrateJavaScriptActionSources(directory: string, manifest: Workf
         const source = await fs.readFile(file, 'utf8')
         if (isWorkflowActionJavaScriptScaffold(source)) return
         const scaffold = generateWorkflowActionJavaScriptScaffold(action, version, source)
+        const prepared = prepareWorkflowActionJavaScript({
+          directory,
+          filename: file,
+          source: scaffold,
+          action,
+          version
+        })
+        if (prepared.errors.length > 0 || prepared.code !== source) return
         await writeTextFileAtomic(file, scaffold, Number(stat.mode) & 0o777)
       })
     )

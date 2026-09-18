@@ -143,7 +143,7 @@ For \`CODE\` execution, JSON stores only a deterministic \`codeFile\` reference.
 
 The generated \`tsconfig.actions.json\` is intentionally separate from the root TypeScript project. Sandbox code must exclude browser and Node ambient globals, while the rest of the app may require them; TypeScript cannot apply both environments from one project configuration. Type generation excludes the action-code directory from broad root-project discovery so each file is checked only by its intended project.
 
-Pull preserves checked JavaScript and TypeScript when their uploaded JavaScript still matches the portal. Generating types wraps raw portal JavaScript without changing the body sent back to the server. Local or portal edits stop pull with conflict paths; \`--force\` explicitly accepts portal JavaScript.
+Pull keeps checked JavaScript wrappers, rewrapping portal edits around their new body, and preserves TypeScript while its uploaded JavaScript still matches the portal. Generating types wraps raw portal JavaScript without changing the body sent back to the server. Local edits, and portal edits to TypeScript-backed code, stop pull with conflict paths; \`--force\` explicitly accepts portal JavaScript.
 
 \`customVarsJson\` contains representative response data. Each item in \`customVars\` contains \`name\`, a dot-separated \`reference\` to a selectable value in that response, and its inferred \`fieldType\`: \`string\`, \`boolean\`, \`numerical\`, or \`array\`. Objects and empty arrays cannot be selected as variables.
 

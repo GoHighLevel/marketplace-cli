@@ -2,6 +2,7 @@ import path from 'node:path'
 
 import ts from 'typescript'
 
+import { errorMessage } from '../../shared/errors.js'
 import { WORKFLOW_ACTION_CODE_MAX_BYTES, workflowActionCodeSyntaxError } from './code.js'
 import type { WorkflowActionDefinition, WorkflowActionVersion } from './manifest.js'
 import {
@@ -447,10 +448,26 @@ export default action
 `
 }
 
+/* Declarations are generated from action JSON that may not have passed
+   validation yet, so a malformed definition surfaces as a compile error
+   instead of aborting the command. */
+function checkedFiles(
+  input: CompileWorkflowActionTypeScriptInput,
+  language: 'javascript' | 'typescript'
+): ReturnType<typeof typeCheckFiles> {
+  try {
+    return typeCheckFiles(input, language)
+  } catch (error) {
+    return {
+      errors: [`${input.filename}: ${errorMessage(error, 'The action definition could not be type-checked.')}`]
+    }
+  }
+}
+
 export function compileWorkflowActionTypeScript(
   input: CompileWorkflowActionTypeScriptInput
 ): CompileWorkflowActionTypeScriptResult {
-  const checked = typeCheckFiles(input, 'typescript')
+  const checked = checkedFiles(input, 'typescript')
   if (checked.errors.length > 0) return { code: '', errors: checked.errors }
   try {
     const code = emitSandboxBody(input.source, input.filename)
@@ -467,7 +484,7 @@ export function compileWorkflowActionJavaScript(
   input: CompileWorkflowActionTypeScriptInput
 ): CompileWorkflowActionTypeScriptResult {
   const prepared = prepareWorkflowActionJavaScript(input)
-  const checked = typeCheckFiles(input, 'javascript')
+  const checked = checkedFiles(input, 'javascript')
   const errors = [...new Set([...prepared.errors, ...checked.errors])]
   if (errors.length > 0) return { code: '', errors }
   return prepared

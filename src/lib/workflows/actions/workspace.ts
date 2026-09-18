@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { isRecord } from '../../api/response.js'
 import { writeTextFileAtomic } from '../../shared/atomic-file.js'
+import { errorMessage } from '../../shared/errors.js'
 import { assertWorkspaceDocumentationFilesWritable, writeWorkspaceDocumentation } from '../../app/instructions.js'
 import { requireRegularFile } from '../../app/local-workspace.js'
 import { readPullWorkspaceBinding } from '../../app/pull.js'
@@ -26,6 +27,7 @@ import { isWorkflowVersion } from '../shared/value-validation.js'
 import { validateJsonSchema, withJsonSchemaReference, writeJsonSchemaWorkspace } from '../../app/json-schema.js'
 import {
   compileWorkflowActionTypeScript,
+  generateWorkflowActionJavaScriptScaffold,
   isWorkflowActionJavaScriptScaffold,
   prepareWorkflowActionJavaScript
 } from './typescript.js'
@@ -257,6 +259,30 @@ function replaceHandlerVersion(source: WorkflowActionCodeSource, actionKey: stri
   return source.source.replaceAll(previous, next)
 }
 
+/* The checked JavaScript wrapper is a lossless local envelope around the
+   uploaded body, so a portal edit is wrapped again instead of downgrading the
+   file to plain JavaScript and dropping its editor types. TypeScript cannot be
+   rebuilt from JavaScript, so its portal edits surface as pull conflicts. */
+function rewrappedJavaScriptSource(
+  binding: WorkflowActionsAppBinding,
+  action: WorkflowActionDefinition,
+  version: WorkflowActionVersion,
+  previous: WorkflowActionCodeSourceOverride
+): WorkflowActionCodeSourceOverride | undefined {
+  const code = version.executionConfig?.code
+  if (previous.language !== 'javascript' || !isWorkflowActionJavaScriptScaffold(previous.source)) return undefined
+  if (code === undefined) return undefined
+  const source = generateWorkflowActionJavaScriptScaffold(action, version, code)
+  const filename = path.join(
+    binding.directory,
+    WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH,
+    workflowActionCodeFilename(action.key, version.version, 'javascript')
+  )
+  const prepared = prepareWorkflowActionJavaScript({ directory: binding.directory, filename, source, action, version })
+  if (prepared.errors.length > 0 || prepared.code !== code) return undefined
+  return { actionKey: action.key, version: version.version, language: 'javascript', source, compiledCode: code }
+}
+
 function resolveCodeSources(
   binding: WorkflowActionsAppBinding,
   manifest: WorkflowActionsManifest,
@@ -292,7 +318,9 @@ function resolveCodeSources(
       }
       const selected = sourceByVersion.get(id)
       if (!selected || selected.compiledCode !== version.executionConfig.code) {
-        sourceByVersion.delete(id)
+        const rewrapped = selected ? rewrappedJavaScriptSource(binding, action, version, selected) : undefined
+        if (rewrapped) sourceByVersion.set(id, rewrapped)
+        else sourceByVersion.delete(id)
         continue
       }
       if (selected.language !== 'typescript' && !isWorkflowActionJavaScriptScaffold(selected.source)) continue
@@ -578,7 +606,9 @@ async function readActionManifest(binding: WorkflowActionsAppBinding): Promise<{
 
   const codeSources = await hydrateCodeSources(actionDirectory, sources)
   if (codeSources.errors.length > 0) {
-    throw new Error(`Workflow action code is invalid:\n- ${codeSources.errors.join('\n- ')}`)
+    /* File-level problems are reported alongside code problems because a
+       malformed definition is often why its source could not be compiled. */
+    throw new Error(`Workflow action code is invalid:\n- ${[...codeSources.errors, ...errors].join('\n- ')}`)
   }
   const actions = codeSources.actions
   const manifest: WorkflowActionsManifest = { schemaVersion: 1, appId: binding.appId, actions }
@@ -785,4 +815,32 @@ export async function loadWorkflowActionsWorkspaceIfPresent(
   ])
   if (!actionStat && !stateStat && !legacyStat) return undefined
   return loadWorkflowActionsWorkspace(workspace.directory)
+}
+
+/* Pull protects local edits only when the workspace carries a baseline for
+   this app. A legacy aggregate file, a missing state file, or state left by
+   another app has no usable baseline, so pull rebuilds the workspace as the
+   recovery messages promise. Invalid action sources still reject here so that
+   a pull never silently discards work it could not compare. */
+export async function loadWorkflowActionsPullBaseline(
+  directory: string
+): Promise<WorkflowActionsWorkspace | undefined> {
+  const workspace = await readPullWorkspaceBinding(directory)
+  if (!workspace) return undefined
+  const stateFile = path.join(workspace.directory, WORKFLOW_ACTIONS_STATE_RELATIVE_PATH)
+  const legacyFile = path.join(workspace.directory, LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH)
+  const [stateStat, legacyStat] = await Promise.all([stat(stateFile), stat(legacyFile)])
+  if (legacyStat || !stateStat?.isFile()) return undefined
+  const state = await readJsonFile<unknown>(stateFile)
+  if (!isRecord(state) || state.appId !== workspace.appId) return undefined
+  const baseline = isRecord(state.baseline) ? state.baseline : undefined
+  if (baseline?.appId !== workspace.appId) return undefined
+  try {
+    return await loadWorkflowActionsWorkspace(workspace.directory)
+  } catch (error) {
+    throw new Error(
+      `${errorMessage(error, 'The local workflow action workspace could not be loaded.')}\n` +
+        'Fix the local workflow action files, or pass --force to replace them with the portal state.'
+    )
+  }
 }

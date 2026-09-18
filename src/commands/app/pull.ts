@@ -30,7 +30,7 @@ import { fetchWorkflowActionsManifest } from '../../lib/workflows/actions/servic
 import { validateWorkflowActionsManifest } from '../../lib/workflows/actions/schema.js'
 import {
   assertWorkflowActionsWorkspaceWritable,
-  loadWorkflowActionsWorkspaceIfPresent,
+  loadWorkflowActionsPullBaseline,
   writeWorkflowActionsWorkspace
 } from '../../lib/workflows/actions/workspace.js'
 import { planWorkflowActionsSync } from '../../lib/workflows/actions/sync.js'
@@ -135,7 +135,7 @@ export default class AppPull extends GhlCommand {
       throw new Error(`Workflow trigger configuration is invalid:\n- ${triggerErrors.join('\n- ')}`)
     }
     const existingActions =
-      workspaceBinding && !flags.force ? await loadWorkflowActionsWorkspaceIfPresent(directory) : undefined
+      workspaceBinding && !flags.force ? await loadWorkflowActionsPullBaseline(directory) : undefined
     if (existingActions && !flags.force) {
       const actionPlan = planWorkflowActionsSync(
         existingActions.state.baseline,

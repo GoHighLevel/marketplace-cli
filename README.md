@@ -237,7 +237,7 @@ Code execution is stored separately as `code/<action-key>.<version>.js` or `.ts`
 
 The action sandbox intentionally has no `fetch`, Node APIs, timers, `crypto`, `URL`, or module loading. Typed handlers receive `inputData`, `customRequest`, `console`, Lodash (`_`), Moment (`moment`), `fileDownloader`, `_csv`, `_base64`, and `_uuid` through their context. Runtime imports are rejected; type-only imports are erased before upload. Run `tsc -p tsconfig.actions.json` for CI checking. The isolated action project is required because TypeScript cannot apply different ambient libraries to one folder inside the app's root project.
 
-The portal stores JavaScript, so JavaScript-to-TypeScript reconstruction is not lossless. A normal pull preserves compatible local JavaScript wrappers and TypeScript while their uploaded JavaScript still matches the portal. When types are generated, raw portal JavaScript is placed inside the checked wrapper without changing the body that will be uploaded. Local and portal edits to the same code stop pull with conflict paths; `--force` explicitly accepts portal JavaScript.
+The portal stores JavaScript, so JavaScript-to-TypeScript reconstruction is not lossless. A normal pull keeps local JavaScript wrappers, rewrapping a portal edit around its new body, and preserves TypeScript while its uploaded JavaScript still matches the portal. When types are generated, raw portal JavaScript is placed inside the checked wrapper without changing the body that will be uploaded. Local edits, and portal edits to TypeScript-backed code, stop pull with conflict paths; `--force` explicitly accepts portal JavaScript.
 
 | Command | Description |
 |---|---|

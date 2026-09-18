@@ -1,7 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { promises as fs } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { WORKFLOW_ACTIONS_RESOURCE } from '../../../../src/lib/workflows/actions/resource.js'
 import { type WorkflowActionsManifest } from '../../../../src/lib/workflows/actions/manifest.js'
+import {
+  loadWorkflowActionsWorkspace,
+  writeWorkflowActionsWorkspace
+} from '../../../../src/lib/workflows/actions/workspace.js'
+
+const directories: string[] = []
+
+afterEach(async () => {
+  await Promise.all(directories.splice(0).map(directory => fs.rm(directory, { recursive: true, force: true })))
+})
 
 const manifest: WorkflowActionsManifest = {
   schemaVersion: 1,
@@ -69,5 +82,52 @@ describe('WORKFLOW_ACTIONS_RESOURCE', () => {
     expect(WORKFLOW_ACTIONS_RESOURCE.filesDirectory(files)).toBe('/w/actions')
     expect(WORKFLOW_ACTIONS_RESOURCE.stateFiles(files)).toEqual({ stateFile: '/w/.ghl/state.json' })
     expect(WORKFLOW_ACTIONS_RESOURCE.filenameFromKey('send_message')).toBe('send-message.json')
+  })
+})
+
+describe('WORKFLOW_ACTIONS_RESOURCE staged sources', () => {
+  it('stages a deletion by rewriting the remaining actions and keeping their code', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-actions-resource-'))
+    directories.push(directory)
+    await fs.writeFile(
+      path.join(directory, 'ghl-app.json'),
+      JSON.stringify({ schemaVersion: 1, appId: 'app-1', versionId: 'version-1' })
+    )
+    const initial: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [
+        {
+          templateId: 'tpl-1',
+          key: 'keep_me',
+          versions: [
+            {
+              version: '1.0',
+              status: 'published',
+              info: { name: 'Keep' },
+              executionConfig: { type: 'CODE', code: 'return { kept: true }' }
+            }
+          ]
+        },
+        {
+          templateId: 'tpl-2',
+          key: 'remove_me',
+          versions: [{ version: '1.0', status: 'draft', info: { name: 'Remove' } }]
+        }
+      ]
+    }
+    await writeWorkflowActionsWorkspace(directory, initial)
+    const workspace = await loadWorkflowActionsWorkspace(directory)
+
+    const staged = await WORKFLOW_ACTIONS_RESOURCE.writeStagedSources(
+      workspace,
+      WORKFLOW_ACTIONS_RESOURCE.withoutItem(initial, 'remove_me')
+    )
+
+    expect(staged.files.map(file => path.basename(file))).toEqual(['keep-me.json'])
+    const reloaded = await loadWorkflowActionsWorkspace(directory)
+    expect(reloaded.manifest.actions.map(action => action.key)).toEqual(['keep_me'])
+    expect(reloaded.codeSources.map(source => source.compiledCode)).toEqual(['return { kept: true }'])
+    expect(reloaded.state.baseline).toEqual(initial)
   })
 })
