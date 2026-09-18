@@ -35,7 +35,7 @@ export default class Update extends GhlCommand {
     const { flags } = await this.parse(Update)
     const packageManager =
       flags['package-manager'] === 'auto'
-        ? detectPackageManager(process.argv[1], process.env.npm_config_user_agent)
+        ? detectPackageManager([process.argv[1], this.config.root], process.env.npm_config_user_agent)
         : (flags['package-manager'] as PackageManager)
     const invocation = buildUpdateInvocation(packageManager)
     const command = formatUpdateInvocation(invocation)
