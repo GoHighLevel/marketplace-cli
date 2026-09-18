@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { AppVersion } from '../../../src/lib/api/client.js'
-import { executeAppSyncPlan, PushClient } from '../../../src/lib/app/push.js'
+import { executeAppSyncPlan, type PushClient } from '../../../src/lib/app/push.js'
 import { createAppSyncPlan } from '../../../src/lib/app/sync.js'
-import { WorkspaceState } from '../../../src/lib/app/workspace.js'
+import { type WorkspaceState } from '../../../src/lib/app/workspace.js'
 import { cloneAppFiles, completeAppFiles, completeAppVersion } from '../../helpers/app-files.js'
 
 function stateFor() {
@@ -132,10 +131,7 @@ describe('executeAppSyncPlan', () => {
   it('maps default redirect and default client key to dedicated APIs only', async () => {
     const baseline = completeAppFiles({
       status: 'live',
-      redirectUris: [
-        'https://acme.example.com/oauth/callback',
-        'https://acme.example.com/oauth/secondary'
-      ],
+      redirectUris: ['https://acme.example.com/oauth/callback', 'https://acme.example.com/oauth/secondary'],
       clientKeys: [
         { id: 'client-1', name: 'Production', isDefault: true },
         { id: 'client-2', name: 'Secondary', isDefault: false }

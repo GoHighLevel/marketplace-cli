@@ -5,11 +5,7 @@ const CLEAR_LINE = '\r\u001B[2K'
 
 /* Runs a task with a stderr spinner so stdout stays clean for data and
    piping. Quiet mode or a non-TTY stderr makes this a pure pass-through. */
-export async function withSpinner<T>(
-  text: string,
-  task: () => Promise<T>,
-  options?: { quiet?: boolean }
-): Promise<T> {
+export async function withSpinner<T>(text: string, task: () => Promise<T>, options?: { quiet?: boolean }): Promise<T> {
   if (options?.quiet || !process.stderr.isTTY) return task()
 
   const safeText = sanitizeTerminalText(text, 200)

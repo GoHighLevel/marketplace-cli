@@ -14,10 +14,28 @@ This directory is the local, code-friendly representation of one HighLevel marke
 \`\`\`text
 <app-folder>/
 ├── ghl-app.json
+├── ghl-app.d.ts
+├── tsconfig.json
+├── tsconfig.actions.json
+├── eslint.config.mjs
 ├── AGENTS.md
 ├── CLAUDE.md
 ├── HIGHLEVEL_APP.md
+├── .vscode/
+│   └── settings.json
 ├── .ghl/
+│   ├── schemas/
+│   │   ├── ghl-app.schema.json
+│   │   ├── ghl-webhooks.schema.json
+│   │   ├── ghl-workflow-action.schema.json
+│   │   ├── ghl-workflow-trigger.schema.json
+│   │   ├── ghl-subscription.schema.json
+│   │   └── ghl-usage-based.schema.json
+│   ├── types/
+│   │   └── actions/
+│   │       ├── workflow-action.d.ts
+│   │       ├── <action-key>.d.ts
+│   │       └── eslint.config.actions.mjs
 │   ├── state.json
 │   ├── workflow-actions-state.json
 │   ├── workflow-triggers-state.json
@@ -34,7 +52,7 @@ This directory is the local, code-friendly representation of one HighLevel marke
             ├── actions/
             │   ├── HIGHLEVEL_WORKFLOW_ACTIONS.md
             │   ├── code/
-            │   │   └── <action-key>.<version>.js
+            │   │   └── <action-key>.<version>.(js|ts)
             │   └── <action-name>.json
             └── triggers/
                 ├── HIGHLEVEL_WORKFLOW_TRIGGERS.md
@@ -42,11 +60,17 @@ This directory is the local, code-friendly representation of one HighLevel marke
 \`\`\`
 
 - The \`billing\`, \`webhooks\`, \`actions\`, \`triggers\`, and action \`code\` directories are created only when their corresponding configuration exists.
+- Every pull writes \`.ghl/schemas/\`, adds \`$schema\` references to generated JSON, and creates \`.vscode/settings.json\` when absent. Add \`--with-types\` to generate \`ghl-app.d.ts\`, action declarations, and TypeScript project integration.
 - **\`ghl-app.json\`**: Supported app metadata and the app/version binding used by local commands.
+- **\`ghl-app.d.ts\`**: Readonly declarations for TypeScript or JavaScript tooling that explicitly imports the generated interfaces; JSON files are validated by the schemas instead.
+- **\`tsconfig.json\` / \`jsconfig.json\`**: Developer-owned project settings. Type generation creates \`tsconfig.json\` when neither exists, or adds the declaration to an existing \`include\` or \`files\` list without replacing other settings. When actions exist, broad root projects exclude the isolated action-code directory.
 - **\`src/webhooks/ghl-webhooks.json\`**: Configured app-level webhook URL and event subscriptions, kept separate from app metadata.
 - **\`.ghl/state.json\`**: Last-pull baseline used for three-way diffing and conflict detection. It is CLI-managed and must not be edited.
 - **\`src/modules/workflows/actions/<action-name>.json\`**: One JSON file per action, including every action-owned version. Its required \`key\` must match the key derived from the filename.
-- **\`src/modules/workflows/actions/code/<action-key>.<version>.js\`**: JavaScript source for one code-backed action version, referenced by that version's \`executionConfig.codeFile\`.
+- **\`src/modules/workflows/actions/code/<action-key>.<version>.(js|ts)\`**: Checked JavaScript or TypeScript handler for one code-backed action version, referenced by \`executionConfig.codeFile\`.
+- **\`.ghl/types/actions/workflow-action.d.ts\` / \`.ghl/types/actions/<key>.d.ts\`**: Generated declarations for verified sandbox helpers and version-specific inputs and outputs.
+- **\`tsconfig.actions.json\`**: Isolated \`allowJs\`/ \`checkJs\` settings that prevent unavailable browser and Node globals from appearing valid in action code.
+- **\`.ghl/types/actions/eslint.config.actions.mjs\`**: Generated ESLint flat-config override for action JavaScript. A root \`eslint.config.mjs\` is created only when no developer config exists.
 - **\`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\`**: Detailed action schema, naming, validation, and synchronization reference.
 - **\`src/modules/workflows/triggers/<trigger-name>.json\`**: One JSON file per trigger, including every trigger-owned version and the filename-derived \`key\`.
 - **\`src/modules/workflows/triggers/HIGHLEVEL_WORKFLOW_TRIGGERS.md\`**: Complete trigger schema, callback, execution, validation, and synchronization reference.
@@ -56,6 +80,8 @@ This directory is the local, code-friendly representation of one HighLevel marke
 - **\`.ghl/workflow-actions-state.json\`**: Separate last-pull baseline for workflow-action conflict detection. It is CLI-managed and must not be edited.
 - **\`.ghl/workflow-triggers-state.json\`**: Separate last-pull baseline for workflow-trigger conflict detection. It is CLI-managed and must not be edited.
 - **\`.ghl/billing-state.json\`**: Separate app-level subscription and meter baseline. It is CLI-managed and must not be edited.
+- **\`.ghl/schemas/*.schema.json\`**: Offline draft-07 schemas used for autocomplete and structural JSON validation.
+- **\`.vscode/settings.json\`**: Schema associations created only when type/schema generation is requested and the file does not already exist; existing editor settings are preserved.
 - **\`AGENTS.md\`**: Workspace rules and the complete GHL CLI reference for AI coding agents.
 - **\`CLAUDE.md\`**: The same operational guidance addressed specifically to Claude Code.
 - **\`HIGHLEVEL_APP.md\`**: This structural reference for developers and AI agents.
@@ -113,7 +139,11 @@ Each JSON file directly under \`src/modules/workflows/actions/\` contains one ac
 
 The filename uses lowercase letters, numbers, and hyphens ending in \`.json\`. The CLI converts hyphens to underscores, so \`send-contact-sync-payload.json\` requires \`"key": "send_contact_sync_payload"\`. Each file has \`schemaVersion\`, the matching \`key\`, an API-owned \`templateId\` after creation, and a newest-first \`versions\` array. See \`src/modules/workflows/actions/HIGHLEVEL_WORKFLOW_ACTIONS.md\` for the complete contract.
 
-For \`CODE\` execution, JSON stores only a deterministic \`codeFile\` reference. The CLI validates the JavaScript without executing it, then sends its contents to the portal as inline \`executionConfig.code\`. A version suffix keeps draft and published source independent.
+For \`CODE\` execution, JSON stores only a deterministic \`codeFile\` reference. JavaScript uses a checked module wrapper, and the CLI extracts only its handler body before sending it to the portal. TypeScript exports a typed default handler and is type-checked and transpiled in memory. The CLI never writes a compiled file or attempts lossy JavaScript-to-TypeScript conversion.
+
+The generated \`tsconfig.actions.json\` is intentionally separate from the root TypeScript project. Sandbox code must exclude browser and Node ambient globals, while the rest of the app may require them; TypeScript cannot apply both environments from one project configuration. Type generation excludes the action-code directory from broad root-project discovery so each file is checked only by its intended project.
+
+Pull keeps checked JavaScript wrappers, rewrapping portal edits around their new body, and preserves TypeScript while its uploaded JavaScript still matches the portal. Generating types wraps raw portal JavaScript without changing the body sent back to the server. Local edits, and portal edits to TypeScript-backed code, stop pull with conflict paths; \`--force\` explicitly accepts portal JavaScript.
 
 \`customVarsJson\` contains representative response data. Each item in \`customVars\` contains \`name\`, a dot-separated \`reference\` to a selectable value in that response, and its inferred \`fieldType\`: \`string\`, \`boolean\`, \`numerical\`, or \`array\`. Objects and empty arrays cannot be selected as variables.
 

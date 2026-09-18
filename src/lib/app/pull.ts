@@ -1,10 +1,10 @@
 import path from 'node:path'
 
-import { AppVersion, VersionListItem } from '../api/client.js'
+import type { AppVersion, VersionListItem } from '../api/types.js'
 import type { BillingWorkspaceResult } from '../billing/workspace.js'
 import { isRecord } from '../api/response.js'
 import { requireRegularFile } from './local-workspace.js'
-import { APP_MANIFEST_FILENAME, AppWorkspaceResult } from './workspace.js'
+import { APP_MANIFEST_FILENAME, type AppWorkspaceResult } from './workspace.js'
 import { isAppResourceIdentifier } from './schema.js'
 import { readJsonFile } from '../shared/json-file.js'
 import type { WorkflowActionsWorkspaceResult } from '../workflows/actions/workspace.js'
@@ -19,6 +19,15 @@ export interface PullWorkspaceBinding {
 
 export interface AppExportClient {
   getVersion(appId: string, versionId: string): Promise<AppVersion>
+}
+
+export interface PullArtifactPlan {
+  includeJsonSchema: true
+  includeTypeDeclarations: boolean
+}
+
+export function pullArtifactPlan(withTypes: boolean): PullArtifactPlan {
+  return { includeJsonSchema: true, includeTypeDeclarations: withTypes }
 }
 
 export function buildPullFilesOutput(options: {
@@ -99,9 +108,7 @@ export function resolveVersionId(
   const match = versions.find(version => version._id === selector || version.version === selector)
   if (match) return match._id
   const available = versions.map(version => `${version.version ?? 'unversioned'} (${version._id})`).join(', ')
-  throw new Error(
-    `Version "${selector}" was not found for this app. Available versions: ${available || 'none'}.`
-  )
+  throw new Error(`Version "${selector}" was not found for this app. Available versions: ${available || 'none'}.`)
 }
 
 export async function loadAppVersionForExport(

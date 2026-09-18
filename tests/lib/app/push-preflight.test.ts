@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { validateDynamicAuthConfiguration } from '../../../src/lib/app/push-preflight.js'
 import { createAppSyncPlan } from '../../../src/lib/app/sync.js'
-import { WorkspaceState } from '../../../src/lib/app/workspace.js'
+import { type WorkspaceState } from '../../../src/lib/app/workspace.js'
 import { cloneAppFiles, completeAppFiles } from '../../helpers/app-files.js'
 
 function planWith(change: (files: ReturnType<typeof completeAppFiles>) => void) {

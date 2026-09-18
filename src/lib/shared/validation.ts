@@ -445,10 +445,7 @@ function containsSingleSeparatorHighLevel(value: string): boolean {
     const suffix = index + 4
     if (value.startsWith('level', suffix)) return true
     const separator = value.charCodeAt(suffix)
-    if (
-      ![0x0a, 0x0d, 0x2028, 0x2029].includes(separator) &&
-      value.startsWith('level', suffix + 1)
-    ) {
+    if (![0x0a, 0x0d, 0x2028, 0x2029].includes(separator) && value.startsWith('level', suffix + 1)) {
       return true
     }
     searchFrom = index + 1
@@ -500,11 +497,9 @@ export function validateTextForWhiteLabel(value: string, label: string): Validat
     return `${label} must be at most ${MAX_SECURITY_TEXT_LENGTH.toLocaleString('en-US')} characters.`
   }
   const normalized = value.toLowerCase()
-  return (
-    containsSingleSeparatorHighLevel(normalized) ||
+  return containsSingleSeparatorHighLevel(normalized) ||
     containsSpacedGoHighLevel(normalized) ||
     containsStandaloneGhl(normalized)
-  )
     ? `${label} must not reference GHL or HighLevel — this app is marked white-label friendly.`
     : true
 }

@@ -1,7 +1,8 @@
-import { ApiClient, AppVersion, ProfileUpdateResult } from '../api/client.js'
+import { ApiClient } from '../api/client.js'
+import type { AppVersion, ProfileUpdateResult } from '../api/types.js'
 import { persistSelection, resolveApp } from './context.js'
-import { CliConfig, getConfig } from '../config/environment.js'
-import { SelectedApp } from '../config/selection-store.js'
+import { type CliConfig, getConfig } from '../config/environment.js'
+import { type SelectedApp } from '../config/selection-store.js'
 import { extractNewVersion } from './profile-sections.js'
 import { withSpinner } from '../shared/spinner.js'
 

@@ -1,7 +1,7 @@
-import { CliConfig } from '../config/environment.js'
+import { type CliConfig } from '../config/environment.js'
 import { isRecord, readApiResponse } from '../api/response.js'
 import { CLI_VERSION_HEADERS } from '../api/version-header.js'
-import { loadCredentials, saveProfile, StoredProfile } from './token-store.js'
+import { loadCredentials, saveProfile, type StoredProfile } from './token-store.js'
 
 const EXPIRY_SKEW_MS = 60_000
 const EPOCH_MILLISECONDS_THRESHOLD = 100_000_000_000
@@ -83,11 +83,12 @@ export async function refreshSession(config: CliConfig, name: string, profile: S
     throw new Error('Session refresh returned an invalid token response. Run `ghl login` again.')
   }
   const jwtExpiry = decodeJwtExp(data.jwt)
-  const refreshedExpiry = typeof data.expiresAt === 'number'
-    ? normalizeExpiresAt(data.expiresAt)
-    : jwtExpiry === undefined
-      ? undefined
-      : jwtExpiry * 1000
+  const refreshedExpiry =
+    typeof data.expiresAt === 'number'
+      ? normalizeExpiresAt(data.expiresAt)
+      : jwtExpiry === undefined
+        ? undefined
+        : jwtExpiry * 1000
   const updated: StoredProfile = {
     ...profile,
     accessToken: data.jwt,

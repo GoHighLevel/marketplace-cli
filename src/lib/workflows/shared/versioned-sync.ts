@@ -69,9 +69,10 @@ function editableVersion<TVersion extends VersionedWorkflowVersion>(version: TVe
   return editable
 }
 
-function definitionMap<TVersion extends VersionedWorkflowVersion, TDefinition extends VersionedWorkflowDefinition<TVersion>>(
-  definitions: TDefinition[]
-): Map<string, TDefinition> {
+function definitionMap<
+  TVersion extends VersionedWorkflowVersion,
+  TDefinition extends VersionedWorkflowDefinition<TVersion>
+>(definitions: TDefinition[]): Map<string, TDefinition> {
   return new Map(definitions.map(definition => [definition.key, definition]))
 }
 
@@ -81,7 +82,10 @@ function versionMap<TVersion extends VersionedWorkflowVersion>(
   return new Map(definition.versions.map(version => [version.version, version]))
 }
 
-function manifestChanges<TVersion extends VersionedWorkflowVersion, TDefinition extends VersionedWorkflowDefinition<TVersion>>(
+function manifestChanges<
+  TVersion extends VersionedWorkflowVersion,
+  TDefinition extends VersionedWorkflowDefinition<TVersion>
+>(
   base: VersionedWorkflowManifest<TDefinition>,
   value: VersionedWorkflowManifest<TDefinition>,
   descriptor: VersionedWorkflowDescriptor
@@ -123,7 +127,8 @@ function processExistingDefinition<
   descriptor: VersionedWorkflowDescriptor
 ): void {
   const definitionPath = `${descriptor.collection}.${key}`
-  if (local.key !== base.key) plan.errors.push(`${definitionPath}.key is immutable; create a new ${descriptor.singular} instead.`)
+  if (local.key !== base.key)
+    plan.errors.push(`${definitionPath}.key is immutable; create a new ${descriptor.singular} instead.`)
   if (local.templateId !== base.templateId) {
     plan.errors.push(`${definitionPath}.templateId is server-owned and cannot be changed.`)
   }
@@ -139,7 +144,7 @@ function processExistingDefinition<
     if (!baseVersions.has(version)) {
       plan.errors.push(
         `${definitionPath} version ${version} was added locally; ` +
-        `run \`ghl app ${descriptor.command} new-version ${key}\` instead.`
+          `run \`ghl app ${descriptor.command} new-version ${key}\` instead.`
       )
     }
   }
@@ -158,7 +163,7 @@ function processExistingDefinition<
     if (baseVersion.status !== 'draft') {
       plan.errors.push(
         `${definitionPath} version ${version} is ${baseVersion.status} and cannot be edited; ` +
-        `run \`ghl app ${descriptor.command} new-version ${key}\` first.`
+          `run \`ghl app ${descriptor.command} new-version ${key}\` first.`
       )
       continue
     }
@@ -227,18 +232,21 @@ export function planVersionedWorkflowSync<
     if (matchingLocal && matchingLocal.key !== base.key) {
       plan.errors.push(
         `${descriptor.collection}.${base.key}.key is immutable; create a separate ${descriptor.singular} ` +
-        `and explicitly delete the old one.`
+          `and explicitly delete the old one.`
       )
     }
   }
 
-  for (const key of [...new Set([...baseDefinitions.keys(), ...localDefinitions.keys(), ...remoteDefinitions.keys()])].sort()) {
+  for (const key of [
+    ...new Set([...baseDefinitions.keys(), ...localDefinitions.keys(), ...remoteDefinitions.keys()])
+  ].sort()) {
     const base = baseDefinitions.get(key)
     const desired = localDefinitions.get(key)
     const current = remoteDefinitions.get(key)
     const definitionPath = `${descriptor.collection}.${key}`
     if (!base && desired) {
-      if (desired.templateId) plan.errors.push(`${definitionPath}.templateId must be omitted for a new local ${descriptor.singular}.`)
+      if (desired.templateId)
+        plan.errors.push(`${definitionPath}.templateId must be omitted for a new local ${descriptor.singular}.`)
       else if (current) plan.conflicts.push(definitionPath)
       else plan.operations.push({ type: 'create', key, desired })
       continue
@@ -266,7 +274,9 @@ export function planVersionedWorkflowSync<
     plan.operations = []
   } else {
     const priority = { update: 0, create: 1, delete: 2 } as const
-    plan.operations.sort((left, right) => priority[left.type] - priority[right.type] || left.key.localeCompare(right.key))
+    plan.operations.sort(
+      (left, right) => priority[left.type] - priority[right.type] || left.key.localeCompare(right.key)
+    )
   }
   return plan
 }

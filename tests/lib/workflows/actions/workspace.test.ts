@@ -3,11 +3,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { JSON_SCHEMA_REFERENCES } from '../../../../src/lib/app/json-schema.js'
 import {
   toWorkflowActionUpdateBody,
-  WorkflowActionsManifest
+  type WorkflowActionsManifest
 } from '../../../../src/lib/workflows/actions/manifest.js'
 import {
+  LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH,
+  loadWorkflowActionsPullBaseline,
   loadWorkflowActionsWorkspace,
   WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH,
   WORKFLOW_ACTION_CODE_MAX_BYTES,
@@ -18,6 +21,12 @@ import {
   WORKFLOW_ACTIONS_STATE_RELATIVE_PATH,
   writeWorkflowActionsWorkspace
 } from '../../../../src/lib/workflows/actions/workspace.js'
+import {
+  compileWorkflowActionJavaScript,
+  compileWorkflowActionTypeScript,
+  generateWorkflowActionJavaScriptScaffold,
+  generateWorkflowActionTypeScriptScaffold
+} from '../../../../src/lib/workflows/actions/typescript.js'
 
 const directories: string[] = []
 
@@ -69,6 +78,21 @@ describe('workflow action filenames', () => {
 })
 
 describe('workflow action workspaces', () => {
+  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+    const directory = await workspace()
+    const manifest: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [action('send_message', 'Send message')]
+    }
+    const result = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      includeJsonSchema: false
+    })
+
+    await expect(fs.readFile(result.actionFiles[0], 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.stat(path.join(directory, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('writes one source file per action and reloads a combined in-memory manifest', async () => {
     const directory = await workspace()
     const manifest: WorkflowActionsManifest = {
@@ -91,15 +115,19 @@ describe('workflow action workspaces', () => {
 
     const sendMessageFile = JSON.parse(await fs.readFile(result.actionFiles[0], 'utf8'))
     expect(sendMessageFile).toEqual({
+      $schema: JSON_SCHEMA_REFERENCES['workflow-action'],
       schemaVersion: 1,
       key: 'send_message',
       templateId: 'template-1',
       versions: [{ version: '1.0', status: 'draft', info: { name: 'Send message' } }]
     })
-    expect(await fs.readFile(result.guideFile, 'utf8')).toMatch(/filename.*send-contact-sync-payload\.json.*send_contact_sync_payload/is)
     expect(await fs.readFile(result.guideFile, 'utf8')).toMatch(
-      /code\/<action-key>\.<major>\.<minor>\.js[\s\S]*without executing[\s\S]*inline `code`/i
+      /filename.*send-contact-sync-payload\.json.*send_contact_sync_payload/is
     )
+    const guide = await fs.readFile(result.guideFile, 'utf8')
+    expect(guide).toMatch(/code\/<action-key>\.<major>\.<minor>\.js` or `\.ts/i)
+    expect(guide).toMatch(/without execution/i)
+    expect(guide).toMatch(/inline JSON `code`/i)
     expect(await fs.readFile(path.join(directory, 'HIGHLEVEL_APP.md'), 'utf8')).toMatch(
       /src\/modules\/workflows\/actions.*one JSON file per action/is
     )
@@ -126,9 +154,7 @@ describe('workflow action workspaces', () => {
     )
 
     const loaded = await loadWorkflowActionsWorkspace(directory)
-    expect(loaded.manifest.actions).toEqual([
-      action('my_workflow_action', 'My workflow action')
-    ])
+    expect(loaded.manifest.actions).toEqual([action('my_workflow_action', 'My workflow action')])
   })
 
   it('keeps only the hidden baseline when there are no workflow actions', async () => {
@@ -169,24 +195,26 @@ describe('workflow action workspaces', () => {
     const manifest: WorkflowActionsManifest = {
       schemaVersion: 1,
       appId: 'app-1',
-      actions: [{
-        templateId: 'template-1',
-        key: 'calculate_score',
-        versions: [
-          {
-            version: '1.1',
-            status: 'draft',
-            info: { name: 'Calculate score' },
-            executionConfig: { type: 'CODE', code: 'const value = await Promise.resolve(42)\nreturn { value }' }
-          },
-          {
-            version: '1.0',
-            status: 'published',
-            info: { name: 'Calculate score' },
-            executionConfig: { type: 'CODE', code: 'return { value: 10 }' }
-          }
-        ]
-      }]
+      actions: [
+        {
+          templateId: 'template-1',
+          key: 'calculate_score',
+          versions: [
+            {
+              version: '1.1',
+              status: 'draft',
+              info: { name: 'Calculate score' },
+              executionConfig: { type: 'CODE', code: 'const value = await Promise.resolve(42)\nreturn { value }' }
+            },
+            {
+              version: '1.0',
+              status: 'published',
+              info: { name: 'Calculate score' },
+              executionConfig: { type: 'CODE', code: 'return { value: 10 }' }
+            }
+          ]
+        }
+      ]
     }
 
     const result = await writeWorkflowActionsWorkspace(directory, manifest)
@@ -221,22 +249,300 @@ describe('workflow action workspaces', () => {
     expect((await fs.stat(result.codeFiles[0])).mode & 0o777).toBe(0o644)
   })
 
+  it('loads TypeScript action sources, type-checks them, and keeps compiled JavaScript in memory only', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Calculate score' },
+          inputs: [{ field: 'score', title: 'Score', fieldType: 'numerical', required: true }],
+          customVarsJson: { result: 42 }
+        }
+      ]
+    }
+    const version = definition.versions[0]
+    const source = generateWorkflowActionTypeScriptScaffold(definition, version)
+    const sourceFile = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts')
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: sourceFile,
+      source,
+      action: definition,
+      version
+    })
+    expect(compiled.errors).toEqual([])
+    version.executionConfig = { type: 'CODE', code: compiled.code }
+    const manifest: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+
+    const result = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: version.version,
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+
+    expect(result.codeFiles).toEqual([sourceFile])
+    await expect(fs.readFile(sourceFile, 'utf8')).resolves.toBe(source)
+    await expect(fs.stat(sourceFile.replace(/\.ts$/, '.js'))).rejects.toMatchObject({ code: 'ENOENT' })
+    const json = JSON.parse(await fs.readFile(result.actionFiles[0], 'utf8'))
+    expect(json.versions[0].executionConfig.codeFile).toBe('code/calculate_score.1.0.ts')
+
+    const loaded = await loadWorkflowActionsWorkspace(directory)
+    expect(loaded.manifest).toEqual(manifest)
+    expect(loaded.codeSources).toEqual([
+      expect.objectContaining({
+        actionKey: 'calculate_score',
+        version: '1.0',
+        language: 'typescript',
+        file: sourceFile,
+        source,
+        compiledCode: compiled.code
+      })
+    ])
+  })
+
+  it('preserves TypeScript sources after synchronization when portal JavaScript still matches', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Calculate score' },
+          customVarsJson: {},
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const version = definition.versions[0]
+    const source = generateWorkflowActionTypeScriptScaffold(definition, version)
+    const sourceFile = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts')
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: sourceFile,
+      source,
+      action: definition,
+      version
+    })
+    version.executionConfig = { type: 'CODE', code: compiled.code }
+    const manifest: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: version.version,
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+    const existing = await loadWorkflowActionsWorkspace(directory)
+
+    const refreshed = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    expect(refreshed.codeFiles).toEqual([sourceFile])
+    await expect(fs.readFile(sourceFile, 'utf8')).resolves.toBe(source)
+  })
+
+  it('replaces TypeScript with portal JavaScript and removes generated action types when preservation is omitted', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Calculate score' },
+          customVarsJson: {},
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const version = definition.versions[0]
+    const source = generateWorkflowActionTypeScriptScaffold(definition, version)
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts'),
+      source,
+      action: definition,
+      version
+    })
+    version.executionConfig = { type: 'CODE', code: compiled.code }
+    const manifest: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    const typed = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: version.version,
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+
+    const replaced = await writeWorkflowActionsWorkspace(directory, manifest, manifest)
+
+    expect(replaced.codeFiles.map(file => path.basename(file))).toEqual(['calculate_score.1.0.js'])
+    await expect(fs.stat(typed.codeFiles[0])).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(directory, '.ghl/types/actions/workflow-action.d.ts'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+    await expect(fs.stat(path.join(replaced.codeDirectory, 'tsconfig.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(directory, 'tsconfig.actions.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('carries TypeScript into a cloned server version only when the compiled code remains equivalent', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      templateId: 'template-1',
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'published',
+          info: { name: 'Calculate score' },
+          inputs: [{ field: 'score', title: 'Score', fieldType: 'numerical', required: true }],
+          customVarsJson: { result: 42 },
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const source = generateWorkflowActionTypeScriptScaffold(definition, definition.versions[0])
+    const compiled = compileWorkflowActionTypeScript({
+      directory,
+      filename: path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts'),
+      source,
+      action: definition,
+      version: definition.versions[0]
+    })
+    definition.versions[0].executionConfig = { type: 'CODE', code: compiled.code }
+    const initial: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    await writeWorkflowActionsWorkspace(directory, initial, initial, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: '1.0',
+          language: 'typescript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+    const existing = await loadWorkflowActionsWorkspace(directory)
+    const refreshed = structuredClone(initial)
+    refreshed.actions[0].versions.unshift({
+      ...structuredClone(refreshed.actions[0].versions[0]),
+      version: '1.1',
+      status: 'draft'
+    })
+
+    const result = await writeWorkflowActionsWorkspace(directory, refreshed, refreshed, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    expect(result.codeFiles.map(file => path.basename(file))).toEqual([
+      'calculate_score.1.0.ts',
+      'calculate_score.1.1.ts'
+    ])
+    await expect(fs.readFile(result.codeFiles[1], 'utf8')).resolves.toMatch(/GhlActionCalculateScoreV1_1Handler/)
+  })
+
+  it('preserves checked JavaScript and updates its action type when the server clones a version', async () => {
+    const directory = await workspace()
+    const definition: WorkflowActionsManifest['actions'][number] = {
+      templateId: 'template-1',
+      key: 'calculate_score',
+      versions: [
+        {
+          version: '1.0',
+          status: 'published',
+          info: { name: 'Calculate score' },
+          inputs: [{ field: 'score', title: 'Score', fieldType: 'numerical', required: true }],
+          customVarsJson: { result: 42 },
+          executionConfig: { type: 'CODE', code: '' }
+        }
+      ]
+    }
+    const source = generateWorkflowActionJavaScriptScaffold(
+      definition,
+      definition.versions[0],
+      'return { result: Number(inputData.data.score) }'
+    )
+    const filename = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.js')
+    const compiled = compileWorkflowActionJavaScript({
+      directory,
+      filename,
+      source,
+      action: definition,
+      version: definition.versions[0]
+    })
+    expect(compiled.errors).toEqual([])
+    definition.versions[0].executionConfig = { type: 'CODE', code: compiled.code }
+    const initial: WorkflowActionsManifest = { schemaVersion: 1, appId: 'app-1', actions: [definition] }
+    await writeWorkflowActionsWorkspace(directory, initial, initial, {
+      codeSourceOverrides: [
+        {
+          actionKey: definition.key,
+          version: '1.0',
+          language: 'javascript',
+          source,
+          compiledCode: compiled.code
+        }
+      ]
+    })
+    const existing = await loadWorkflowActionsWorkspace(directory)
+    const refreshed = structuredClone(initial)
+    refreshed.actions[0].versions.unshift({
+      ...structuredClone(refreshed.actions[0].versions[0]),
+      version: '1.1',
+      status: 'draft'
+    })
+
+    const result = await writeWorkflowActionsWorkspace(directory, refreshed, refreshed, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    expect(result.codeFiles.map(file => path.basename(file))).toEqual([
+      'calculate_score.1.0.js',
+      'calculate_score.1.1.js'
+    ])
+    await expect(fs.readFile(result.codeFiles[1], 'utf8')).resolves.toMatch(/GhlActionCalculateScoreV1_1Handler/)
+    expect((await loadWorkflowActionsWorkspace(directory)).manifest).toEqual(refreshed)
+  })
+
   it('round-trips malformed legacy code for immutable published versions', async () => {
     const directory = await workspace()
     const legacyCode = '{\n"legacy": true\n}'
     const manifest: WorkflowActionsManifest = {
       schemaVersion: 1,
       appId: 'app-1',
-      actions: [{
-        templateId: 'template-1',
-        key: 'legacy_action',
-        versions: [{
-          version: '1.0',
-          status: 'published',
-          info: { name: 'Legacy action' },
-          executionConfig: { type: 'CODE', code: legacyCode }
-        }]
-      }]
+      actions: [
+        {
+          templateId: 'template-1',
+          key: 'legacy_action',
+          versions: [
+            {
+              version: '1.0',
+              status: 'published',
+              info: { name: 'Legacy action' },
+              executionConfig: { type: 'CODE', code: legacyCode }
+            }
+          ]
+        }
+      ]
     }
 
     const result = await writeWorkflowActionsWorkspace(directory, manifest)
@@ -250,15 +556,19 @@ describe('workflow action workspaces', () => {
     const manifest: WorkflowActionsManifest = {
       schemaVersion: 1,
       appId: 'app-1',
-      actions: [{
-        key: 'calculate_score',
-        versions: [{
-          version: '1.0',
-          status: 'draft',
-          info: { name: 'Calculate score' },
-          executionConfig: { type: 'CODE', code: 'return { value: 10 }' }
-        }]
-      }]
+      actions: [
+        {
+          key: 'calculate_score',
+          versions: [
+            {
+              version: '1.0',
+              status: 'draft',
+              info: { name: 'Calculate score' },
+              executionConfig: { type: 'CODE', code: 'return { value: 10 }' }
+            }
+          ]
+        }
+      ]
     }
     const result = await writeWorkflowActionsWorkspace(directory, manifest)
     await fs.writeFile(result.codeFiles[0], 'const result = ;')
@@ -276,15 +586,19 @@ describe('workflow action workspaces', () => {
     const manifest: WorkflowActionsManifest = {
       schemaVersion: 1,
       appId: 'app-1',
-      actions: [{
-        key: 'calculate_score',
-        versions: [{
-          version: '1.0',
-          status: 'draft',
-          info: { name: 'Calculate score' },
-          executionConfig: { type: 'CODE', code: 'return { value: 10 }' }
-        }]
-      }]
+      actions: [
+        {
+          key: 'calculate_score',
+          versions: [
+            {
+              version: '1.0',
+              status: 'draft',
+              info: { name: 'Calculate score' },
+              executionConfig: { type: 'CODE', code: 'return { value: 10 }' }
+            }
+          ]
+        }
+      ]
     }
     const result = await writeWorkflowActionsWorkspace(directory, manifest)
     const source = JSON.parse(await fs.readFile(result.actionFiles[0], 'utf8'))
@@ -295,7 +609,9 @@ describe('workflow action workspaces', () => {
     await fs.writeFile(result.codeFiles[0], 'return {}')
     source.versions[0].executionConfig.codeFile = '../outside.js'
     await fs.writeFile(result.actionFiles[0], JSON.stringify(source))
-    await expect(loadWorkflowActionsWorkspace(directory)).rejects.toThrow(/codeFile.*must be "code\/calculate_score\.1\.0\.js"/i)
+    await expect(loadWorkflowActionsWorkspace(directory)).rejects.toThrow(
+      /codeFile.*must be "code\/calculate_score\.1\.0\.js"/i
+    )
 
     source.versions[0].executionConfig = { type: 'CODE', code: 'return {}' }
     await fs.writeFile(result.actionFiles[0], JSON.stringify(source))
@@ -312,19 +628,23 @@ describe('workflow action workspaces', () => {
     const apiManifest: WorkflowActionsManifest = {
       schemaVersion: 1,
       appId: 'app-1',
-      actions: [{
-        key: 'execute_action',
-        versions: [{
-          version: '1.0',
-          status: 'draft',
-          info: { name: 'Execute action' },
-          executionConfig: {
-            type: 'API',
-            url: 'https://api.example.com/actions/execute',
-            method: 'POST'
-          }
-        }]
-      }]
+      actions: [
+        {
+          key: 'execute_action',
+          versions: [
+            {
+              version: '1.0',
+              status: 'draft',
+              info: { name: 'Execute action' },
+              executionConfig: {
+                type: 'API',
+                url: 'https://api.example.com/actions/execute',
+                method: 'POST'
+              }
+            }
+          ]
+        }
+      ]
     }
     const result = await writeWorkflowActionsWorkspace(directory, apiManifest)
     const source = JSON.parse(await fs.readFile(result.actionFiles[0], 'utf8'))
@@ -365,15 +685,19 @@ describe('workflow action workspaces', () => {
     const manifest: WorkflowActionsManifest = {
       schemaVersion: 1,
       appId: 'app-1',
-      actions: [{
-        key: 'calculate_score',
-        versions: [{
-          version: '1.0',
-          status: 'draft',
-          info: { name: 'Calculate score' },
-          executionConfig: { type: 'CODE', code: 'return {}' }
-        }]
-      }]
+      actions: [
+        {
+          key: 'calculate_score',
+          versions: [
+            {
+              version: '1.0',
+              status: 'draft',
+              info: { name: 'Calculate score' },
+              executionConfig: { type: 'CODE', code: 'return {}' }
+            }
+          ]
+        }
+      ]
     }
     const result = await writeWorkflowActionsWorkspace(directory, manifest)
     const target = path.join(directory, 'linked-code.js')
@@ -394,12 +718,14 @@ describe('workflow action workspaces', () => {
     const directory = await workspace()
     const codeAction: WorkflowActionsManifest['actions'][number] = {
       key: 'calculate_score',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: { name: 'Calculate score' },
-        executionConfig: { type: 'CODE', code: 'return {}' }
-      }]
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Calculate score' },
+          executionConfig: { type: 'CODE', code: 'return {}' }
+        }
+      ]
     }
     const first = await writeWorkflowActionsWorkspace(directory, {
       schemaVersion: 1,
@@ -415,7 +741,9 @@ describe('workflow action workspaces', () => {
       actions: [action('api_action', 'API action')]
     })
 
-    await expect(fs.stat(path.join(second.codeDirectory, 'calculate_score.1.0.js'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(second.codeDirectory, 'calculate_score.1.0.js'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
     await expect(fs.readFile(notes, 'utf8')).resolves.toBe('Keep me')
   })
 
@@ -451,7 +779,32 @@ describe('workflow action workspaces', () => {
       })
     )
 
-    await expect(loadWorkflowActionsWorkspace(directory)).rejects.toThrow(/send-message\.json\.key must be a non-empty string/i)
+    await expect(loadWorkflowActionsWorkspace(directory)).rejects.toThrow(
+      /send-message\.json\.key must be a non-empty string/i
+    )
+  })
+
+  it('validates editable action files with the generated JSON Schema contract', async () => {
+    const directory = await workspace()
+    const result = await writeWorkflowActionsWorkspace(directory, {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: []
+    })
+    await fs.mkdir(result.actionDirectory, { recursive: true })
+    await fs.writeFile(
+      path.join(result.actionDirectory, 'send-message.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        key: 'send_message',
+        versions: [{ version: '1.0', status: 'draft', info: { name: 'Send message' } }],
+        unsupported: true
+      })
+    )
+
+    await expect(loadWorkflowActionsWorkspace(directory)).rejects.toThrow(
+      /send-message\.json\.unsupported is not a supported property/i
+    )
   })
 
   it('requires the JSON key to match the filename-derived key', async () => {
@@ -492,7 +845,9 @@ describe('workflow action workspaces', () => {
       actions: [action('second_action', 'Second')]
     })
 
-    await expect(fs.stat(path.join(second.actionDirectory, 'first-action.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(second.actionDirectory, 'first-action.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
     await expect(fs.readFile(notesFile, 'utf8')).resolves.toBe('Keep me')
     await expect(fs.readFile(second.guideFile, 'utf8')).resolves.toMatch(/HighLevel Workflow Actions/)
   })
@@ -532,5 +887,164 @@ describe('workflow action workspaces', () => {
     }
 
     await expect(writeWorkflowActionsWorkspace(directory, branded)).rejects.toThrow(/white-label/i)
+  })
+})
+
+function checkedJavaScriptWorkspace(): {
+  definition: WorkflowActionsManifest['actions'][number]
+  manifest: WorkflowActionsManifest
+} {
+  const definition: WorkflowActionsManifest['actions'][number] = {
+    templateId: 'template-1',
+    key: 'calculate_score',
+    versions: [
+      {
+        version: '1.0',
+        status: 'draft',
+        info: { name: 'Calculate score' },
+        inputs: [{ field: 'score', title: 'Score', fieldType: 'numerical', required: true }],
+        customVarsJson: { result: 42 },
+        executionConfig: { type: 'CODE', code: '' }
+      }
+    ]
+  }
+  return { definition, manifest: { schemaVersion: 1, appId: 'app-1', actions: [definition] } }
+}
+
+async function writeCheckedJavaScriptWorkspace(directory: string): Promise<WorkflowActionsManifest> {
+  const { definition, manifest } = checkedJavaScriptWorkspace()
+  const version = definition.versions[0]
+  const source = generateWorkflowActionJavaScriptScaffold(definition, version, 'return { result: 1 }')
+  const filename = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.js')
+  const compiled = compileWorkflowActionJavaScript({ directory, filename, source, action: definition, version })
+  expect(compiled.errors).toEqual([])
+  version.executionConfig = { type: 'CODE', code: compiled.code }
+  await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+    codeSourceOverrides: [
+      { actionKey: definition.key, version: '1.0', language: 'javascript', source, compiledCode: compiled.code }
+    ]
+  })
+  return manifest
+}
+
+describe('workflow action pull preservation', () => {
+  it('rewraps a portal JavaScript edit inside the checked wrapper instead of downgrading the file', async () => {
+    const directory = await workspace()
+    const manifest = await writeCheckedJavaScriptWorkspace(directory)
+    const existing = await loadWorkflowActionsWorkspace(directory)
+    const edited = structuredClone(manifest)
+    edited.actions[0].versions[0].executionConfig = { type: 'CODE', code: 'return { result: 2 }' }
+
+    const result = await writeWorkflowActionsWorkspace(directory, edited, edited, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    const source = await fs.readFile(result.codeFiles[0], 'utf8')
+    expect(source).toContain('// @ts-check')
+    expect(source).toContain('\nreturn { result: 2 }\n')
+    await expect(fs.stat(path.join(directory, '.ghl/types/actions/workflow-action.d.ts'))).resolves.toBeDefined()
+    const reloaded = await loadWorkflowActionsWorkspace(directory)
+    expect(reloaded.manifest).toEqual(edited)
+    expect(reloaded.codeSources[0]).toMatchObject({ language: 'javascript', compiledCode: 'return { result: 2 }' })
+  })
+
+  it('keeps a portal edit as plain JavaScript when the wrapper cannot hand it back unchanged', async () => {
+    const directory = await workspace()
+    const manifest = await writeCheckedJavaScriptWorkspace(directory)
+    const existing = await loadWorkflowActionsWorkspace(directory)
+    const edited = structuredClone(manifest)
+    const legacyCode = '{\n"legacy": true\n}'
+    edited.actions[0].versions[0].status = 'published'
+    edited.actions[0].versions[0].executionConfig = { type: 'CODE', code: legacyCode }
+
+    const result = await writeWorkflowActionsWorkspace(directory, edited, edited, {
+      preserveCodeSources: existing.codeSources
+    })
+
+    await expect(fs.readFile(result.codeFiles[0], 'utf8')).resolves.toBe(legacyCode)
+    expect((await loadWorkflowActionsWorkspace(directory)).manifest).toEqual(edited)
+  })
+
+  it('reports a malformed action definition instead of failing while type-checking TypeScript', async () => {
+    const directory = await workspace()
+    const { definition, manifest } = checkedJavaScriptWorkspace()
+    const version = definition.versions[0]
+    const source = generateWorkflowActionTypeScriptScaffold(definition, version)
+    const filename = path.join(directory, WORKFLOW_ACTION_CODE_DIRECTORY_RELATIVE_PATH, 'calculate_score.1.0.ts')
+    const compiled = compileWorkflowActionTypeScript({ directory, filename, source, action: definition, version })
+    expect(compiled.errors).toEqual([])
+    version.executionConfig = { type: 'CODE', code: compiled.code }
+    const result = await writeWorkflowActionsWorkspace(directory, manifest, manifest, {
+      codeSourceOverrides: [
+        { actionKey: definition.key, version: '1.0', language: 'typescript', source, compiledCode: compiled.code }
+      ]
+    })
+    const file = JSON.parse(await fs.readFile(result.actionFiles[0], 'utf8'))
+    file.versions[0].inputs = [{ field: 'mode', title: 'Mode', fieldType: 'select', options: [{ label: 'Safe' }] }]
+    await fs.writeFile(result.actionFiles[0], JSON.stringify(file))
+
+    const failure = await loadWorkflowActionsWorkspace(directory).then(
+      () => undefined,
+      (error: unknown) => error as Error
+    )
+    expect(failure?.message).toMatch(/options\[0\]\.value/)
+    expect(failure?.message).not.toMatch(/Cannot read properties/)
+  })
+})
+
+describe('workflow action pull baselines', () => {
+  it('protects local sources only when the workspace state belongs to this app', async () => {
+    const directory = await workspace()
+    expect(await loadWorkflowActionsPullBaseline(directory)).toBeUndefined()
+
+    const manifest: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [action('send_message', 'Send message', 'template-1')]
+    }
+    await writeWorkflowActionsWorkspace(directory, manifest)
+    expect((await loadWorkflowActionsPullBaseline(directory))?.manifest).toEqual(manifest)
+
+    const stateFile = path.join(directory, WORKFLOW_ACTIONS_STATE_RELATIVE_PATH)
+    const state = JSON.parse(await fs.readFile(stateFile, 'utf8'))
+    await fs.writeFile(
+      stateFile,
+      JSON.stringify({ ...state, appId: 'other-app', baseline: { ...state.baseline, appId: 'other-app' } })
+    )
+    expect(await loadWorkflowActionsPullBaseline(directory)).toBeUndefined()
+
+    await fs.rm(stateFile)
+    expect(await loadWorkflowActionsPullBaseline(directory)).toBeUndefined()
+
+    await writeWorkflowActionsWorkspace(directory, manifest)
+    await fs.writeFile(path.join(directory, LEGACY_WORKFLOW_ACTIONS_RELATIVE_PATH), '{}')
+    expect(await loadWorkflowActionsPullBaseline(directory)).toBeUndefined()
+  })
+
+  it('rejects an invalid workspace with a --force hint instead of replacing it silently', async () => {
+    const directory = await workspace()
+    const manifest: WorkflowActionsManifest = {
+      schemaVersion: 1,
+      appId: 'app-1',
+      actions: [
+        {
+          key: 'calculate_score',
+          versions: [
+            {
+              version: '1.0',
+              status: 'draft',
+              info: { name: 'Calculate score' },
+              executionConfig: { type: 'CODE', code: 'return { value: 10 }' }
+            }
+          ]
+        }
+      ]
+    }
+    const result = await writeWorkflowActionsWorkspace(directory, manifest)
+    await fs.writeFile(result.codeFiles[0], 'const result = ;')
+
+    await expect(loadWorkflowActionsPullBaseline(directory)).rejects.toThrow(
+      /unexpected token[\s\S]*pass --force to replace them with the portal state/i
+    )
   })
 })

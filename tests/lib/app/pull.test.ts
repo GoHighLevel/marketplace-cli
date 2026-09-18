@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildPullFilesOutput,
   loadAppVersionForExport,
+  pullArtifactPlan,
   readPullWorkspaceBinding,
   resolvePullWorkspaceBinding,
   resolveVersionId
@@ -19,6 +20,13 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true })
+})
+
+describe('pull artifact plan', () => {
+  it('always enables JSON Schema artifacts and keeps TypeScript declarations opt-in', () => {
+    expect(pullArtifactPlan(false)).toEqual({ includeJsonSchema: true, includeTypeDeclarations: false })
+    expect(pullArtifactPlan(true)).toEqual({ includeJsonSchema: true, includeTypeDeclarations: true })
+  })
 })
 
 describe('pull workspace binding', () => {
@@ -133,21 +141,32 @@ describe('loadAppVersionForExport', () => {
 
 describe('buildPullFilesOutput', () => {
   it('keeps every component state and guide path under an unambiguous key', () => {
-    expect(buildPullFilesOutput({
-      app: { directory: root, appFile: 'ghl-app.json', stateFile: '.ghl/state.json' },
-      actions: {
-        actionDirectory: 'actions', actionFiles: ['action.json'], codeDirectory: 'code', codeFiles: [],
-        guideFile: 'actions.md', stateFile: '.ghl/workflow-actions-state.json'
-      },
-      triggers: {
-        triggerDirectory: 'triggers', triggerFiles: ['trigger.json'],
-        triggerGuideFile: 'triggers.md', triggerStateFile: '.ghl/workflow-triggers-state.json'
-      },
-      billing: {
-        billingDirectory: 'billing', subscriptionFile: 'subscription.json', usageFile: 'usage-based.json',
-        guideFile: 'billing.md', stateFile: '.ghl/billing-state.json'
-      }
-    })).toMatchObject({
+    expect(
+      buildPullFilesOutput({
+        app: { directory: root, appFile: 'ghl-app.json', stateFile: '.ghl/state.json' },
+        actions: {
+          actionDirectory: 'actions',
+          actionFiles: ['action.json'],
+          codeDirectory: 'code',
+          codeFiles: [],
+          guideFile: 'actions.md',
+          stateFile: '.ghl/workflow-actions-state.json'
+        },
+        triggers: {
+          triggerDirectory: 'triggers',
+          triggerFiles: ['trigger.json'],
+          triggerGuideFile: 'triggers.md',
+          triggerStateFile: '.ghl/workflow-triggers-state.json'
+        },
+        billing: {
+          billingDirectory: 'billing',
+          subscriptionFile: 'subscription.json',
+          usageFile: 'usage-based.json',
+          guideFile: 'billing.md',
+          stateFile: '.ghl/billing-state.json'
+        }
+      })
+    ).toMatchObject({
       stateFile: '.ghl/state.json',
       actionGuideFile: 'actions.md',
       workflowActionStateFile: '.ghl/workflow-actions-state.json',

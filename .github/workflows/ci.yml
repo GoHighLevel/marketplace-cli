@@ -36,8 +36,8 @@ jobs:
       - name: Build and verify package
         run: npm pack --dry-run
 
-  lint:
-    name: lint
+  typecheck:
+    name: typecheck
     runs-on: ubuntu-latest
 
     steps:
@@ -54,7 +54,7 @@ jobs:
         run: npm ci
 
       - name: Run type checks
-        run: npm run lint
+        run: npm run typecheck
 
   test:
     name: test

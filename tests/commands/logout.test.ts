@@ -36,7 +36,7 @@ afterEach(async () => {
 describe('logout', () => {
   it('prints only the account and reauthentication guidance after a successful logout', async () => {
     const output: string[] = []
-    const log = vi.spyOn(Logout.prototype, 'log').mockImplementation((message = '') => {
+    vi.spyOn(Logout.prototype, 'log').mockImplementation((message = '') => {
       output.push(message)
     })
     const config = await Config.load({ root: path.resolve('.') })

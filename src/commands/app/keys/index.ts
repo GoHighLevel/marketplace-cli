@@ -1,8 +1,9 @@
-import { Command, Flags } from '@oclif/core'
+import { Flags } from '@oclif/core'
 
+import { GhlCommand } from '../../../lib/shared/command.js'
 import { loadAppContext } from '../../../lib/app/section-context.js'
 
-export default class AppKeys extends Command {
+export default class AppKeys extends GhlCommand {
   static description = 'Show the client keys of the selected app'
 
   static examples = ['<%= config.bin %> app keys', '<%= config.bin %> app keys create my-key']
@@ -13,27 +14,22 @@ export default class AppKeys extends Command {
     app: Flags.string({ description: 'App id (defaults to the selected app)' })
   }
 
-  async run(): Promise<unknown> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppKeys)
-    try {
-      const context = await loadAppContext(flags.app, this.jsonEnabled())
-      const keys = (context.version.clientKeys ?? []).filter(key => !key.deleted)
-      const defaultClientKeyId = context.version.defaults?.clientKey
+    const context = await loadAppContext(flags.app, this.jsonEnabled())
+    const keys = (context.version.clientKeys ?? []).filter(key => !key.deleted)
+    const defaultClientKeyId = context.version.defaults?.clientKey
 
-      if (this.jsonEnabled()) return { clientKeys: keys, defaultClientKeyId }
+    if (this.jsonEnabled()) return { clientKeys: keys, defaultClientKeyId }
 
-      if (keys.length === 0) {
-        this.log('No client keys. Create one with `ghl app keys create <name>`.')
-        return
-      }
-      this.log(`${keys.length} client key(s):`)
-      for (const key of keys) {
-        const isDefault = key.id === defaultClientKeyId || key.isDefault === true || key.default === true
-        this.log(`  ${key.id ?? '(no id)'}  ${key.name ?? ''}${isDefault ? '  (default)' : ''}`)
-      }
+    if (keys.length === 0) {
+      this.log('No client keys. Create one with `ghl app keys create <name>`.')
       return
-    } catch (error) {
-      this.error(error instanceof Error ? error.message : 'Failed to load client keys')
+    }
+    this.log(`${keys.length} client key(s):`)
+    for (const key of keys) {
+      const isDefault = key.id === defaultClientKeyId || key.isDefault === true || key.default === true
+      this.log(`  ${key.id ?? '(no id)'}  ${key.name ?? ''}${isDefault ? '  (default)' : ''}`)
     }
   }
 }

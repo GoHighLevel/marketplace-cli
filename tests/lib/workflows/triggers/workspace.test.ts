@@ -3,7 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { WorkflowTriggersManifest } from '../../../../src/lib/workflows/triggers/manifest.js'
+import { JSON_SCHEMA_REFERENCES } from '../../../../src/lib/app/json-schema.js'
+import { type WorkflowTriggersManifest } from '../../../../src/lib/workflows/triggers/manifest.js'
 import {
   loadWorkflowTriggersWorkspace,
   loadWorkflowTriggersWorkspaceIfPresent,
@@ -19,17 +20,20 @@ const directories: string[] = []
 async function workspace(): Promise<string> {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-triggers-workspace-'))
   directories.push(directory)
-  await fs.writeFile(path.join(directory, 'ghl-app.json'), JSON.stringify({
-    schemaVersion: 1,
-    appId: 'app-1',
-    versionId: 'version-1',
-    listing: { userTypes: ['Location'], isWhiteLabelFriendly: false },
-    oauth: {
-      allowedScopes: ['workflows.readonly'],
-      redirectUris: ['https://example.com/oauth/callback'],
-      clientKeys: [{ id: 'key-1', name: 'Default', isDefault: true }]
-    }
-  }))
+  await fs.writeFile(
+    path.join(directory, 'ghl-app.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      appId: 'app-1',
+      versionId: 'version-1',
+      listing: { userTypes: ['Location'], isWhiteLabelFriendly: false },
+      oauth: {
+        allowedScopes: ['workflows.readonly'],
+        redirectUris: ['https://example.com/oauth/callback'],
+        clientKeys: [{ id: 'key-1', name: 'Default', isDefault: true }]
+      }
+    })
+  )
   return directory
 }
 
@@ -37,19 +41,23 @@ function manifest(): WorkflowTriggersManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    triggers: [{
-      templateId: 'template-1',
-      key: 'contact_changed',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: { name: 'Contact changed' },
-        customVarsJson: { contact: { id: 'contact-1' } },
-        filters: [{ field: 'contact.id', title: 'Contact ID', fieldType: 'string', required: true }],
-        customVars: [{ name: 'Contact ID', reference: 'contact.id', fieldType: 'string' }],
-        subscriptionConfig: { url: 'https://example.com/subscriptions' }
-      }]
-    }]
+    triggers: [
+      {
+        templateId: 'template-1',
+        key: 'contact_changed',
+        versions: [
+          {
+            version: '1.0',
+            status: 'draft',
+            info: { name: 'Contact changed' },
+            customVarsJson: { contact: { id: 'contact-1' } },
+            filters: [{ field: 'contact.id', title: 'Contact ID', fieldType: 'string', required: true }],
+            customVars: [{ name: 'Contact ID', reference: 'contact.id', fieldType: 'string' }],
+            subscriptionConfig: { url: 'https://example.com/subscriptions' }
+          }
+        ]
+      }
+    ]
   }
 }
 
@@ -65,7 +73,8 @@ describe('workflow trigger filenames', () => {
 
   it.each(['Contact.json', 'contact_status.json', '-contact.json', 'contact-.json', 'contact.txt'])(
     'rejects unsupported trigger filename %s',
-    filename => expect(() => workflowTriggerKeyFromFilename(filename)).toThrow(/lowercase.*letters.*numbers.*hyphens.*\.json/i)
+    filename =>
+      expect(() => workflowTriggerKeyFromFilename(filename)).toThrow(/lowercase.*letters.*numbers.*hyphens.*\.json/i)
   )
 
   it('rejects reserved and overlong keys', () => {
@@ -76,6 +85,17 @@ describe('workflow trigger filenames', () => {
 })
 
 describe('workflow trigger workspaces', () => {
+  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+    const directory = await workspace()
+    const triggerManifest = manifest()
+    const result = await writeWorkflowTriggersWorkspace(directory, triggerManifest, triggerManifest, {
+      includeJsonSchema: false
+    })
+
+    await expect(fs.readFile(result.triggerFiles[0], 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.stat(path.join(directory, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('writes one file per trigger, state, guide, and reloads the aggregate manifest', async () => {
     const directory = await workspace()
     const result = await writeWorkflowTriggersWorkspace(directory, manifest())
@@ -85,6 +105,7 @@ describe('workflow trigger workspaces', () => {
     expect(result.triggerStateFile).toBe(path.join(directory, WORKFLOW_TRIGGERS_STATE_RELATIVE_PATH))
     expect(await fs.readFile(result.triggerGuideFile, 'utf8')).toMatch(/subscription callback/i)
     expect(JSON.parse(await fs.readFile(result.triggerFiles[0], 'utf8'))).toMatchObject({
+      $schema: JSON_SCHEMA_REFERENCES['workflow-trigger'],
       schemaVersion: 1,
       key: 'contact_changed',
       templateId: 'template-1'
@@ -105,17 +126,42 @@ describe('workflow trigger workspaces', () => {
     const result = await writeWorkflowTriggersWorkspace(directory, empty)
     await fs.mkdir(result.triggerDirectory, { recursive: true })
     const triggerFile = path.join(result.triggerDirectory, 'order-created.json')
-    await fs.writeFile(triggerFile, JSON.stringify({
-      schemaVersion: 1,
-      key: 'order_created',
-      versions: [{ version: '1.0', status: 'draft', info: { name: 'Order created' } }]
-    }))
+    await fs.writeFile(
+      triggerFile,
+      JSON.stringify({
+        schemaVersion: 1,
+        key: 'order_created',
+        versions: [{ version: '1.0', status: 'draft', info: { name: 'Order created' } }]
+      })
+    )
     expect((await loadWorkflowTriggersWorkspace(directory)).manifest.triggers[0].key).toBe('order_created')
 
     const invalid = JSON.parse(await fs.readFile(triggerFile, 'utf8'))
     invalid.key = 'wrong_key'
     await fs.writeFile(triggerFile, JSON.stringify(invalid))
-    await expect(loadWorkflowTriggersWorkspace(directory)).rejects.toThrow(/must match the filename-derived key "order_created"/i)
+    await expect(loadWorkflowTriggersWorkspace(directory)).rejects.toThrow(
+      /must match the filename-derived key "order_created"/i
+    )
+  })
+
+  it('validates editable trigger files with the generated JSON Schema contract', async () => {
+    const directory = await workspace()
+    const empty: WorkflowTriggersManifest = { schemaVersion: 1, appId: 'app-1', triggers: [] }
+    const result = await writeWorkflowTriggersWorkspace(directory, empty)
+    await fs.mkdir(result.triggerDirectory, { recursive: true })
+    await fs.writeFile(
+      path.join(result.triggerDirectory, 'order-created.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        key: 'order_created',
+        versions: [{ version: '1.0', status: 'draft', info: { name: 'Order created' } }],
+        unsupported: true
+      })
+    )
+
+    await expect(loadWorkflowTriggersWorkspace(directory)).rejects.toThrow(
+      /order-created\.json\.unsupported is not a supported property/i
+    )
   })
 
   it('keeps only the hidden baseline when there are no workflow triggers', async () => {

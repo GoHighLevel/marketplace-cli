@@ -30,11 +30,7 @@ export function storedProfileFromTokenResponse(tokens: TokenResponse): StoredPro
   }
 }
 
-export async function exchangeCodeForTokens(
-  apiUrl: string,
-  code: string,
-  verifier: string
-): Promise<TokenResponse> {
+export async function exchangeCodeForTokens(apiUrl: string, code: string, verifier: string): Promise<TokenResponse> {
   const endpoint = `${apiUrl}/cli-auth/token`
   let res: Response
   try {

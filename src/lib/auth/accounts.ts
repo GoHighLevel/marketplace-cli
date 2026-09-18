@@ -1,4 +1,4 @@
-import type { DeveloperTeam } from '../api/client.js'
+import type { DeveloperTeam } from '../api/types.js'
 import { clearSelectedApp, getSelectedApp, saveSelectedApp } from '../config/selection-store.js'
 
 interface DeveloperAccountClient {
@@ -8,7 +8,11 @@ interface DeveloperAccountClient {
 }
 
 export function developerAccountName(account: DeveloperTeam): string {
-  const name = account.name?.replace(/[\u0000-\u001F\u007F-\u009F]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const name = account.name
+    /* eslint-disable-next-line no-control-regex -- Control characters are stripped intentionally. */
+    ?.replace(/[\u0000-\u001F\u007F-\u009F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (name) return name.slice(0, 200)
   return account.role?.toUpperCase() === 'OWNER' ? 'Your Team' : 'Unnamed account'
 }

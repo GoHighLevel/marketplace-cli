@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest'
 import {
   workflowActionCodeFilename,
   workflowActionCodeReference,
-  workflowActionCodeSyntaxError
+  workflowActionCodeSyntaxError,
+  workflowActionSourceLanguage
 } from '../../../../src/lib/workflows/actions/code.js'
 
 describe('workflow action code', () => {
   it('creates deterministic version-aware filenames and references', () => {
     expect(workflowActionCodeFilename('calculate_score', '1.2')).toBe('calculate_score.1.2.js')
     expect(workflowActionCodeReference('calculate_score', '1.2')).toBe('code/calculate_score.1.2.js')
+    expect(workflowActionCodeFilename('calculate_score', '1.2', 'typescript')).toBe('calculate_score.1.2.ts')
+    expect(workflowActionCodeReference('calculate_score', '1.2', 'typescript')).toBe('code/calculate_score.1.2.ts')
+    expect(workflowActionSourceLanguage('code/calculate_score.1.2.ts')).toBe('typescript')
+    expect(workflowActionSourceLanguage('code/calculate_score.1.2.js')).toBe('javascript')
   })
 
   it('validates the async function-body syntax accepted by the portal', () => {

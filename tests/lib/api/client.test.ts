@@ -3,9 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiClient, normalizeUploadResponse } from '../../../src/lib/api/client.js'
+import { ApiClient } from '../../../src/lib/api/client.js'
+import { normalizeUploadResponse } from '../../../src/lib/api/normalizers/uploads.js'
 import { findAppItemById } from '../../../src/lib/app/context.js'
-import { CliConfig } from '../../../src/lib/config/environment.js'
+import { type CliConfig } from '../../../src/lib/config/environment.js'
 import { loadCredentials, saveProfile } from '../../../src/lib/auth/token-store.js'
 import { packageVersion } from '../../helpers/package-version.js'
 
@@ -74,10 +75,12 @@ describe('ApiClient', () => {
     await saveProfile(dir, 'default', { accessToken: validJwt, refreshToken: 'mrt' })
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse([
-        { team: 'member-team', name: 'Member account', role: 'USER' },
-        { team: 'owner-team', name: 'Owner account', role: 'OWNER' }
-      ]))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          { team: 'member-team', name: 'Member account', role: 'USER' },
+          { team: 'owner-team', name: 'Owner account', role: 'OWNER' }
+        ])
+      )
       .mockResolvedValueOnce(jsonResponse({ apps: [], totalCount: 0 }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -273,7 +276,7 @@ describe('ApiClient', () => {
       .mockResolvedValueOnce(jsonResponse({ success: true, action: summary }))
       .mockResolvedValueOnce(jsonResponse({ success: true, action: { ...summary, version: '1.1' } }))
       .mockResolvedValueOnce(jsonResponse({ success: true }))
-      .mockResolvedValueOnce(jsonResponse({ success: true, action: summary }))
+      .mockResolvedValueOnce(jsonResponse({ success: true }))
       .mockResolvedValueOnce(jsonResponse({ success: true }))
       .mockResolvedValueOnce(jsonResponse({ success: true }))
       .mockResolvedValueOnce(jsonResponse({ hasError: false, output: { ok: true }, consoleLogs: [] }))
@@ -294,11 +297,13 @@ describe('ApiClient', () => {
       releaseNotes: { user: 'Initial release', reviewer: 'Initial release' }
     })
     await client.publishWorkflowActionSummary('app1', 'template-1', '1.0')
-    await expect(client.testWorkflowAction('app1', {
-      appId: 'app1',
-      inputData: { email: 'developer@example.com' },
-      executionConfig: { type: 'CODE', code: 'return {}', headers: [] }
-    })).resolves.toEqual({ hasError: false, output: { ok: true }, consoleLogs: [] })
+    await expect(
+      client.testWorkflowAction('app1', {
+        appId: 'app1',
+        inputData: { email: 'developer@example.com' },
+        executionConfig: { type: 'CODE', code: 'return {}', headers: [] }
+      })
+    ).resolves.toEqual({ hasError: false, output: { ok: true }, consoleLogs: [] })
     await client.deleteWorkflowAction('app1', 'template-1')
 
     const requests = fetchMock.mock.calls.map(([url, init]) => ({
@@ -307,7 +312,11 @@ describe('ApiClient', () => {
       appId: init.headers.appid
     }))
     expect(requests).toEqual([
-      { url: 'https://workflows.test/workflows-marketplace/slugs/availability/send_message', method: 'GET', appId: 'app1' },
+      {
+        url: 'https://workflows.test/workflows-marketplace/slugs/availability/send_message',
+        method: 'GET',
+        appId: 'app1'
+      },
       { url: 'https://oauth.test/clients/app1/actions', method: 'POST', appId: undefined },
       { url: 'https://oauth.test/clients/app1/actions/template-1/new-version', method: 'POST', appId: undefined },
       { url: 'https://workflows.test/workflows-marketplace/actions/template-1', method: 'PUT', appId: 'app1' },
@@ -337,7 +346,8 @@ describe('ApiClient', () => {
       status: 'draft',
       info: { name: 'Contact changed' }
     }
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ success: false, action: [] }))
       .mockResolvedValueOnce(jsonResponse({ actions: [actionDraft] }))
       .mockResolvedValueOnce(jsonResponse({ success: false, trigger: [] }))
@@ -368,11 +378,13 @@ describe('ApiClient', () => {
     const client = new ApiClient(config)
     await client.init()
 
-    await expect(client.testWorkflowAction('app1', {
-      appId: 'app1',
-      inputData: {},
-      executionConfig: { type: 'CODE', code: 'return {}', headers: [] }
-    })).rejects.toThrow(/workflow action test API returned an unexpected response/i)
+    await expect(
+      client.testWorkflowAction('app1', {
+        appId: 'app1',
+        inputData: {},
+        executionConfig: { type: 'CODE', code: 'return {}', headers: [] }
+      })
+    ).rejects.toThrow(/workflow action test API returned an unexpected response/i)
   })
 
   it('uses the registry and workflow-service endpoints for the complete trigger lifecycle', async () => {
@@ -392,7 +404,8 @@ describe('ApiClient', () => {
       status: 'draft',
       info: { name: 'Contact changed' }
     }
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ triggers: [summary] }))
       .mockResolvedValueOnce(jsonResponse({ triggers: [configResponse] }))
       .mockResolvedValueOnce(jsonResponse({ triggers: [configResponse] }))
@@ -400,7 +413,7 @@ describe('ApiClient', () => {
       .mockResolvedValueOnce(jsonResponse({ success: true, trigger: summary }))
       .mockResolvedValueOnce(jsonResponse({ success: true, trigger: { ...summary, version: '1.1' } }))
       .mockResolvedValueOnce(jsonResponse({ success: true }))
-      .mockResolvedValueOnce(jsonResponse({ success: true, trigger: summary }))
+      .mockResolvedValueOnce(jsonResponse({ success: true }))
       .mockResolvedValueOnce(jsonResponse({ success: true }))
       .mockResolvedValueOnce(jsonResponse({ success: true }))
       .mockResolvedValueOnce(jsonResponse({ success: true }))
@@ -425,15 +438,25 @@ describe('ApiClient', () => {
     await client.publishWorkflowTriggerSummary('app1', 'template-1', '1.0')
     await client.deleteWorkflowTrigger('app1', 'template-1')
 
-    expect(fetchMock.mock.calls.map(([url, init]) => ({
-      url: String(url),
-      method: init.method,
-      appId: init.headers.appid
-    }))).toEqual([
+    expect(
+      fetchMock.mock.calls.map(([url, init]) => ({
+        url: String(url),
+        method: init.method,
+        appId: init.headers.appid
+      }))
+    ).toEqual([
       { url: 'https://oauth.test/clients/app1/triggers', method: 'GET', appId: undefined },
       { url: 'https://workflows.test/workflows-marketplace/triggers', method: 'GET', appId: 'app1' },
-      { url: 'https://workflows.test/workflows-marketplace/triggers/template-1?version=1.0', method: 'GET', appId: 'app1' },
-      { url: 'https://workflows.test/workflows-marketplace/slugs/availability/contact_changed', method: 'GET', appId: 'app1' },
+      {
+        url: 'https://workflows.test/workflows-marketplace/triggers/template-1?version=1.0',
+        method: 'GET',
+        appId: 'app1'
+      },
+      {
+        url: 'https://workflows.test/workflows-marketplace/slugs/availability/contact_changed',
+        method: 'GET',
+        appId: 'app1'
+      },
       { url: 'https://oauth.test/clients/app1/triggers', method: 'POST', appId: undefined },
       { url: 'https://oauth.test/clients/app1/triggers/template-1/new-version', method: 'POST', appId: undefined },
       { url: 'https://workflows.test/workflows-marketplace/triggers/template-1', method: 'PUT', appId: 'app1' },
@@ -629,8 +652,12 @@ describe('ApiClient', () => {
     await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ events: ['ContactCreate'], mapping: { 'contacts.readonly': ['ContactCreate'] } }))
-      .mockResolvedValueOnce(jsonResponse({ events: ['ContactCreate'], mapping: { 'contacts.readonly': 'ContactCreate' } }))
+      .mockResolvedValueOnce(
+        jsonResponse({ events: ['ContactCreate'], mapping: { 'contacts.readonly': ['ContactCreate'] } })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ events: ['ContactCreate'], mapping: { 'contacts.readonly': 'ContactCreate' } })
+      )
       .mockResolvedValueOnce(jsonResponse({ events: ['ContactCreate'], mapping: { 'contacts.readonly': ['Unknown'] } }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -691,32 +718,43 @@ describe('ApiClient', () => {
 
   it('uses the exact subscription and usage billing lifecycle endpoints', async () => {
     await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse([{
-        _id: 'plan-1',
-        name: 'Pro',
-        features: [],
-        price: 10,
-        paymentTime: 'month',
-        paymentType: 'recurring'
-      }]))
-      .mockResolvedValueOnce(jsonResponse([{
-        _id: 'meter-1',
-        appId: 'app1',
-        productType: 'workflow_action',
-        productId: 'send_message',
-        productName: 'Send message',
-        customPriceType: 'fixed',
-        usageUnit: 'execution',
-        billingTier: [{
-          _id: 'tier-1',
-          name: 'Executions',
-          minVolume: 0,
-          maxVolume: null,
-          pricePerUnit: 0.01,
-          executionLimitPerCycle: 1000
-        }]
-      }]))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            _id: 'plan-1',
+            name: 'Pro',
+            features: [],
+            price: 10,
+            paymentTime: 'month',
+            paymentType: 'recurring'
+          }
+        ])
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            _id: 'meter-1',
+            appId: 'app1',
+            productType: 'workflow_action',
+            productId: 'send_message',
+            productName: 'Send message',
+            customPriceType: 'fixed',
+            usageUnit: 'execution',
+            billingTier: [
+              {
+                _id: 'tier-1',
+                name: 'Executions',
+                minVolume: 0,
+                maxVolume: null,
+                pricePerUnit: 0.01,
+                executionLimitPerCycle: 1000
+              }
+            ]
+          }
+        ])
+      )
       .mockResolvedValue(jsonResponse({ success: true }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -801,11 +839,13 @@ describe('ApiClient', () => {
     await saveProfile(dir, 'default', { accessToken: validJwt, teamId: 'team1' })
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValueOnce(jsonResponse({
-        _id: 'legacy-subcategory',
-        appId: 'app1',
-        subcategory: 'CRM'
-      }))
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse({
+          _id: 'legacy-subcategory',
+          appId: 'app1',
+          subcategory: 'CRM'
+        })
+      )
     )
 
     const client = new ApiClient(config)
@@ -845,7 +885,10 @@ describe('ApiClient', () => {
           redirectUris: ['https://draft.example.com/callback'],
           oAuthClient: [
             {
-              clientKeys: [{ id: 'live', name: 'Live' }, { id: 'top', name: 'Duplicate' }],
+              clientKeys: [
+                { id: 'live', name: 'Live' },
+                { id: 'top', name: 'Duplicate' }
+              ],
               defaults: { clientKey: 'live' },
               redirectUris: ['https://live.example.com/callback']
             }
@@ -892,14 +935,16 @@ describe('ApiClient', () => {
         .fn()
         .mockResolvedValueOnce(jsonResponse(response))
         .mockResolvedValueOnce(
-          jsonResponse([{
-            _id: 'plan1',
-            name: 'Growth',
-            features: ['Priority support'],
-            price: 49,
-            paymentTime: 'month',
-            paymentType: 'recurring'
-          }])
+          jsonResponse([
+            {
+              _id: 'plan1',
+              name: 'Growth',
+              features: ['Priority support'],
+              price: 49,
+              paymentTime: 'month',
+              paymentType: 'recurring'
+            }
+          ])
         )
     )
 
