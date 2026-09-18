@@ -1,7 +1,7 @@
 {
   "name": "@gohighlevel/marketplace-cli",
   "version": "0.1.1",
-  "description": "Command-line interface for the GoHighLevel marketplace developer portal \u2014 build, configure, and publish marketplace apps from the terminal",
+  "description": "Command-line interface for the GoHighLevel marketplace developer portal — build, configure, and publish marketplace apps from the terminal",
   "keywords": [
     "gohighlevel",
     "highlevel",
@@ -68,7 +68,7 @@
         "description": "Manage apps in your developer account (create, configure, publish)"
       },
       "app:keys": {
-        "description": "OAuth client keys \u2014 each key is a client id + one-time secret pair"
+        "description": "OAuth client keys — each key is a client id + one-time secret pair"
       },
       "app:scopes": {
         "description": "OAuth scopes the app requests at install time"
@@ -117,7 +117,6 @@
     "@oclif/plugin-help": "^6.2.56",
     "acorn": "^8.18.0",
     "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
     "jsonc-parser": "^3.3.1",
     "open": "^10.1.0",
     "redos-detector": "^6.1.4",

@@ -552,3 +552,107 @@ describe('schema references', () => {
     })
   })
 })
+
+describe('JSON Schema parity with the CLI validators', () => {
+  it('accepts ordinary decimal prices instead of applying floating-point multipleOf checks', () => {
+    const usage = validUsageMeter()
+    const tier = ((usage.meters as SchemaObject[])[0].tiers as SchemaObject[])[0]
+    tier.pricePerUnit = 199.99
+    tier.minPricePerUnit = 67.123456
+    tier.maxPricePerUnit = 131.03081
+    expect(validateJsonSchema('usage-based', usage, 'usage-based.json')).toEqual([])
+
+    const subscription = validSubscription()
+    ;(subscription.plans as SchemaObject[])[0].amount = 1_234_567.89
+    expect(validateJsonSchema('subscription', subscription, 'subscription.json')).toEqual([])
+  })
+
+  it('checks only the URL scheme so WHATWG-valid URLs are not rejected by the RFC 3986 format', () => {
+    const action = validWorkflowAction()
+    const version = (action.versions as SchemaObject[])[0]
+    version.executionConfig = {
+      type: 'API',
+      url: 'https://api.example.com/items?fields[]=id&filter={"a":1}',
+      method: 'POST'
+    }
+    ;(version.info as SchemaObject).screenshots = ['https://cdn.example.com/スクリーン.png']
+    expect(validateJsonSchema('workflow-action', action, 'send-message.json')).toEqual([])
+
+    version.executionConfig = { type: 'API', url: 'ftp://api.example.com/items', method: 'POST' }
+    expect(validateJsonSchema('workflow-action', action, 'send-message.json')).toEqual([
+      'send-message.json.versions[0].executionConfig.url does not match the required format.'
+    ])
+  })
+
+  it('keeps catalog memberships and conditional rules out of structural validation', () => {
+    const manifest = validAppManifest()
+    ;(manifest.basicInfo as SchemaObject).subcategory = ['CRM']
+    const billing = manifest.billing as SchemaObject
+    billing.hasFreeTrial = true
+    billing.freeTrialDuration = null
+
+    expect(validateJsonSchemaStructure('app', manifest, 'ghl-app.json')).toEqual([])
+    expect(schemaAccepts('app', manifest)).toBe(false)
+
+    billing.billingType = 'bogus'
+    expect(validateJsonSchemaStructure('app', manifest, 'ghl-app.json')).toEqual([
+      'ghl-app.json.billing.billingType must be one of: "free", "freemium", "paid".'
+    ])
+  })
+
+  it('does not require optional portal fields that main tolerated', () => {
+    const subscription = validSubscription()
+    const plan = (subscription.plans as SchemaObject[])[0]
+    plan.freeForLocation = true
+    delete plan.locationAmount
+    expect(validateJsonSchema('subscription', subscription, 'subscription.json')).toEqual([])
+
+    const action = validWorkflowAction()
+    const version = (action.versions as SchemaObject[])[0]
+    version.payloadCustomizationType = 'custom'
+    version.customizedPayload = { contact: '{{contact.id}}' }
+    delete version.executionConfig
+    expect(validateJsonSchema('workflow-action', action, 'send-message.json')).toEqual([])
+
+    const input = (version.inputs as SchemaObject[])[0]
+    input.validations = [{ rule: `(value) => value.length < ${'9'.repeat(1_200)}`, errorMessage: 'Too long.' }]
+    expect(validateJsonSchema('workflow-action', action, 'send-message.json')).toEqual([])
+  })
+
+  it('reports one actionable message per problem with readable types and property names', () => {
+    const action = validWorkflowAction()
+    const version = (action.versions as SchemaObject[])[0]
+    const input = (version.inputs as SchemaObject[])[0]
+    delete input.options
+    version.executionConfig = {
+      type: 'API',
+      url: 'https://api.example.com/send',
+      method: 'POST',
+      codeFile: 'code/send_message.1.0.js',
+      headers: { 'bad header': 'value' }
+    }
+
+    const errors = validateJsonSchema('workflow-action', action, 'send-message.json')
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        'send-message.json.versions[0].inputs[0] must match exactly one supported configuration.',
+        'send-message.json.versions[0].executionConfig.codeFile is not supported here.',
+        'send-message.json.versions[0].executionConfig.headers["bad header"] is not a supported property name.'
+      ])
+    )
+    expect(errors).not.toEqual(expect.arrayContaining([expect.stringMatching(/mappedTo is required/)]))
+    expect(errors).not.toEqual(expect.arrayContaining([expect.stringMatching(/does not match the required format/)]))
+    expect(errors).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/contains a value that is not supported/)])
+    )
+
+    const usage = validUsageMeter()
+    const tier = ((usage.meters as SchemaObject[])[0].tiers as SchemaObject[])[0]
+    tier.maxVolume = 'unlimited'
+    tier.executionLimitPerCycle = 1.5
+    expect(validateJsonSchema('usage-based', usage, 'usage-based.json')).toEqual([
+      'usage-based.json.meters[0].tiers[0].maxVolume must be a number or null.',
+      'usage-based.json.meters[0].tiers[0].executionLimitPerCycle must be an integer.'
+    ])
+  })
+})

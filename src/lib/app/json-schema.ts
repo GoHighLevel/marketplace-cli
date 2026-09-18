@@ -1,7 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import AjvModule, { type Ajv as AjvInstance, type ErrorObject, type Options, type ValidateFunction } from 'ajv'
-import addFormatsModule, { type FormatsPlugin } from 'ajv-formats'
 import { writeTextFileAtomic } from '../shared/atomic-file.js'
 import { appSchema } from './json-schemas/app.js'
 import { subscriptionSchema, usageBasedSchema } from './json-schemas/billing.js'
@@ -34,23 +33,22 @@ const JSON_SCHEMAS: Readonly<Record<JsonSchemaName, JsonSchema>> = {
 }
 
 const Ajv = AjvModule as unknown as new (options?: Options) => AjvInstance
-const addFormats = addFormatsModule as unknown as FormatsPlugin
 
-/* Conditional subschemas intentionally inherit property declarations from their parent contract. */
-const schemaValidator = addFormats(
-  new Ajv({
-    allErrors: true,
-    allowUnionTypes: true,
-    coerceTypes: false,
-    multipleOfPrecision: 8,
-    removeAdditional: false,
-    strict: true,
-    strictNumbers: true,
-    strictRequired: false,
-    strictTypes: false,
-    useDefaults: false
-  })
-)
+/* Conditional subschemas intentionally inherit property declarations from
+   their parent contract. `verbose` attaches the failing subschema to each
+   error so `not` rules can name the property they reject. */
+const schemaValidator = new Ajv({
+  allErrors: true,
+  allowUnionTypes: true,
+  coerceTypes: false,
+  removeAdditional: false,
+  strict: true,
+  strictNumbers: true,
+  strictRequired: false,
+  strictTypes: false,
+  useDefaults: false,
+  verbose: true
+})
 const compiledValidators = new Map<JsonSchemaName, ValidateFunction>()
 
 const JSON_SCHEMA_FILE_MATCHES: Readonly<Record<JsonSchemaName, string[]>> = {
@@ -120,59 +118,88 @@ function enumValues(error: ErrorObject): string {
   return values.map(value => JSON.stringify(value)).join(', ')
 }
 
-function jsonSchemaError(error: ErrorObject, rootPath: string): string | undefined {
+function typeLabel(expected: string): string {
+  if (expected === 'null') return 'null'
+  return `${/^[aeiou]/i.test(expected) ? 'an' : 'a'} ${expected}`
+}
+
+/* A `not` rule built from `required` alternatives forbids properties; the
+   verbose error carries that subschema, so the present properties can be named. */
+function forbiddenProperties(error: ErrorObject): string[] {
+  const schema = isRecord(error.schema) ? error.schema : undefined
+  if (!schema || !isRecord(error.data)) return []
+  const alternatives = Array.isArray(schema.anyOf) ? schema.anyOf : [schema]
+  const data = error.data
+  return alternatives.flatMap(alternative =>
+    isRecord(alternative) && Array.isArray(alternative.required)
+      ? alternative.required.filter(
+          (property): property is string => typeof property === 'string' && Object.hasOwn(data, property)
+        )
+      : []
+  )
+}
+
+function jsonSchemaErrors(error: ErrorObject, rootPath: string): string[] {
   const path = errorPath(error, rootPath)
   switch (error.keyword) {
     case 'additionalProperties':
-      return `${path} is not a supported property.`
+      return [`${path} is not a supported property.`]
     case 'required':
-      return `${path} is required.`
-    case 'type': {
-      const expected = String(error.params.type)
-      return `${path} must be ${['array', 'object'].includes(expected) ? 'an' : 'a'} ${expected}.`
-    }
+      return [`${path} is required.`]
+    case 'type':
+      return [`${path} must be ${String(error.params.type).split(',').map(typeLabel).join(' or ')}.`]
     case 'const':
-      return `${path} must be ${JSON.stringify(error.params.allowedValue)}.`
+      return [`${path} must be ${JSON.stringify(error.params.allowedValue)}.`]
     case 'enum':
-      return `${path} must be one of: ${enumValues(error)}.`
+      return [`${path} must be one of: ${enumValues(error)}.`]
     case 'minLength':
-      return `${path} must contain at least ${countLabel(Number(error.params.limit), 'character')}.`
+      return [`${path} must contain at least ${countLabel(Number(error.params.limit), 'character')}.`]
     case 'maxLength':
-      return `${path} must contain at most ${countLabel(Number(error.params.limit), 'character')}.`
+      return [`${path} must contain at most ${countLabel(Number(error.params.limit), 'character')}.`]
     case 'minItems':
-      return `${path} must contain at least ${countLabel(Number(error.params.limit), 'item')}.`
+      return [`${path} must contain at least ${countLabel(Number(error.params.limit), 'item')}.`]
     case 'maxItems':
-      return `${path} must contain at most ${countLabel(Number(error.params.limit), 'item')}.`
+      return [`${path} must contain at most ${countLabel(Number(error.params.limit), 'item')}.`]
+    case 'minProperties':
+      return [`${path} must contain at least ${countLabel(Number(error.params.limit), 'property')}.`]
     case 'uniqueItems':
-      return `${path} must not contain duplicate items.`
+      return [`${path} must not contain duplicate items.`]
     case 'minimum':
-      return `${path} must be at least ${error.params.limit}.`
+      return [`${path} must be at least ${error.params.limit}.`]
     case 'maximum':
-      return `${path} must be at most ${error.params.limit}.`
+      return [`${path} must be at most ${error.params.limit}.`]
     case 'exclusiveMinimum':
-      return `${path} must be greater than ${error.params.limit}.`
+      return [`${path} must be greater than ${error.params.limit}.`]
     case 'exclusiveMaximum':
-      return `${path} must be less than ${error.params.limit}.`
-    case 'multipleOf':
-      return `${path} must be a multiple of ${error.params.multipleOf}.`
+      return [`${path} must be less than ${error.params.limit}.`]
     case 'pattern':
       if (/\/properties\/(?:appId|versionId)\/pattern$/.test(error.schemaPath)) {
-        return `${path} must contain only letters, numbers, underscores, or hyphens and be 1 to 128 characters.`
+        return [`${path} must contain only letters, numbers, underscores, or hyphens and be 1 to 128 characters.`]
       }
-      return `${path} does not match the required format.`
-    case 'format':
-      return `${path} must use valid ${error.params.format} format.`
+      return [`${path} does not match the required format.`]
+    case 'propertyNames':
+      return [`${pathSegment(path, String(error.params.propertyName))} is not a supported property name.`]
     case 'oneOf':
-      return `${path} must match exactly one supported configuration.`
+      return [`${path} must match exactly one supported configuration.`]
     case 'anyOf':
-      return `${path} must match a supported configuration.`
-    case 'not':
-      return `${path} contains a value that is not supported here.`
+      return [`${path} must match a supported configuration.`]
+    case 'not': {
+      const forbidden = forbiddenProperties(error)
+      if (forbidden.length === 0) return [`${path} contains a value that is not supported here.`]
+      return forbidden.map(property => `${pathSegment(path, property)} is not supported here.`)
+    }
     case 'if':
-      return undefined
+      return []
     default:
-      return `${path} ${error.message ?? `failed ${error.keyword} validation`}.`
+      return [`${path} ${error.message ?? `failed ${error.keyword} validation`}.`]
   }
+}
+
+/* Errors raised inside a oneOf/anyOf alternative or a propertyNames subschema
+   only explain why one alternative failed; the enclosing keyword carries the
+   actionable message. */
+function isAlternativeDetail(error: ErrorObject): boolean {
+  return /\/(?:oneOf|anyOf)\/\d+\//.test(error.schemaPath) || /\/propertyNames\//.test(error.schemaPath)
 }
 
 function validatorFor(name: JsonSchemaName): ValidateFunction {
@@ -191,12 +218,7 @@ export function validateJsonSchema(name: JsonSchemaName, value: unknown, rootPat
 
 function formatJsonSchemaErrors(errors: ErrorObject[], rootPath: string): string[] {
   return [
-    ...new Set(
-      errors.flatMap(error => {
-        const message = jsonSchemaError(error, rootPath)
-        return message ? [message] : []
-      })
-    )
+    ...new Set(errors.filter(error => !isAlternativeDetail(error)).flatMap(error => jsonSchemaErrors(error, rootPath)))
   ]
 }
 
@@ -204,9 +226,16 @@ function isConditionalSchemaPath(schemaPath: string): boolean {
   return /\/(?:allOf|anyOf|oneOf|if|then|else|not)\//.test(schemaPath)
 }
 
+/* Structural errors are the shape problems a workspace cannot be loaded with:
+   unknown or missing properties, wrong value types, and fixed protocol values.
+   Conditional rules and catalog memberships (enumerated array items such as
+   categories) remain editor and push-time concerns so that a manifest pulled
+   from the portal always loads, as it did before the schemas existed. */
 function isStructuralError(error: ErrorObject): boolean {
-  if (['additionalProperties', 'type'].includes(error.keyword)) return true
-  if (['const', 'enum', 'required'].includes(error.keyword)) return !isConditionalSchemaPath(error.schemaPath)
+  if (error.keyword === 'additionalProperties') return true
+  if (isConditionalSchemaPath(error.schemaPath)) return false
+  if (['type', 'const', 'required'].includes(error.keyword)) return true
+  if (error.keyword === 'enum') return !/\/items\//.test(error.schemaPath)
   return error.keyword === 'pattern' && /\/properties\/(?:appId|versionId)\/pattern$/.test(error.schemaPath)
 }
 

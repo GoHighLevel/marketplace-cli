@@ -13,19 +13,20 @@ import {
   type JsonSchema
 } from './builders.js'
 
+/* Decimal-place limits are enforced by the CLI on the number's decimal text.
+   JSON Schema `multipleOf` divides binary floating-point values and rejects
+   ordinary prices such as 199.99, so it is intentionally not used here. */
 const currency = (description: string): JsonSchema => ({
   type: 'number',
   minimum: 0,
-  multipleOf: 0.01,
-  description
+  description: `${description} Use at most two decimal places.`
 })
 
 const unitPrice = (description: string): JsonSchema => ({
   type: 'number',
   minimum: 0.000001,
   maximum: 200,
-  multipleOf: 0.000001,
-  description
+  description: `${description} Use at most six decimal places.`
 })
 
 const subscriptionPlan: JsonSchema = {
@@ -68,7 +69,7 @@ const subscriptionPlan: JsonSchema = {
     },
     {
       if: { properties: { freeForLocation: { const: true } }, required: ['freeForLocation'] },
-      then: { properties: { locationAmount: { const: 0 } }, required: ['locationAmount'] },
+      then: { properties: { locationAmount: { const: 0 } } },
       else: { properties: { locationAmount: { minimum: 0.01 } } }
     },
     {

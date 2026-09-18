@@ -80,10 +80,13 @@ export const nullableNumber = (constraints: JsonSchema = {}): JsonSchema => ({
   ...constraints
 })
 
+/* URL schemas check only the scheme. The RFC 3986 `uri` format rejects
+   characters such as braces, brackets, and non-ASCII paths that the WHATWG
+   parser used by the CLI validators accepts, so the full URL check stays with
+   those validators. */
 export const requiredHttpUrl = (description: string): JsonSchema =>
   nonBlankString({
     maxLength: MAX_URL_LENGTH,
-    format: 'uri',
     pattern: '^https?://',
     description
   })
@@ -91,7 +94,6 @@ export const requiredHttpUrl = (description: string): JsonSchema =>
 export const requiredHttpsUrl = (description: string): JsonSchema =>
   nonBlankString({
     maxLength: MAX_URL_LENGTH,
-    format: 'uri',
     pattern: '^https://',
     description
   })
@@ -99,7 +101,6 @@ export const requiredHttpsUrl = (description: string): JsonSchema =>
 export const optionalHttpUrl = (description: string): JsonSchema => ({
   type: 'string',
   maxLength: MAX_URL_LENGTH,
-  format: 'uri-reference',
   pattern: '^(?:$|https?://)',
   description
 })
@@ -107,14 +108,12 @@ export const optionalHttpUrl = (description: string): JsonSchema => ({
 export const optionalHttpsUrl = (description: string): JsonSchema => ({
   type: 'string',
   maxLength: MAX_URL_LENGTH,
-  format: 'uri-reference',
   pattern: '^(?:$|https://)',
   description
 })
 
 const schemaProperty = (): JsonSchema => ({
   type: 'string',
-  format: 'uri-reference',
   description: 'Local JSON Schema used by editors. The CLI treats this property as file metadata.'
 })
 

@@ -72,8 +72,9 @@ const actionDefinitions: Record<string, JsonSchema> = {
   validationRule: object(
     {
       rule: nonEmptyString({
-        maxLength: 1_000,
-        description: 'Predefined validation name, safe regular expression, or arrow function.'
+        maxLength: 1_048_576,
+        description:
+          'Predefined validation name, safe regular expression of at most 1,000 characters, or arrow function.'
       }),
       errorMessage: nonEmptyString({ description: 'Validation message shown to users.' })
     },
@@ -511,7 +512,7 @@ const actionDefinitions: Record<string, JsonSchema> = {
             customizedPayload: { type: 'object', minProperties: 1 },
             executionConfig: { properties: { type: { const: 'API' } }, required: ['type'] }
           },
-          required: ['customizedPayload', 'executionConfig']
+          required: ['customizedPayload']
         }
       },
       {
