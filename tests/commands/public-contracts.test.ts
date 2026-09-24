@@ -2,10 +2,12 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Command, Config, ux } from '@oclif/core'
+import { type Command, Config, ux } from '@oclif/core'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import AccountSwitch from '../../src/commands/account/switch.js'
+import AppActionsCreate from '../../src/commands/app/actions/create.js'
+import AppActionsPull from '../../src/commands/app/actions/pull.js'
 import AppActionsPush from '../../src/commands/app/actions/push.js'
 import AppActionsValidate from '../../src/commands/app/actions/validate.js'
 import AppBillingValidate from '../../src/commands/app/billing/validate.js'
@@ -18,6 +20,7 @@ import AppPush from '../../src/commands/app/push.js'
 import AppSecurityReview from '../../src/commands/app/security-review.js'
 import AppSsoKey from '../../src/commands/app/sso-key.js'
 import AppTriggersValidate from '../../src/commands/app/triggers/validate.js'
+import AppTypes from '../../src/commands/app/types.js'
 import AppValidate from '../../src/commands/app/validate.js'
 import AppWebhookSubscribe from '../../src/commands/app/webhook/subscribe.js'
 import AppWebhookUnsubscribe from '../../src/commands/app/webhook/unsubscribe.js'
@@ -25,6 +28,7 @@ import AppWebhookUrl from '../../src/commands/app/webhook/url.js'
 import AppWithdraw from '../../src/commands/app/withdraw.js'
 import SandboxDelete from '../../src/commands/sandbox/delete.js'
 import SecretsReveal from '../../src/commands/secrets/reveal.js'
+import Update from '../../src/commands/update.js'
 
 type CommandConstructor = new (argv: string[], config: Config) => Command
 
@@ -42,14 +46,16 @@ let commandIds: Set<string>
 
 async function listCommandIds(directory = COMMAND_DIRECTORY, segments: string[] = []): Promise<string[]> {
   const entries = await fs.readdir(directory, { withFileTypes: true })
-  const ids = await Promise.all(entries.map(async entry => {
-    if (entry.isDirectory()) return listCommandIds(path.join(directory, entry.name), [...segments, entry.name])
-    if (!entry.isFile() || !entry.name.endsWith('.ts')) return []
+  const ids = await Promise.all(
+    entries.map(async entry => {
+      if (entry.isDirectory()) return listCommandIds(path.join(directory, entry.name), [...segments, entry.name])
+      if (!entry.isFile() || !entry.name.endsWith('.ts')) return []
 
-    const commandSegments = [...segments, entry.name.slice(0, -3)]
-    if (commandSegments.at(-1) === 'index') commandSegments.pop()
-    return [commandSegments.join(':')]
-  }))
+      const commandSegments = [...segments, entry.name.slice(0, -3)]
+      if (commandSegments.at(-1) === 'index') commandSegments.pop()
+      return [commandSegments.join(':')]
+    })
+  )
   return ids.flat()
 }
 
@@ -64,7 +70,7 @@ async function runCommand(CommandType: CommandConstructor, args: string[]): Prom
   })
   const previousExitCode = process.exitCode
   process.exitCode = undefined
-  let exitCode = 0
+  let exitCode: number
 
   try {
     const command = new CommandType(args, commandConfig)
@@ -95,6 +101,27 @@ afterAll(async () => {
 })
 
 describe('public command contracts', () => {
+  it('exposes a safe self-update command with a machine-readable dry run', async () => {
+    expect(Update.flags).toEqual(
+      expect.objectContaining({
+        'dry-run': expect.objectContaining({ type: 'boolean', default: false }),
+        'package-manager': expect.objectContaining({ options: ['auto', 'npm', 'pnpm', 'yarn', 'bun', 'volta'] })
+      })
+    )
+
+    const result = await runCommand(Update, ['--dry-run', '--package-manager', 'npm', '--json'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      package: '@gohighlevel/marketplace-cli@latest',
+      packageManager: 'npm',
+      command: 'npm install --global @gohighlevel/marketplace-cli@latest',
+      dryRun: true
+    })
+    expect(commandIds).toContain('update')
+  })
+
   it('documents app-create choices and fails closed when automation omits them', async () => {
     expect(AppCreate.flags.type.options).toEqual(['public', 'private'])
     expect(AppCreate.flags.target.options).toEqual(['sub-account', 'agency'])
@@ -109,12 +136,55 @@ describe('public command contracts', () => {
 
   it('exposes app pull with explicit workspace and version controls', async () => {
     expect(AppPull.args).toHaveProperty('appId')
-    expect(AppPull.flags).toEqual(expect.objectContaining({
-      version: expect.any(Object),
-      directory: expect.any(Object),
-      folder: expect.any(Object)
-    }))
+    expect(AppPull.flags).toEqual(
+      expect.objectContaining({
+        version: expect.any(Object),
+        directory: expect.any(Object),
+        folder: expect.any(Object),
+        'with-types': expect.objectContaining({ type: 'boolean', default: false }),
+        force: expect.objectContaining({ type: 'boolean', default: false })
+      })
+    )
+    expect(AppPull.flags['with-types'].description).toMatch(/TypeScript declarations/i)
+    expect(AppPull.flags['with-types'].description).not.toMatch(/schema|editor/i)
     expect(commandIds).toContain('app:pull')
+  })
+
+  it('generates local types and schemas without authentication', async () => {
+    const directory = path.join(configDir, 'types-workspace')
+    await fs.mkdir(directory)
+    await fs.writeFile(
+      path.join(directory, 'ghl-app.json'),
+      JSON.stringify({ schemaVersion: 1, appId: 'app-1', versionId: 'version-1' })
+    )
+
+    expect(AppTypes.flags).toEqual(
+      expect.objectContaining({
+        directory: expect.any(Object),
+        output: expect.any(Object)
+      })
+    )
+    const result = await runCommand(AppTypes, [
+      '--directory',
+      directory,
+      '--output',
+      'generated/ghl-types.d.ts',
+      '--json'
+    ])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      appId: 'app-1',
+      directory,
+      declarationFile: path.join(directory, 'generated', 'ghl-types.d.ts'),
+      typescriptConfig: {
+        file: path.join(directory, 'tsconfig.json'),
+        status: 'created'
+      },
+      schemaFiles: expect.any(Array)
+    })
+    expect(commandIds).toContain('app:types')
   })
 
   it('exposes the local validate, diff, and push workflow without authenticating invalid workspaces', async () => {
@@ -133,6 +203,38 @@ describe('public command contracts', () => {
     }
   })
 
+  it('prints any supported configuration schema without requiring a workspace', async () => {
+    expect(AppValidate.flags['json-schema']).toMatchObject({ type: 'boolean' })
+    expect(AppValidate.flags.schema).toMatchObject({
+      options: ['app', 'webhooks', 'workflow-action', 'workflow-trigger', 'subscription', 'usage-based']
+    })
+
+    const appResult = await runCommand(AppValidate, ['--json-schema'])
+    expect(appResult.exitCode).toBe(0)
+    expect(appResult.stderr).toBe('')
+    expect(JSON.parse(appResult.stdout)).toMatchObject({
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      $id: 'ghl-app.schema.json',
+      title: 'HighLevel App Manifest'
+    })
+
+    const result = await runCommand(AppValidate, ['--json-schema', '--schema', 'workflow-action'])
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      $id: 'ghl-workflow-action.schema.json',
+      title: 'HighLevel Workflow Action'
+    })
+
+    const missingMode = await runCommand(AppValidate, ['--schema', 'workflow-action'])
+    expect(missingMode.exitCode).not.toBe(0)
+    expect(missingMode.stderr).toMatch(/--schema.*requires.*--json-schema/i)
+
+    const jsonMode = await runCommand(AppValidate, ['--json-schema', '--json'])
+    expect(JSON.parse(jsonMode.stdout)).toMatchObject({ $id: 'ghl-app.schema.json' })
+  })
+
   it('requires a local workspace for webhook mutations before authenticating', async () => {
     const commands = [
       { CommandType: AppWebhookUrl, args: ['https://hooks.example.com'] },
@@ -147,29 +249,29 @@ describe('public command contracts', () => {
       expect(invalid.stderr).not.toMatch(/not logged in/i)
     }
 
-    const invalidUrl = await runCommand(AppWebhookUrl, [
-      'http://127.0.0.1/internal-hook',
-      '--directory',
-      configDir
-    ])
+    const invalidUrl = await runCommand(AppWebhookUrl, ['http://127.0.0.1/internal-hook', '--directory', configDir])
     expect(invalidUrl.exitCode).not.toBe(0)
     expect(invalidUrl.stderr).toMatch(/valid https:\/\/ URL/i)
     expect(invalidUrl.stderr).not.toMatch(/not logged in|app workspace|ghl-app\.json/i)
   })
 
   it('exposes the JSON-first workflow action lifecycle and validates local input before authentication', async () => {
-    expect([...commandIds]).toEqual(expect.arrayContaining([
-      'app:actions',
-      'app:actions:pull',
-      'app:actions:create',
-      'app:actions:validate',
-      'app:actions:test',
-      'app:actions:diff',
-      'app:actions:push',
-      'app:actions:delete',
-      'app:actions:new-version',
-      'app:actions:publish'
-    ]))
+    expect([...commandIds]).toEqual(
+      expect.arrayContaining([
+        'app:actions',
+        'app:actions:pull',
+        'app:actions:create',
+        'app:actions:validate',
+        'app:actions:test',
+        'app:actions:diff',
+        'app:actions:push',
+        'app:actions:delete',
+        'app:actions:new-version',
+        'app:actions:publish'
+      ])
+    )
+    expect(AppActionsCreate.flags.typescript).toMatchObject({ type: 'boolean', default: false })
+    expect(AppActionsPull.flags.force).toMatchObject({ type: 'boolean', default: false })
 
     const invalid = await runCommand(AppActionsValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)
@@ -179,20 +281,19 @@ describe('public command contracts', () => {
     const workspace = path.join(configDir, 'invalid-workflow-action')
     const workflowDirectory = path.join(workspace, 'src', 'modules', 'workflows', 'actions')
     const stateDirectory = path.join(workspace, '.ghl')
-    await Promise.all([
-      fs.mkdir(workflowDirectory, { recursive: true }),
-      fs.mkdir(stateDirectory, { recursive: true })
-    ])
+    await Promise.all([fs.mkdir(workflowDirectory, { recursive: true }), fs.mkdir(stateDirectory, { recursive: true })])
     const action: any = {
       schemaVersion: 1,
       key: 'send_message',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: { name: 'Send message' },
-        customVarsJson: { result: { status: 'delivered' } },
-        customVars: [{ name: 'Status', reference: 'result', fieldType: 'string' }]
-      }]
+      versions: [
+        {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Send message' },
+          customVarsJson: { result: { status: 'delivered' } },
+          customVars: [{ name: 'Status', reference: 'result', fieldType: 'string' }]
+        }
+      ]
     }
     const baseline = { schemaVersion: 1, appId: 'app-1', actions: [] }
     await Promise.all([
@@ -207,7 +308,9 @@ describe('public command contracts', () => {
     const validation = await runCommand(AppActionsValidate, ['--directory', workspace, '--json'])
     expect(validation.exitCode).not.toBe(0)
     const validationFailure = JSON.parse(validation.stdout) as { error: { message: string } }
-    expect(validationFailure.error.message).toMatch(/reference "result" must select a primitive value or a non-empty array/)
+    expect(validationFailure.error.message).toMatch(
+      /reference "result" must select a primitive value or a non-empty array/
+    )
     expect(validationFailure.error.message).not.toMatch(/not logged in/i)
 
     action.versions[0].customVars = []
@@ -227,20 +330,100 @@ describe('public command contracts', () => {
     const pushFailure = JSON.parse(push.stdout) as { error: { message: string } }
     expect(pushFailure.error.message).toMatch(/workflow action code is invalid[\s\S]*send_message\.1\.0\.js:1/i)
     expect(pushFailure.error.message).not.toMatch(/not logged in/i)
+
+    const typedWorkspace = path.join(configDir, 'typed-workflow-action')
+    await fs.mkdir(path.join(typedWorkspace, '.ghl'), { recursive: true })
+    await Promise.all([
+      fs.writeFile(
+        path.join(typedWorkspace, 'ghl-app.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          appId: 'app-2',
+          versionId: 'version-1',
+          oauth: { allowedScopes: ['workflows.readonly'] }
+        })
+      ),
+      fs.writeFile(
+        path.join(typedWorkspace, '.ghl', 'workflow-actions-state.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          appId: 'app-2',
+          baseline: { schemaVersion: 1, appId: 'app-2', actions: [] }
+        })
+      )
+    ])
+    const created = await runCommand(AppActionsCreate, [
+      'Typed action',
+      '--key',
+      'typed_action',
+      '--typescript',
+      '--directory',
+      typedWorkspace,
+      '--json'
+    ])
+    expect(created.exitCode).toBe(0)
+    expect(created.stderr).toBe('')
+    const typedCodeFile = path.join(
+      typedWorkspace,
+      'src',
+      'modules',
+      'workflows',
+      'actions',
+      'code',
+      'typed_action.1.0.ts'
+    )
+    await expect(fs.readFile(typedCodeFile, 'utf8')).resolves.toMatch(/export default action/)
+    await expect(fs.stat(typedCodeFile.replace(/\.ts$/, '.js'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(
+      fs.readFile(path.join(typedWorkspace, '.ghl', 'types', 'actions', 'workflow-action.d.ts'), 'utf8')
+    ).resolves.toMatch(/GhlActionContext/)
+    await expect(fs.readFile(path.join(typedWorkspace, 'tsconfig.actions.json'), 'utf8')).resolves.toMatch(
+      /"lib": \[\s*"ES2022"/
+    )
+    const javascriptCreated = await runCommand(AppActionsCreate, [
+      'Checked JavaScript action',
+      '--key',
+      'checked_javascript_action',
+      '--directory',
+      typedWorkspace,
+      '--json'
+    ])
+    expect(javascriptCreated.exitCode).toBe(0)
+    expect(javascriptCreated.stderr).toBe('')
+    const javascriptCodeFile = path.join(
+      typedWorkspace,
+      'src',
+      'modules',
+      'workflows',
+      'actions',
+      'code',
+      'checked_javascript_action.1.0.js'
+    )
+    await expect(fs.readFile(javascriptCodeFile, 'utf8')).resolves.toMatch(
+      /\/\/ @ts-check[\s\S]*reference path=["']\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/\.ghl\/types\/actions\/checked_javascript_action\.d\.ts["'][\s\S]*export default action/
+    )
+    await expect(
+      fs.readFile(path.join(typedWorkspace, '.ghl', 'types', 'actions', 'eslint.config.actions.mjs'), 'utf8')
+    ).resolves.toContain("'no-undef': 'error'")
+    const checked = await runCommand(AppActionsValidate, ['--directory', typedWorkspace, '--json'])
+    expect(checked.exitCode, `${checked.stdout}\n${checked.stderr}`).toBe(0)
+    expect(checked.stderr).toBe('')
   })
 
   it('exposes the JSON-first workflow trigger lifecycle and validates local input before authentication', async () => {
-    expect([...commandIds]).toEqual(expect.arrayContaining([
-      'app:triggers',
-      'app:triggers:pull',
-      'app:triggers:create',
-      'app:triggers:validate',
-      'app:triggers:diff',
-      'app:triggers:push',
-      'app:triggers:delete',
-      'app:triggers:new-version',
-      'app:triggers:publish'
-    ]))
+    expect([...commandIds]).toEqual(
+      expect.arrayContaining([
+        'app:triggers',
+        'app:triggers:pull',
+        'app:triggers:create',
+        'app:triggers:validate',
+        'app:triggers:diff',
+        'app:triggers:push',
+        'app:triggers:delete',
+        'app:triggers:new-version',
+        'app:triggers:publish'
+      ])
+    )
 
     const invalid = await runCommand(AppTriggersValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)
@@ -249,19 +432,21 @@ describe('public command contracts', () => {
   })
 
   it('exposes JSON-first billing lifecycles and validates the workspace before authentication', async () => {
-    expect([...commandIds]).toEqual(expect.arrayContaining([
-      'app:billing',
-      'app:billing:pull',
-      'app:billing:validate',
-      'app:billing:diff',
-      'app:billing:push',
-      'app:billing:plan',
-      'app:billing:plan:create',
-      'app:billing:plan:delete',
-      'app:billing:meter',
-      'app:billing:meter:create',
-      'app:billing:meter:delete'
-    ]))
+    expect([...commandIds]).toEqual(
+      expect.arrayContaining([
+        'app:billing',
+        'app:billing:pull',
+        'app:billing:validate',
+        'app:billing:diff',
+        'app:billing:push',
+        'app:billing:plan',
+        'app:billing:plan:create',
+        'app:billing:plan:delete',
+        'app:billing:meter',
+        'app:billing:meter:create',
+        'app:billing:meter:delete'
+      ])
+    )
 
     const invalid = await runCommand(AppBillingValidate, ['--directory', configDir])
     expect(invalid.exitCode).not.toBe(0)

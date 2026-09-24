@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { WorkspaceState } from '../../../src/lib/app/workspace.js'
-import {
-  createAppSyncPlan,
-  validateLocalAppWorkspace,
-  validateSyncPlan
-} from '../../../src/lib/app/sync.js'
+import { type WorkspaceState } from '../../../src/lib/app/workspace.js'
+import { createAppSyncPlan, validateLocalAppWorkspace, validateSyncPlan } from '../../../src/lib/app/sync.js'
 import { cloneAppFiles, completeAppFiles, completeAppVersion } from '../../helpers/app-files.js'
 
 function stateFor(files = completeAppFiles()): WorkspaceState {
@@ -83,17 +79,10 @@ describe('createAppSyncPlan', () => {
     const plan = createAppSyncPlan(local, stateFor(baseline), remote)
 
     expect(plan.conflicts).toEqual([])
-    expect(plan.desired.app.oauth.allowedScopes).toEqual([
-      'contacts.readonly',
-      'locations.readonly',
-      'users.readonly'
-    ])
+    expect(plan.desired.app.oauth.allowedScopes).toEqual(['contacts.readonly', 'locations.readonly', 'users.readonly'])
     expect(plan.desired.app.listing.searchKeywords).toEqual(['automation', 'contacts', 'sync'])
     expect(plan.sections).toEqual(['listing', 'authSettings'])
-    expect(plan.remoteChanges.map(change => change.path)).toEqual([
-      'listing.searchKeywords',
-      'oauth.allowedScopes'
-    ])
+    expect(plan.remoteChanges.map(change => change.path)).toEqual(['listing.searchKeywords', 'oauth.allowedScopes'])
   })
 
   it('reports server-owned UI changes without scheduling a mutation API', () => {
@@ -228,10 +217,12 @@ describe('local app validation', () => {
 
     const validation = validateLocalAppWorkspace(files, stateFor(files))
 
-    expect(validation.errors).toEqual(expect.arrayContaining([
-      expect.stringMatching(/workspace\.app\.appId must contain only letters, numbers, underscores, or hyphens/i),
-      expect.stringMatching(/workspace\.app\.versionId must contain only letters, numbers, underscores, or hyphens/i)
-    ]))
+    expect(validation.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/workspace\.app\.appId must contain only letters, numbers, underscores, or hyphens/i),
+        expect.stringMatching(/workspace\.app\.versionId must contain only letters, numbers, underscores, or hyphens/i)
+      ])
+    )
     expect(validation.sections).toEqual([])
   })
 
@@ -253,10 +244,7 @@ describe('local app validation', () => {
 
   it('rejects default redirect changes on draft versions like the portal', () => {
     const baseline = completeAppFiles({
-      redirectUris: [
-        'https://acme.example.com/oauth/callback',
-        'https://acme.example.com/oauth/secondary'
-      ]
+      redirectUris: ['https://acme.example.com/oauth/callback', 'https://acme.example.com/oauth/secondary']
     })
     const local = cloneAppFiles(baseline)
     local.app.oauth.defaults.redirectUrl = 'https://acme.example.com/oauth/secondary'

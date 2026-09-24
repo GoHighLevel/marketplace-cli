@@ -1,29 +1,25 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  BillingSubscriptionManifest,
-  BillingUsageManifest
-} from '../../../src/lib/billing/manifest.js'
-import {
-  planBillingSubscriptionSync,
-  planBillingUsageSync
-} from '../../../src/lib/billing/sync.js'
+import { type BillingSubscriptionManifest, type BillingUsageManifest } from '../../../src/lib/billing/manifest.js'
+import { planBillingSubscriptionSync, planBillingUsageSync } from '../../../src/lib/billing/sync.js'
 
 function subscriptions(name = 'Pro', feature = 'Automation'): BillingSubscriptionManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    plans: [{
-      id: 'plan-1',
-      name,
-      features: [feature],
-      paymentTime: 'month',
-      paymentType: 'recurring',
-      amount: 19.99,
-      freePlan: false,
-      freeForAgency: false,
-      freeForLocation: false
-    }]
+    plans: [
+      {
+        id: 'plan-1',
+        name,
+        features: [feature],
+        paymentTime: 'month',
+        paymentType: 'recurring',
+        amount: 19.99,
+        freePlan: false,
+        freeForAgency: false,
+        freeForLocation: false
+      }
+    ]
   }
 }
 
@@ -31,22 +27,26 @@ function usage(name = 'Executions', limit = 1000): BillingUsageManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    meters: [{
-      id: 'meter-1',
-      productType: 'workflow_action',
-      productId: 'send_message',
-      productName: 'Send message',
-      customPriceType: 'fixed',
-      usageUnit: 'execution',
-      tiers: [{
-        id: 'tier-1',
-        name,
-        minVolume: 0,
-        maxVolume: null,
-        pricePerUnit: 0.01,
-        executionLimitPerCycle: limit
-      }]
-    }]
+    meters: [
+      {
+        id: 'meter-1',
+        productType: 'workflow_action',
+        productId: 'send_message',
+        productName: 'Send message',
+        customPriceType: 'fixed',
+        usageUnit: 'execution',
+        tiers: [
+          {
+            id: 'tier-1',
+            name,
+            minVolume: 0,
+            maxVolume: null,
+            pricePerUnit: 0.01,
+            executionLimitPerCycle: limit
+          }
+        ]
+      }
+    ]
   }
 }
 
@@ -54,11 +54,13 @@ describe('subscription billing synchronization', () => {
   it('merges non-overlapping editable changes and detects same-field conflicts', () => {
     const merged = planBillingSubscriptionSync(subscriptions(), subscriptions('Local'), subscriptions('Pro', 'Portal'))
     expect(merged.conflicts).toEqual([])
-    expect(merged.operations).toEqual([expect.objectContaining({
-      type: 'update-plan',
-      planId: 'plan-1',
-      desired: expect.objectContaining({ name: 'Local', features: ['Portal'] })
-    })])
+    expect(merged.operations).toEqual([
+      expect.objectContaining({
+        type: 'update-plan',
+        planId: 'plan-1',
+        desired: expect.objectContaining({ name: 'Local', features: ['Portal'] })
+      })
+    ])
 
     const conflicted = planBillingSubscriptionSync(subscriptions(), subscriptions('Local'), subscriptions('Portal'))
     expect(conflicted.operations).toEqual([])
@@ -71,10 +73,12 @@ describe('subscription billing synchronization', () => {
     local.plans[0].paymentTime = 'year'
     const plan = planBillingSubscriptionSync(subscriptions(), local, subscriptions())
     expect(plan.operations).toEqual([])
-    expect(plan.errors).toEqual(expect.arrayContaining([
-      expect.stringMatching(/amount.*immutable/i),
-      expect.stringMatching(/paymentTime.*immutable/i)
-    ]))
+    expect(plan.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/amount.*immutable/i),
+        expect.stringMatching(/paymentTime.*immutable/i)
+      ])
+    )
   })
 
   it('plans new plans and conflict-safe deletions', () => {
@@ -89,12 +93,14 @@ describe('subscription billing synchronization', () => {
 describe('usage billing synchronization', () => {
   it('merges non-overlapping tier changes and rejects immutable meter identity changes', () => {
     const merged = planBillingUsageSync(usage(), usage('Local'), usage('Executions', 2000))
-    expect(merged.operations).toEqual([expect.objectContaining({
-      type: 'update-tier',
-      meterId: 'meter-1',
-      tierId: 'tier-1',
-      desiredTier: expect.objectContaining({ name: 'Local', executionLimitPerCycle: 2000 })
-    })])
+    expect(merged.operations).toEqual([
+      expect.objectContaining({
+        type: 'update-tier',
+        meterId: 'meter-1',
+        tierId: 'tier-1',
+        desiredTier: expect.objectContaining({ name: 'Local', executionLimitPerCycle: 2000 })
+      })
+    ])
 
     const local = usage()
     local.meters[0].productId = 'renamed_action'
@@ -119,13 +125,15 @@ describe('usage billing synchronization', () => {
       productName: 'Export',
       customPriceType: 'fixed',
       usageUnit: 'export',
-      tiers: [{
-        name: 'Exports',
-        minVolume: 0,
-        maxVolume: null,
-        pricePerUnit: 0.05,
-        executionLimitPerCycle: 100
-      }]
+      tiers: [
+        {
+          name: 'Exports',
+          minVolume: 0,
+          maxVolume: null,
+          pricePerUnit: 0.05,
+          executionLimitPerCycle: 100
+        }
+      ]
     })
     const plan = planBillingUsageSync(base, local, base)
     expect(plan.operations.map(operation => operation.type)).toEqual(['create-tier', 'create-meter'])
@@ -133,12 +141,14 @@ describe('usage billing synchronization', () => {
 
   it('deletes an existing product meter before creating its replacement', () => {
     const local = usage()
-    local.meters = [{
-      ...local.meters[0],
-      id: undefined,
-      productName: 'Replacement',
-      tiers: local.meters[0].tiers.map(tier => ({ ...tier, id: undefined }))
-    }]
+    local.meters = [
+      {
+        ...local.meters[0],
+        id: undefined,
+        productName: 'Replacement',
+        tiers: local.meters[0].tiers.map(tier => ({ ...tier, id: undefined }))
+      }
+    ]
     const plan = planBillingUsageSync(usage(), local, usage())
     expect(plan.operations.map(operation => operation.type)).toEqual(['delete-meter', 'create-meter'])
   })

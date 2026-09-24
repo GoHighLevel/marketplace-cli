@@ -1,13 +1,10 @@
 import { isRecord } from '../../api/response.js'
 import { workflowActionKeyValidationErrors } from '../actions/key.js'
+import { WORKFLOW_TRIGGER_FIELD_TYPES, WORKFLOW_TRIGGER_INTERNAL_REFERENCES } from './contract.js'
 import {
-  WORKFLOW_TRIGGER_FIELD_TYPES,
-  WORKFLOW_TRIGGER_INTERNAL_REFERENCES
-} from './contract.js'
-import {
-  WorkflowTriggerDefinition,
-  WorkflowTriggersManifest,
-  WorkflowTriggerVersion
+  type WorkflowTriggerDefinition,
+  type WorkflowTriggersManifest,
+  type WorkflowTriggerVersion
 } from './manifest.js'
 import { validateHttpUrl, validateHttpsUrl, validateTextForWhiteLabel } from '../../shared/validation.js'
 import {
@@ -22,6 +19,16 @@ import {
   WORKFLOW_REFERENCE_MAX_LENGTH,
   WORKFLOW_VERSION_MAX_LENGTH
 } from '../shared/value-validation.js'
+import {
+  optionalBoolean,
+  optionalString,
+  propertyPath,
+  requireArray,
+  requireRecord,
+  requiredString,
+  stringArray,
+  unknownProperties
+} from '../shared/schema-primitives.js'
 
 export interface WorkflowTriggerValidationOptions {
   publishable?: boolean
@@ -31,10 +38,15 @@ export interface WorkflowTriggerValidationOptions {
 }
 
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+
 const STATUSES = new Set(['draft', 'in_review', 'published'])
+
 const FIELD_TYPES = new Set<string>(WORKFLOW_TRIGGER_FIELD_TYPES)
+
 const INTERNAL_REFERENCES = new Set<string>(WORKFLOW_TRIGGER_INTERNAL_REFERENCES)
+
 const CUSTOM_VARIABLE_TYPES = new Set(['array', 'boolean', 'date', 'numerical', 'string'])
+
 const FILTER_PROPERTIES = new Set([
   'field',
   'title',
@@ -46,52 +58,6 @@ const FILTER_PROPERTIES = new Set([
   'altersDynamicField',
   'dynamicFieldsConfig'
 ])
-
-function propertyPath(path: string, property: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$-]*$/.test(property)
-    ? `${path}.${property}`
-    : `${path}[${JSON.stringify(property)}]`
-}
-
-function unknownProperties(value: unknown, allowed: Set<string>, path: string, errors: string[]): void {
-  if (!isRecord(value)) return
-  for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) errors.push(`${propertyPath(path, key)} is not a supported property.`)
-  }
-}
-
-function requireRecord(value: unknown, path: string, errors: string[]): value is Record<string, unknown> {
-  if (isRecord(value)) return true
-  errors.push(`${path} must be an object.`)
-  return false
-}
-
-function requireArray(value: unknown, path: string, errors: string[]): value is unknown[] {
-  if (Array.isArray(value)) return true
-  errors.push(`${path} must be an array.`)
-  return false
-}
-
-function requiredString(value: unknown, path: string, errors: string[]): value is string {
-  if (typeof value === 'string' && value.trim()) return true
-  errors.push(`${path} must be a non-empty string.`)
-  return false
-}
-
-function optionalString(value: unknown, path: string, errors: string[]): void {
-  if (value !== undefined && typeof value !== 'string') errors.push(`${path} must be a string.`)
-}
-
-function optionalBoolean(value: unknown, path: string, errors: string[]): void {
-  if (value !== undefined && typeof value !== 'boolean') errors.push(`${path} must be a boolean.`)
-}
-
-function stringArray(value: unknown, path: string, errors: string[]): void {
-  if (!requireArray(value, path, errors)) return
-  value.forEach((item, index) => {
-    if (typeof item !== 'string') errors.push(`${path}[${index}] must be a string.`)
-  })
-}
 
 function validateHeaders(value: unknown, path: string, errors: string[]): void {
   if (!requireRecord(value, path, errors)) return
@@ -131,9 +97,10 @@ function validatePublicUrl(
     errors.push(`${path} must be a string.`)
     return
   }
-  const result = protocol === 'https'
-    ? validateHttpsUrl(value, path, { publicOnly: true })
-    : validateHttpUrl(value, path, { publicOnly: true })
+  const result =
+    protocol === 'https'
+      ? validateHttpsUrl(value, path, { publicOnly: true })
+      : validateHttpUrl(value, path, { publicOnly: true })
   if (result !== true) errors.push(result)
 }
 
@@ -144,7 +111,12 @@ function validateOptions(value: unknown, path: string, errors: string[]): void {
   value.forEach((option, index) => {
     const optionPath = `${path}[${index}]`
     if (!requireRecord(option, optionPath, errors)) return
-    unknownProperties(option, new Set(['label', 'value', 'description', 'disabled', 'icon', 'iconUrl']), optionPath, errors)
+    unknownProperties(
+      option,
+      new Set(['label', 'value', 'description', 'disabled', 'icon', 'iconUrl']),
+      optionPath,
+      errors
+    )
     requiredString(option.label, `${optionPath}.label`, errors)
     if (requiredString(option.value, `${optionPath}.value`, errors)) {
       if (values.has(option.value)) errors.push(`${optionPath}.value duplicates option value "${option.value}".`)
@@ -245,7 +217,8 @@ function validateFilter(
     typeof value.field !== 'string' ||
     !value.field ||
     value.field.length > WORKFLOW_REFERENCE_MAX_LENGTH
-  ) return
+  )
+    return
   const reference = triggerDataReference(triggerData, value.field)
   if (!reference.found) errors.push(`${path}.field "${value.field}" does not resolve in customVarsJson.`)
 }
@@ -264,16 +237,22 @@ function validateCustomVariables(value: unknown, triggerData: unknown, path: str
     requiredString(variable.name, `${variablePath}.name`, errors)
     if (requiredString(variable.reference, `${variablePath}.reference`, errors)) {
       if (variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH) {
-        errors.push(`${variablePath}.reference must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`)
+        errors.push(
+          `${variablePath}.reference must be at most ${WORKFLOW_REFERENCE_MAX_LENGTH.toLocaleString('en-US')} characters.`
+        )
       } else {
-        if (containsWhitespace(variable.reference)) errors.push(`${variablePath}.reference must not contain whitespace.`)
+        if (containsWhitespace(variable.reference))
+          errors.push(`${variablePath}.reference must not contain whitespace.`)
         if (references.has(variable.reference)) {
           errors.push(`${variablePath}.reference duplicates "${variable.reference}".`)
         }
         references.add(variable.reference)
       }
     }
-    if (requiredString(variable.fieldType, `${variablePath}.fieldType`, errors) && !CUSTOM_VARIABLE_TYPES.has(variable.fieldType)) {
+    if (
+      requiredString(variable.fieldType, `${variablePath}.fieldType`, errors) &&
+      !CUSTOM_VARIABLE_TYPES.has(variable.fieldType)
+    ) {
       errors.push(`${variablePath}.fieldType is not supported.`)
     }
     if (
@@ -281,12 +260,15 @@ function validateCustomVariables(value: unknown, triggerData: unknown, path: str
       typeof variable.reference !== 'string' ||
       !variable.reference ||
       variable.reference.length > WORKFLOW_REFERENCE_MAX_LENGTH
-    ) return
+    )
+      return
     const resolved = triggerDataReference(triggerData, variable.reference)
     if (!resolved.found) {
       errors.push(`${variablePath}.reference "${variable.reference}" does not resolve in customVarsJson.`)
     } else if (!resolved.type) {
-      errors.push(`${variablePath}.reference "${variable.reference}" must select a primitive value or a non-empty array.`)
+      errors.push(
+        `${variablePath}.reference "${variable.reference}" must select a primitive value or a non-empty array.`
+      )
     } else if (
       typeof variable.fieldType === 'string' &&
       variable.fieldType !== resolved.type &&
@@ -301,7 +283,12 @@ function validateCustomVariables(value: unknown, triggerData: unknown, path: str
 
 function validateInfo(value: unknown, path: string, errors: string[], whiteLabel: boolean): void {
   if (!requireRecord(value, path, errors)) return
-  unknownProperties(value, new Set(['name', 'description', 'summary', 'groupName', 'keywords', 'icon', 'screenshots']), path, errors)
+  unknownProperties(
+    value,
+    new Set(['name', 'description', 'summary', 'groupName', 'keywords', 'icon', 'screenshots']),
+    path,
+    errors
+  )
   requiredString(value.name, `${path}.name`, errors)
   for (const field of ['description', 'summary', 'groupName', 'icon']) {
     optionalString(value[field], `${path}.${field}`, errors)
@@ -327,12 +314,7 @@ function validateInfo(value: unknown, path: string, errors: string[], whiteLabel
   }
 }
 
-function validateSubscription(
-  value: unknown,
-  path: string,
-  errors: string[],
-  publishable: boolean
-): void {
+function validateSubscription(value: unknown, path: string, errors: string[], publishable: boolean): void {
   if (value === undefined) {
     if (publishable) errors.push(`${path}.url is required before submission for review.`)
     return
@@ -457,12 +439,19 @@ function validateTrigger(
   value.versions.forEach((version, index) => {
     if (isRecord(version)) {
       if (typeof version.version === 'string') {
-        if (versions.has(version.version)) errors.push(`${path}.versions[${index}].version duplicates "${version.version}".`)
+        if (versions.has(version.version))
+          errors.push(`${path}.versions[${index}].version duplicates "${version.version}".`)
         versions.add(version.version)
       }
       if (version.status === 'draft') draftCount += 1
     }
-    validateVersion(version, `${path}.versions[${index}]`, value as unknown as WorkflowTriggerDefinition, options, errors)
+    validateVersion(
+      version,
+      `${path}.versions[${index}]`,
+      value as unknown as WorkflowTriggerDefinition,
+      options,
+      errors
+    )
   })
   if (draftCount > 1) errors.push(`${path}.versions may contain only one draft version.`)
   if (!value.templateId) {
@@ -498,9 +487,7 @@ export function validateWorkflowTriggersManifest(
   })
   if (options.publishable) {
     const triggers = value.triggers.filter(isRecord)
-    const target = options.triggerKey
-      ? triggers.find(trigger => trigger.key === options.triggerKey)
-      : undefined
+    const target = options.triggerKey ? triggers.find(trigger => trigger.key === options.triggerKey) : undefined
     if (options.triggerKey && !target) {
       errors.push(`${path} trigger "${options.triggerKey}" was not found.`)
     } else if (target) {
@@ -514,9 +501,13 @@ export function validateWorkflowTriggersManifest(
       } else if (version.status !== 'draft') {
         errors.push(`${path} trigger "${options.triggerKey}" version ${version.version} is not an editable draft.`)
       }
-    } else if (!triggers.some(trigger =>
-      Array.isArray(trigger.versions) && trigger.versions.some(version => isRecord(version) && version.status === 'draft')
-    )) {
+    } else if (
+      !triggers.some(
+        trigger =>
+          Array.isArray(trigger.versions) &&
+          trigger.versions.some(version => isRecord(version) && version.status === 'draft')
+      )
+    ) {
       errors.push(`${path} contains no draft workflow trigger to validate for publication.`)
     }
   }

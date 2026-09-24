@@ -1,21 +1,24 @@
 import {
-  CreateVersionedWorkflowOperation,
-  DeleteVersionedWorkflowOperation,
+  type CreateVersionedWorkflowOperation,
+  type DeleteVersionedWorkflowOperation,
   planVersionedWorkflowSync,
-  UpdateVersionedWorkflowOperation,
-  VersionedWorkflowSyncOperation,
-  VersionedWorkflowSyncPlan
+  type UpdateVersionedWorkflowOperation,
+  type VersionedWorkflowSyncOperation,
+  type VersionedWorkflowSyncPlan
 } from '../shared/versioned-sync.js'
 import {
-  WorkflowTriggerDefinition,
-  WorkflowTriggersManifest,
-  WorkflowTriggerVersion
+  type WorkflowTriggerDefinition,
+  type WorkflowTriggersManifest,
+  type WorkflowTriggerVersion
 } from './manifest.js'
 
 export type CreateWorkflowTriggerOperation = CreateVersionedWorkflowOperation<WorkflowTriggerDefinition>
 export type DeleteWorkflowTriggerOperation = DeleteVersionedWorkflowOperation
 export type UpdateWorkflowTriggerOperation = UpdateVersionedWorkflowOperation<WorkflowTriggerVersion>
-export type WorkflowTriggerSyncOperation = VersionedWorkflowSyncOperation<WorkflowTriggerDefinition, WorkflowTriggerVersion>
+export type WorkflowTriggerSyncOperation = VersionedWorkflowSyncOperation<
+  WorkflowTriggerDefinition,
+  WorkflowTriggerVersion
+>
 export type WorkflowTriggersSyncPlan = VersionedWorkflowSyncPlan<WorkflowTriggerDefinition, WorkflowTriggerVersion>
 
 function adaptable(manifest: WorkflowTriggersManifest) {

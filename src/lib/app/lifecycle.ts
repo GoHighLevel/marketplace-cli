@@ -1,7 +1,9 @@
-import { AppVersion } from '../api/client.js'
+import { errorMessage } from '../shared/errors.js'
+import type { AppVersion } from '../api/types.js'
 import { writeJsonFileAtomic } from '../shared/json-file.js'
 import { readLocalAppWorkspace } from './local-workspace.js'
 import { readPullWorkspaceBinding } from './pull.js'
+import { withJsonSchemaReference, writeJsonSchemaWorkspace } from './json-schema.js'
 
 export interface AppLifecycleClient {
   listVersions(appId: string): Promise<Array<{ _id: string; version?: string }>>
@@ -74,13 +76,24 @@ export async function refreshAppWorkspaceLifecycle(
   workspace.state.baseline.app.status = status
 
   const managedWrites: Array<[string, unknown, unknown, number]> = [
-    [workspace.appFile, workspace.files.app, originalApp, 0o644],
+    [
+      workspace.appFile,
+      withJsonSchemaReference(workspace.files.app, 'app'),
+      withJsonSchemaReference(originalApp, 'app'),
+      0o644
+    ],
     [workspace.stateFile, workspace.state, originalState, 0o600]
   ]
   if (workspace.webhookFileExists) {
-    managedWrites.push([workspace.webhookFile, workspace.files.webhooks, originalWebhooks, 0o644])
+    managedWrites.push([
+      workspace.webhookFile,
+      withJsonSchemaReference(workspace.files.webhooks, 'webhooks'),
+      withJsonSchemaReference(originalWebhooks, 'webhooks'),
+      0o644
+    ])
   }
 
+  await writeJsonSchemaWorkspace(workspace.directory)
   const writes = await Promise.allSettled(
     managedWrites.map(([file, current, , mode]) => writeJsonFileAtomic(file, current, mode))
   )
@@ -89,7 +102,7 @@ export async function refreshAppWorkspaceLifecycle(
     const restored = await Promise.allSettled(
       managedWrites.map(([file, , original, mode]) => writeJsonFileAtomic(file, original, mode))
     )
-    const reason = failure.reason instanceof Error ? failure.reason.message : 'Unknown write failure.'
+    const reason = errorMessage(failure.reason, 'Unknown write failure.')
     if (restored.some(result => result.status === 'rejected')) {
       throw new Error(
         `Local lifecycle synchronization failed and rollback was incomplete: ${reason} ` +

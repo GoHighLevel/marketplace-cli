@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { WorkflowActionsManifest } from '../../../../src/lib/workflows/actions/manifest.js'
+import { type WorkflowActionsManifest } from '../../../../src/lib/workflows/actions/manifest.js'
 import { planWorkflowActionsSync } from '../../../../src/lib/workflows/actions/sync.js'
 
 function manifest(description = 'Base', summary = 'Base summary'): WorkflowActionsManifest {
@@ -57,6 +57,30 @@ describe('workflow action synchronization', () => {
 
     expect(plan.operations).toEqual([])
     expect(plan.conflicts).toEqual(['actions.send_message.versions.1.1.info.description'])
+  })
+
+  it('treats portal JavaScript edits as conflicts for TypeScript-managed action versions', () => {
+    const base = manifest()
+    base.actions[0].versions[0].executionConfig = { type: 'CODE', code: 'return { result: 1 };' }
+    const local = structuredClone(base)
+    const remote = structuredClone(base)
+    remote.actions[0].versions[0].executionConfig = { type: 'CODE', code: 'return { result: 2 };' }
+
+    const plan = planWorkflowActionsSync(base, local, remote, {
+      codeSources: [
+        {
+          actionKey: 'send_message',
+          version: '1.1',
+          language: 'typescript',
+          file: '/workspace/send_message.1.1.ts',
+          source: 'export default async () => ({ result: 1 })',
+          compiledCode: 'return { result: 1 };'
+        }
+      ]
+    })
+
+    expect(plan.operations).toEqual([])
+    expect(plan.conflicts).toContain('actions.send_message.versions.1.1.executionConfig.code')
   })
 
   it('plans local additions and deletions explicitly', () => {

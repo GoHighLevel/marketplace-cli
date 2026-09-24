@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { readJsonFile } from '../../../src/lib/shared/json-file.js'
+import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
 import {
   AGENTS_FILENAME,
   APP_MANIFEST_FILENAME,
@@ -58,7 +59,9 @@ describe('app workspace paths', () => {
 
     const fileParent = path.join(directory, 'not-a-directory')
     await fs.writeFile(fileParent, 'x')
-    await expect(assertAppDirectoryAvailable(resolveAppDirectory(fileParent, 'app'))).rejects.toThrow(/not a directory/i)
+    await expect(assertAppDirectoryAvailable(resolveAppDirectory(fileParent, 'app'))).rejects.toThrow(
+      /not a directory/i
+    )
   })
 
   it('fails before mutation when an unrelated non-empty folder would be overwritten', async () => {
@@ -72,6 +75,25 @@ describe('app workspace paths', () => {
 })
 
 describe('writeAppWorkspace', () => {
+  it('can omit JSON Schema artifacts when an internal caller explicitly disables them', async () => {
+    const target = resolveAppDirectory(directory, 'without-types')
+    const result = await writeAppWorkspace({
+      directory: target,
+      version: {
+        _id: 'version-1',
+        appId: 'app-1',
+        name: 'Acme',
+        webhookUrl: 'https://acme.test/webhooks'
+      },
+      includeJsonSchema: false
+    })
+
+    await expect(readJsonFile(result.appFile)).resolves.not.toHaveProperty('$schema')
+    await expect(readJsonFile(result.webhookFile!)).resolves.not.toHaveProperty('$schema')
+    await expect(fs.stat(path.join(target, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(target, '.vscode'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('omits webhook files and directories when the app has no webhook configuration', async () => {
     const target = resolveAppDirectory(directory, 'without-webhooks')
     const result = await writeAppWorkspace({
@@ -121,11 +143,19 @@ describe('writeAppWorkspace', () => {
       webhookFile: path.join(target, WEBHOOK_MANIFEST_RELATIVE_PATH),
       stateFile: path.join(target, WORKSPACE_STATE_RELATIVE_PATH)
     })
-    await expect(readJsonFile(result.appFile)).resolves.toMatchObject({ appId: 'app-1', versionId: 'version-1' })
-    await expect(readJsonFile(result.webhookFile!)).resolves.toMatchObject({ webhookUrl: 'https://acme.test/webhooks' })
+    await expect(readJsonFile(result.appFile)).resolves.toMatchObject({
+      $schema: JSON_SCHEMA_REFERENCES.app,
+      appId: 'app-1',
+      versionId: 'version-1'
+    })
+    await expect(readJsonFile(result.webhookFile!)).resolves.toMatchObject({
+      $schema: JSON_SCHEMA_REFERENCES.webhooks,
+      webhookUrl: 'https://acme.test/webhooks'
+    })
     expect((await fs.stat(result.appFile)).mode & 0o777).toBe(0o644)
     expect((await fs.stat(result.webhookFile!)).mode & 0o777).toBe(0o644)
-    await expect(readJsonFile(result.stateFile)).resolves.toMatchObject({
+    const state = await readJsonFile<Record<string, unknown>>(result.stateFile)
+    expect(state).toMatchObject({
       schemaVersion: 1,
       appId: 'app-1',
       versionId: 'version-1',
@@ -134,6 +164,8 @@ describe('writeAppWorkspace', () => {
         webhooks: { appId: 'app-1', versionId: 'version-1' }
       }
     })
+    expect(state).not.toHaveProperty('baseline.app.$schema')
+    expect(state).not.toHaveProperty('baseline.webhooks.$schema')
     expect((await fs.stat(result.stateFile)).mode & 0o777).toBe(0o600)
     expect((await fs.stat(path.dirname(result.stateFile))).mode & 0o777).toBe(0o700)
     expect((await fs.stat(target)).mode & 0o777).toBe(0o755)
@@ -146,6 +178,13 @@ describe('writeAppWorkspace', () => {
       /GHL marketplace app workspace[\s\S]*ghl-app\.json[\s\S]*src\/webhooks\/ghl-webhooks\.json[\s\S]*complete command reference/i
     )
     expect(claude).toMatch(/CLAUDE\.md[\s\S]*Claude Code[\s\S]*complete command reference/i)
+    for (const document of [agents, claude]) {
+      expect(document).toContain('`ghl-app.d.ts` provides compile-time types')
+      expect(document).toContain('automatically included in `tsconfig.json` or `jsconfig.json`')
+      expect(document).toContain('`.ghl/schemas/*.schema.json` and `.vscode/settings.json` provide JSON validation')
+      expect(document).toContain('`--with-types`')
+      expect(document).toContain('`--json-schema`')
+    }
     for (const command of commandNames) {
       expect(agents, `${command} missing from AGENTS.md`).toContain(`\`${command}`)
       expect(claude, `${command} missing from CLAUDE.md`).toContain(`\`${command}`)
@@ -153,13 +192,20 @@ describe('writeAppWorkspace', () => {
     expect(appGuide).toMatch(
       /HighLevel marketplace app[\s\S]*Workspace structure[\s\S]*ghl-app\.json[\s\S]*src\/webhooks\/ghl-webhooks\.json[\s\S]*App configuration sections[\s\S]*Version model[\s\S]*Local workflow/i
     )
-    expect(appGuide).toMatch(
-      /customVarsJson[\s\S]*customVars[\s\S]*branchesConfig[\s\S]*conditionType[\s\S]*branchId/i
-    )
+    expect(appGuide).toMatch(/customVarsJson[\s\S]*customVars[\s\S]*branchesConfig[\s\S]*conditionType[\s\S]*branchId/i)
     expect(appGuide).toMatch(
       /src\/modules\/workflows\/actions[\s\S]*one JSON file per action[\s\S]*required[\s\S]*key[\s\S]*filename/i
     )
-    for (const section of ['Basic information', 'Listing', 'Profiles', 'OAuth', 'Support', 'Billing', 'Review', 'Webhooks']) {
+    for (const section of [
+      'Basic information',
+      'Listing',
+      'Profiles',
+      'OAuth',
+      'Support',
+      'Billing',
+      'Review',
+      'Webhooks'
+    ]) {
       expect(appGuide).toContain(section)
     }
     expect(appGuide).toMatch(/external authentication[\s\S]*MCP configuration[\s\S]*custom pages/i)
@@ -191,7 +237,9 @@ describe('writeAppWorkspace', () => {
     await expect(fs.readFile(path.join(target, 'developer-file.ts'), 'utf8')).resolves.toBe('preserve me')
     const customInstructions = await fs.readFile(path.join(target, AGENTS_FILENAME), 'utf8')
     expect(customInstructions).toMatch(/^custom agent instructions[\s\S]*complete command reference/i)
-    await expect(fs.readFile(path.join(target, CLAUDE_FILENAME), 'utf8')).resolves.toMatch(/complete command reference/i)
+    await expect(fs.readFile(path.join(target, CLAUDE_FILENAME), 'utf8')).resolves.toMatch(
+      /complete command reference/i
+    )
     expect((await fs.stat(target)).mode & 0o777).toBe(0o700)
 
     await expect(

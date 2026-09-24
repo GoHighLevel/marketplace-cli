@@ -181,7 +181,11 @@ function imageDimensions(data: Buffer, extension: string): ImageDimensions | und
   return undefined
 }
 
-function validateImageDimensions(dimensions: ImageDimensions | undefined, kind: 'logo' | 'preview', filePath: string): void {
+function validateImageDimensions(
+  dimensions: ImageDimensions | undefined,
+  kind: 'logo' | 'preview',
+  filePath: string
+): void {
   if (!dimensions || dimensions.width <= 0 || dimensions.height <= 0) {
     throw new Error(`"${filePath}" is not a valid readable image.`)
   }

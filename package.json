@@ -1,6 +1,6 @@
 {
   "name": "@gohighlevel/marketplace-cli",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "Command-line interface for the GoHighLevel marketplace developer portal — build, configure, and publish marketplace apps from the terminal",
   "keywords": [
     "gohighlevel",
@@ -43,10 +43,13 @@
     "pretest": "npm run build && npm run manifest",
     "test": "vitest run",
     "posttest": "node scripts/cleanup-manifest.mjs",
-    "lint": "tsc --noEmit",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "eslint --fix . && prettier --write .",
+    "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm test && npm run lint",
     "prepack": "npm run build && npm run manifest",
-    "postpack": "node scripts/cleanup-manifest.mjs"
+    "postpack": "node scripts/cleanup-manifest.mjs",
+    "prepare": "husky"
   },
   "oclif": {
     "bin": "ghl",
@@ -113,15 +116,34 @@
     "@oclif/plugin-commands": "^4.1.62",
     "@oclif/plugin-help": "^6.2.56",
     "acorn": "^8.18.0",
+    "ajv": "^8.20.0",
+    "jsonc-parser": "^3.3.1",
     "open": "^10.1.0",
-    "redos-detector": "^6.1.4"
+    "redos-detector": "^6.1.4",
+    "typescript": "5.9.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@inquirer/testing": "^3.3.9",
     "@types/node": "^22.10.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
     "oclif": "^4.23.30",
-    "typescript": "^5.7.0",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "~8.55.0",
     "vite": "^6.4.3",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.11"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

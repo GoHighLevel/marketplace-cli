@@ -49,10 +49,7 @@ export const WORKFLOW_ACTION_FIELD_TYPES = [
 
 export const WORKFLOW_ACTION_REQUIRED_SCOPE = 'workflows.readonly'
 
-export function workflowActionPrerequisiteErrors(
-  allowedScopes: readonly string[],
-  actionCount: number
-): string[] {
+export function workflowActionPrerequisiteErrors(allowedScopes: readonly string[], actionCount: number): string[] {
   if (actionCount === 0 || allowedScopes.includes(WORKFLOW_ACTION_REQUIRED_SCOPE)) return []
   return [
     `ghl-app.json.oauth.allowedScopes must include "${WORKFLOW_ACTION_REQUIRED_SCOPE}" ` +

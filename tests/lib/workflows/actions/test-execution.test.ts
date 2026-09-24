@@ -80,13 +80,15 @@ describe('workflow action execution tests', () => {
         executionConfig: { type: 'CODE', code: 'return {}' },
         branchesConfig: {
           predefinedBranches: {
-            branches: [{
-              id: 'branch-1',
-              branchName: 'Ready',
-              conditionType: 'user-defined',
-              fields: { outcome: 'ready' },
-              meta: { category: 'qualified' }
-            }]
+            branches: [
+              {
+                id: 'branch-1',
+                branchName: 'Ready',
+                conditionType: 'user-defined',
+                fields: { outcome: 'ready' },
+                meta: { category: 'qualified' }
+              }
+            ]
           }
         }
       }
@@ -94,47 +96,51 @@ describe('workflow action execution tests', () => {
 
     expect(request.inputData).toEqual({
       score: 95,
-      branches: [{
-        id: 'branch-1',
-        name: 'Ready',
-        fields: { outcome: 'ready' },
-        meta: { category: 'qualified' }
-      }]
+      branches: [
+        {
+          id: 'branch-1',
+          name: 'Ready',
+          fields: { outcome: 'ready' },
+          meta: { category: 'qualified' }
+        }
+      ]
     })
   })
 
   it('does not allow test input to override configured branches', () => {
-    expect(() => prepareWorkflowActionTestRequest({
-      appId: 'app-1',
-      inputData: { branches: [] },
-      version: {
-        version: '1.0',
-        status: 'draft',
-        info: { name: 'Route contact' },
-        executionConfig: { type: 'CODE', code: 'return {}' },
-        branchesConfig: {
-          predefinedBranches: {
-            branches: [{
-              id: 'branch-1',
-              branchName: 'Ready',
-              conditionType: 'user-defined',
-              fields: { outcome: 'ready' }
-            }]
+    expect(() =>
+      prepareWorkflowActionTestRequest({
+        appId: 'app-1',
+        inputData: { branches: [] },
+        version: {
+          version: '1.0',
+          status: 'draft',
+          info: { name: 'Route contact' },
+          executionConfig: { type: 'CODE', code: 'return {}' },
+          branchesConfig: {
+            predefinedBranches: {
+              branches: [
+                {
+                  id: 'branch-1',
+                  branchName: 'Ready',
+                  conditionType: 'user-defined',
+                  fields: { outcome: 'ready' }
+                }
+              ]
+            }
           }
         }
-      }
-    })).toThrow(/reserved field "branches"/i)
+      })
+    ).toThrow(/reserved field "branches"/i)
   })
 
   it('rejects failed tests and primitive code output', () => {
-    expect(() => assertWorkflowActionTestSucceeded(
-      { hasError: true, errorMessage: { status: 500, error: 'failed' } },
-      'API'
-    )).toThrow(/workflow action test failed.*500.*failed/i)
+    expect(() =>
+      assertWorkflowActionTestSucceeded({ hasError: true, errorMessage: { status: 500, error: 'failed' } }, 'API')
+    ).toThrow(/workflow action test failed.*500.*failed/i)
 
-    expect(() => assertWorkflowActionTestSucceeded(
-      { hasError: false, output: 'primitive' },
-      'CODE'
-    )).toThrow(/code output must be a JavaScript object or array/i)
+    expect(() => assertWorkflowActionTestSucceeded({ hasError: false, output: 'primitive' }, 'CODE')).toThrow(
+      /code output must be a JavaScript object or array/i
+    )
   })
 })

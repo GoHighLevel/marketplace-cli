@@ -3,16 +3,18 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiClient, AppVersion } from '../../../src/lib/api/client.js'
-import { buildAppFiles, WebhookManifest } from '../../../src/lib/app/manifest.js'
+import { type ApiClient } from '../../../src/lib/api/client.js'
+import type { AppVersion } from '../../../src/lib/api/types.js'
+import { buildAppFiles, type WebhookManifest } from '../../../src/lib/app/manifest.js'
+import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
 import { readLocalAppWorkspace } from '../../../src/lib/app/local-workspace.js'
 import { createAppSyncPlan, validateLocalAppWorkspace } from '../../../src/lib/app/sync.js'
-import { CliConfig } from '../../../src/lib/config/environment.js'
+import { type CliConfig } from '../../../src/lib/config/environment.js'
 import { readJsonFile, writeJsonFileAtomic } from '../../../src/lib/shared/json-file.js'
 import {
   applyWebhookWorkspaceMutation,
-  WebhookMutationRuntime,
-  WebhookWorkspaceMutationContext
+  type WebhookMutationRuntime,
+  type WebhookWorkspaceMutationContext
 } from '../../../src/lib/webhooks/workspace-mutation.js'
 import { writeAppWorkspace } from '../../../src/lib/app/workspace.js'
 import { cloneAppFiles, completeAppVersion } from '../../helpers/app-files.js'
@@ -73,15 +75,20 @@ describe('applyWebhookWorkspaceMutation', () => {
     const executePlan = vi.fn().mockImplementation(async () => {
       const local = await readJsonFile<WebhookManifest>(context.local.webhookFile)
       const state = await readJsonFile<{ baseline: { webhooks: WebhookManifest } }>(context.local.stateFile)
+      expect(local).toMatchObject({ $schema: JSON_SCHEMA_REFERENCES.webhooks })
       expect(local?.subscribedEvents).toEqual([{ name: 'ContactCreate' }])
       expect(state?.baseline.webhooks.subscribedEvents).toHaveLength(2)
       return { appliedSections: ['authSettings'] as const, versionId: 'version-1' }
     })
 
-    const result = await applyWebhookWorkspaceMutation(context, configuration(desiredVersion), runtime({
-      executePlan,
-      loadVersion: vi.fn().mockResolvedValue(desiredVersion)
-    }))
+    const result = await applyWebhookWorkspaceMutation(
+      context,
+      configuration(desiredVersion),
+      runtime({
+        executePlan,
+        loadVersion: vi.fn().mockResolvedValue(desiredVersion)
+      })
+    )
 
     expect(result).toMatchObject({ applied: true, recovered: false, versionId: 'version-1' })
     const refreshed = await readLocalAppWorkspace(context.local.directory)
@@ -93,11 +100,17 @@ describe('applyWebhookWorkspaceMutation', () => {
     const context = await mutationContext()
     const desiredVersion = completeAppVersion({ subscribedEvents: [{ name: 'ContactCreate' }] })
 
-    await expect(applyWebhookWorkspaceMutation(context, configuration(desiredVersion), runtime({
-      executePlan: vi.fn().mockRejectedValue(new Error('request rejected')),
-      loadVersion: vi.fn().mockResolvedValue(context.remoteVersion),
-      loadLatestVersion: vi.fn().mockResolvedValue(context.remoteVersion)
-    }))).rejects.toThrow(/request rejected.*restored/i)
+    await expect(
+      applyWebhookWorkspaceMutation(
+        context,
+        configuration(desiredVersion),
+        runtime({
+          executePlan: vi.fn().mockRejectedValue(new Error('request rejected')),
+          loadVersion: vi.fn().mockResolvedValue(context.remoteVersion),
+          loadLatestVersion: vi.fn().mockResolvedValue(context.remoteVersion)
+        })
+      )
+    ).rejects.toThrow(/request rejected.*restored/i)
 
     const restored = await readLocalAppWorkspace(context.local.directory)
     expect(restored.files.webhooks).toEqual(context.local.files.webhooks)
@@ -112,11 +125,17 @@ describe('applyWebhookWorkspaceMutation', () => {
       subscribedEvents: [{ name: 'ContactCreate' }]
     })
 
-    await expect(applyWebhookWorkspaceMutation(context, configuration(desiredVersion), runtime({
-      executePlan: vi.fn().mockRejectedValue(new Error('request rejected')),
-      loadVersion: vi.fn().mockResolvedValue(initialVersion),
-      loadLatestVersion: vi.fn().mockResolvedValue(initialVersion)
-    }))).rejects.toThrow(/request rejected.*restored/i)
+    await expect(
+      applyWebhookWorkspaceMutation(
+        context,
+        configuration(desiredVersion),
+        runtime({
+          executePlan: vi.fn().mockRejectedValue(new Error('request rejected')),
+          loadVersion: vi.fn().mockResolvedValue(initialVersion),
+          loadLatestVersion: vi.fn().mockResolvedValue(initialVersion)
+        })
+      )
+    ).rejects.toThrow(/request rejected.*restored/i)
 
     await expect(fs.stat(path.dirname(context.local.webhookFile))).rejects.toMatchObject({ code: 'ENOENT' })
     expect((await readLocalAppWorkspace(context.local.directory)).files.webhooks.subscribedEvents).toEqual([])
@@ -126,11 +145,17 @@ describe('applyWebhookWorkspaceMutation', () => {
     const context = await mutationContext()
     const desiredVersion = completeAppVersion({ subscribedEvents: [{ name: 'ContactCreate' }] })
 
-    await expect(applyWebhookWorkspaceMutation(context, configuration(desiredVersion), runtime({
-      executePlan: vi.fn().mockRejectedValue(new Error('connection reset')),
-      loadVersion: vi.fn().mockRejectedValue(new Error('offline')),
-      loadLatestVersion: vi.fn().mockRejectedValue(new Error('offline'))
-    }))).rejects.toThrow(/could not be verified.*kept as a pending change/i)
+    await expect(
+      applyWebhookWorkspaceMutation(
+        context,
+        configuration(desiredVersion),
+        runtime({
+          executePlan: vi.fn().mockRejectedValue(new Error('connection reset')),
+          loadVersion: vi.fn().mockRejectedValue(new Error('offline')),
+          loadLatestVersion: vi.fn().mockRejectedValue(new Error('offline'))
+        })
+      )
+    ).rejects.toThrow(/could not be verified.*kept as a pending change/i)
 
     const pending = await readLocalAppWorkspace(context.local.directory)
     expect(pending.files.webhooks.subscribedEvents).toEqual([{ name: 'ContactCreate' }])
@@ -144,11 +169,15 @@ describe('applyWebhookWorkspaceMutation', () => {
       subscribedEvents: [{ name: 'ContactCreate' }]
     })
 
-    const result = await applyWebhookWorkspaceMutation(context, configuration(desiredVersion), runtime({
-      executePlan: vi.fn().mockRejectedValue(new Error('response lost')),
-      loadVersion: vi.fn().mockResolvedValue(context.remoteVersion),
-      loadLatestVersion: vi.fn().mockResolvedValue(desiredVersion)
-    }))
+    const result = await applyWebhookWorkspaceMutation(
+      context,
+      configuration(desiredVersion),
+      runtime({
+        executePlan: vi.fn().mockRejectedValue(new Error('response lost')),
+        loadVersion: vi.fn().mockResolvedValue(context.remoteVersion),
+        loadLatestVersion: vi.fn().mockResolvedValue(desiredVersion)
+      })
+    )
 
     expect(result).toMatchObject({ applied: true, recovered: true, versionId: 'draft-2' })
     const refreshed = await readLocalAppWorkspace(context.local.directory)
@@ -183,11 +212,9 @@ describe('applyWebhookWorkspaceMutation', () => {
     context.plan = createAppSyncPlan(local.files, local.state, context.remoteFiles)
     const executePlan = vi.fn()
 
-    await expect(applyWebhookWorkspaceMutation(
-      context,
-      configuration(context.remoteVersion),
-      runtime({ executePlan })
-    )).rejects.toThrow(/pending local app changes.*basicInfo\.tagline.*app push/i)
+    await expect(
+      applyWebhookWorkspaceMutation(context, configuration(context.remoteVersion), runtime({ executePlan }))
+    ).rejects.toThrow(/pending local app changes.*basicInfo\.tagline.*app push/i)
 
     expect(executePlan).not.toHaveBeenCalled()
     const unchanged = await readLocalAppWorkspace(context.local.directory)

@@ -5,24 +5,25 @@ import { isRecord } from '../api/response.js'
 import { writeTextFileAtomic } from '../shared/atomic-file.js'
 import { writeWorkspaceDocumentation } from '../app/instructions.js'
 import { readLocalAppWorkspace } from '../app/local-workspace.js'
-import { AppManifest } from '../app/manifest.js'
+import { type AppManifest } from '../app/manifest.js'
 import { readPullWorkspaceBinding } from '../app/pull.js'
 import { APP_MANIFEST_FILENAME } from '../app/workspace.js'
 import { BILLING_GUIDE_FILENAME, buildBillingGuide } from './guide.js'
 import {
-  BillingSubscriptionManifest,
-  BillingUsageManifest,
+  type BillingSubscriptionManifest,
+  type BillingUsageManifest,
   emptyBillingSubscriptionManifest,
   emptyBillingUsageManifest
 } from './manifest.js'
 import {
-  BillingSubscriptionValidationOptions,
-  BillingUsageValidationOptions,
+  type BillingSubscriptionValidationOptions,
+  type BillingUsageValidationOptions,
   validateBillingSubscriptionManifest,
   validateBillingUsageManifest
 } from './schema.js'
 import { readJsonFile, writeJsonFileAtomic } from '../shared/json-file.js'
 import { removeEmptyDirectoryTree, removeRegularFileIfPresent } from '../shared/workspace-files.js'
+import { withJsonSchemaReference, withoutJsonSchemaReference, writeJsonSchemaWorkspace } from '../app/json-schema.js'
 
 export { BILLING_GUIDE_FILENAME }
 export const BILLING_DIRECTORY_RELATIVE_PATH = path.join('src', 'billing')
@@ -56,6 +57,10 @@ export interface BillingWorkspaceResult {
   usageFile?: string
   guideFile?: string
   stateFile: string
+}
+
+export interface WriteBillingWorkspaceOptions {
+  includeJsonSchema?: boolean
 }
 
 interface BillingBinding {
@@ -116,7 +121,8 @@ async function loadBinding(inputDirectory: string): Promise<BillingBinding> {
     errors.push('listing.userTypes')
   }
   if (!listing || typeof listing.isWhiteLabelFriendly !== 'boolean') errors.push('listing.isWhiteLabelFriendly')
-  if (!billing || !['free', 'paid', 'freemium'].includes(String(billing.billingType))) errors.push('billing.billingType')
+  if (!billing || !['free', 'paid', 'freemium'].includes(String(billing.billingType)))
+    errors.push('billing.billingType')
   if (!billing || typeof billing.externalBilling !== 'boolean') errors.push('billing.externalBilling')
   if (errors.length > 0) {
     throw new Error(`App manifest is missing billing prerequisites: ${errors.join(', ')}. Run \`ghl app pull\` again.`)
@@ -162,12 +168,7 @@ function assertManifestAppIds(
   if (errors.length > 0) throw new Error(`Billing configuration is invalid:\n- ${errors.join('\n- ')}`)
 }
 
-function validateManifests(
-  binding: BillingBinding,
-  subscriptions: unknown,
-  usage: unknown,
-  contextual = true
-): void {
+function validateManifests(binding: BillingBinding, subscriptions: unknown, usage: unknown, contextual = true): void {
   const errors = [
     ...validateBillingSubscriptionManifest(subscriptions, {
       ...binding.subscriptionOptions,
@@ -195,7 +196,11 @@ async function assertBillingPathsSafe(binding: BillingBinding): Promise<void> {
     }
   }
   await Promise.all([
-    requireSafeRegularFile(path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH), 'Subscription manifest', true),
+    requireSafeRegularFile(
+      path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH),
+      'Subscription manifest',
+      true
+    ),
     requireSafeRegularFile(path.join(binding.directory, BILLING_USAGE_RELATIVE_PATH), 'Usage-based manifest', true),
     requireSafeRegularFile(path.join(binding.directory, BILLING_STATE_RELATIVE_PATH), 'Billing state', true)
   ])
@@ -205,21 +210,38 @@ async function writeBillingSources(
   binding: BillingBinding,
   subscriptions: BillingSubscriptionManifest,
   usage: BillingUsageManifest,
-  contextual: boolean
+  contextual: boolean,
+  options: WriteBillingWorkspaceOptions = {}
 ): Promise<Omit<BillingWorkspaceResult, 'stateFile'>> {
   validateManifests(binding, subscriptions, usage, contextual)
   assertManifestAppIds(binding, subscriptions, usage)
   await assertBillingPathsSafe(binding)
+  const includeJsonSchema = options.includeJsonSchema !== false
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(binding.directory)
   const billingDirectory = path.join(binding.directory, BILLING_DIRECTORY_RELATIVE_PATH)
   const subscriptionPath = path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH)
   const usagePath = path.join(binding.directory, BILLING_USAGE_RELATIVE_PATH)
   const guidePath = path.join(billingDirectory, BILLING_GUIDE_FILENAME)
   const hasSources = subscriptions.plans.length > 0 || usage.meters.length > 0
   if (hasSources) await fs.mkdir(billingDirectory, { recursive: true, mode: 0o755 })
-  if (subscriptions.plans.length > 0) await writeJsonFileAtomic(subscriptionPath, subscriptions, 0o644)
-  else await removeRegularFileIfPresent(subscriptionPath, 'Subscription manifest')
-  if (usage.meters.length > 0) await writeJsonFileAtomic(usagePath, usage, 0o644)
-  else await removeRegularFileIfPresent(usagePath, 'Usage-based manifest')
+  if (subscriptions.plans.length > 0) {
+    await writeJsonFileAtomic(
+      subscriptionPath,
+      includeJsonSchema ? withJsonSchemaReference(subscriptions, 'subscription') : subscriptions,
+      0o644
+    )
+  } else {
+    await removeRegularFileIfPresent(subscriptionPath, 'Subscription manifest')
+  }
+  if (usage.meters.length > 0) {
+    await writeJsonFileAtomic(
+      usagePath,
+      includeJsonSchema ? withJsonSchemaReference(usage, 'usage-based') : usage,
+      0o644
+    )
+  } else {
+    await removeRegularFileIfPresent(usagePath, 'Usage-based manifest')
+  }
   if (hasSources) await writeTextFileAtomic(guidePath, buildBillingGuide())
   else await removeRegularFileIfPresent(guidePath, 'Billing guide')
   await removeEmptyDirectoryTree(billingDirectory, binding.directory)
@@ -236,12 +258,13 @@ export async function writeBillingWorkspace(
   directory: string,
   subscriptions: BillingSubscriptionManifest,
   usage: BillingUsageManifest,
-  baseline: { subscriptions: BillingSubscriptionManifest; usage: BillingUsageManifest } = { subscriptions, usage }
+  baseline: { subscriptions: BillingSubscriptionManifest; usage: BillingUsageManifest } = { subscriptions, usage },
+  options: WriteBillingWorkspaceOptions = {}
 ): Promise<BillingWorkspaceResult> {
   const binding = await loadBinding(directory)
   validateManifests(binding, baseline.subscriptions, baseline.usage, false)
   assertManifestAppIds(binding, baseline.subscriptions, baseline.usage)
-  const sources = await writeBillingSources(binding, subscriptions, usage, false)
+  const sources = await writeBillingSources(binding, subscriptions, usage, false, options)
   const stateFile = path.join(binding.directory, BILLING_STATE_RELATIVE_PATH)
   const state: BillingState = {
     schemaVersion: 1,
@@ -288,13 +311,11 @@ function validateState(binding: BillingBinding, value: unknown): asserts value i
     ...validateBillingSubscriptionManifest(value.subscriptionBaseline, {
       ...binding.subscriptionOptions,
       contextual: false
-    })
-      .map(error => error.replace('subscription.json', '.ghl/billing-state.json.subscriptionBaseline')),
+    }).map(error => error.replace('subscription.json', '.ghl/billing-state.json.subscriptionBaseline')),
     ...validateBillingUsageManifest(value.usageBaseline, {
       ...binding.usageOptions,
       contextual: false
-    })
-      .map(error => error.replace('usage-based.json', '.ghl/billing-state.json.usageBaseline'))
+    }).map(error => error.replace('usage-based.json', '.ghl/billing-state.json.usageBaseline'))
   )
   if (errors.length > 0) throw new Error(`Billing state is invalid:\n- ${errors.join('\n- ')}`)
 }
@@ -306,7 +327,7 @@ export async function loadBillingWorkspace(directory: string): Promise<BillingWo
   const subscriptionPath = path.join(binding.directory, BILLING_SUBSCRIPTION_RELATIVE_PATH)
   const usagePath = path.join(binding.directory, BILLING_USAGE_RELATIVE_PATH)
   const stateFile = path.join(binding.directory, BILLING_STATE_RELATIVE_PATH)
-  if (!await lstatIfPresent(stateFile)) {
+  if (!(await lstatIfPresent(stateFile))) {
     throw new Error('Billing conflict state is missing. Run `ghl app billing pull` before editing billing resources.')
   }
   await requireSafeRegularFile(stateFile, 'Billing state')
@@ -315,8 +336,12 @@ export async function loadBillingWorkspace(directory: string): Promise<BillingWo
     readJsonFile<unknown>(usagePath),
     readJsonFile<unknown>(stateFile)
   ])
-  const unresolvedSubscriptions = subscriptionValue ?? emptyBillingSubscriptionManifest(binding.app.appId)
-  const unresolvedUsage = usageValue ?? emptyBillingUsageManifest(binding.app.appId)
+  const unresolvedSubscriptions = subscriptionValue
+    ? withoutJsonSchemaReference(subscriptionValue)
+    : emptyBillingSubscriptionManifest(binding.app.appId)
+  const unresolvedUsage = usageValue
+    ? withoutJsonSchemaReference(usageValue)
+    : emptyBillingUsageManifest(binding.app.appId)
   validateManifests(binding, unresolvedSubscriptions, unresolvedUsage, false)
   const subscriptions = unresolvedSubscriptions as BillingSubscriptionManifest
   const usage = unresolvedUsage as BillingUsageManifest
@@ -340,19 +365,31 @@ export async function loadBillingWorkspaceIfPresent(directory: string): Promise<
   const workspace = await readPullWorkspaceBinding(directory)
   if (!workspace) return undefined
   const paths = [BILLING_SUBSCRIPTION_RELATIVE_PATH, BILLING_USAGE_RELATIVE_PATH, BILLING_STATE_RELATIVE_PATH]
-  const stats = await Promise.all(paths.map(relativePath => lstatIfPresent(path.join(workspace.directory, relativePath))))
+  const stats = await Promise.all(
+    paths.map(relativePath => lstatIfPresent(path.join(workspace.directory, relativePath)))
+  )
   if (stats.every(value => !value)) return undefined
   return loadBillingWorkspace(workspace.directory)
 }
 
-export async function synchronizeUsageBillingSummary(directory: string, hasUsageBasedPrice: boolean): Promise<void> {
+export async function synchronizeUsageBillingSummary(
+  directory: string,
+  hasUsageBasedPrice: boolean,
+  options: WriteBillingWorkspaceOptions = {}
+): Promise<void> {
   const binding = await readPullWorkspaceBinding(directory)
   if (!binding) throw new Error('Cannot synchronize usage billing because no app workspace was found.')
   const workspace = await readLocalAppWorkspace(binding.directory)
   workspace.files.app.billing.hasUsageBasedPrice = hasUsageBasedPrice
   workspace.state.baseline.app.billing.hasUsageBasedPrice = hasUsageBasedPrice
+  const includeJsonSchema = options.includeJsonSchema !== false
+  if (includeJsonSchema) await writeJsonSchemaWorkspace(workspace.directory)
   await Promise.all([
-    writeJsonFileAtomic(workspace.appFile, workspace.files.app, 0o644),
+    writeJsonFileAtomic(
+      workspace.appFile,
+      includeJsonSchema ? withJsonSchemaReference(workspace.files.app, 'app') : workspace.files.app,
+      0o644
+    ),
     writeJsonFileAtomic(workspace.stateFile, workspace.state, 0o600)
   ])
 }

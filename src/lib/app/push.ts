@@ -1,4 +1,5 @@
-import { AppVersion, BillingSettings, ProfileUpdateResult } from '../api/client.js'
+import { errorMessage } from '../shared/errors.js'
+import type { AppVersion, BillingSettings, ProfileUpdateResult } from '../api/types.js'
 import { buildAuthSettingsBody } from '../auth/settings.js'
 import { buildBillingSettings } from '../billing/pricing.js'
 import {
@@ -9,7 +10,7 @@ import {
   buildSupportBody,
   extractNewVersion
 } from './profile-sections.js'
-import { AppSyncPlan, appVersionFromFiles, validateSyncPlan } from './sync.js'
+import { type AppSyncPlan, appVersionFromFiles, validateSyncPlan } from './sync.js'
 
 export interface PushClient {
   updateProfileSection(
@@ -90,10 +91,20 @@ export async function executeAppSyncPlan(
         const result = await client.updateProfileSection('basicInfo', appId, versionId, buildBasicInfoBody(version, {}))
         versionId = followResultVersion(appId, versionId, result)
       } else if (section === 'profiles') {
-        const result = await client.updateProfileSection('appProfiles', appId, versionId, buildProfilesBody(version, {}))
+        const result = await client.updateProfileSection(
+          'appProfiles',
+          appId,
+          versionId,
+          buildProfilesBody(version, {})
+        )
         versionId = followResultVersion(appId, versionId, result)
       } else if (section === 'support') {
-        const result = await client.updateProfileSection('supportDetails', appId, versionId, buildSupportBody(version, {}))
+        const result = await client.updateProfileSection(
+          'supportDetails',
+          appId,
+          versionId,
+          buildSupportBody(version, {})
+        )
         versionId = followResultVersion(appId, versionId, result)
       } else if (section === 'authSettings') {
         if (remoteVersion.status?.toLowerCase() === 'live' && requiresDraftAuth && versionId === remoteVersion._id) {
@@ -114,7 +125,7 @@ export async function executeAppSyncPlan(
       appliedSections.push(section)
     }
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'The API rejected the update.'
+    const reason = errorMessage(error, 'The API rejected the update.')
     const applied = appliedSections.length > 0 ? appliedSections.join(', ') : 'none'
     throw new Error(
       `${reason} Push stopped while applying ${activeSection ?? 'the plan'}; completed sections: ${applied}. ` +

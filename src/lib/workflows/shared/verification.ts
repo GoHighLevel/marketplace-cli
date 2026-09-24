@@ -5,10 +5,7 @@ interface CanonicalWorkflowConfigOptions {
   isSecretReference: (value: string) => boolean
 }
 
-export function canonicalWorkflowConfig(
-  value: unknown,
-  options: CanonicalWorkflowConfigOptions
-): unknown {
+export function canonicalWorkflowConfig(value: unknown, options: CanonicalWorkflowConfigOptions): unknown {
   const ignoredKeys = new Set(options.ignoredKeys ?? [])
   const visit = (current: unknown): unknown => {
     if (typeof current === 'string' && options.isSecretReference(current)) return '${secret}'

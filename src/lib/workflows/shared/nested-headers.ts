@@ -27,12 +27,14 @@ export function redactWorkflowHeaders<T>(value: T): T {
     if (HEADER_TRAVERSAL_BOUNDARIES.has(key)) {
       result[key] = structuredClone(child)
     } else if (key === 'headers' && isRecord(child)) {
-      result[key] = Object.fromEntries(Object.entries(child).map(([name, headerValue]) => [
-        name,
-        typeof headerValue === 'string' && headerValue && workflowHeaderRequiresReference(name)
-          ? WORKFLOW_REMOTE_REFERENCE
-          : structuredClone(headerValue)
-      ]))
+      result[key] = Object.fromEntries(
+        Object.entries(child).map(([name, headerValue]) => [
+          name,
+          typeof headerValue === 'string' && headerValue && workflowHeaderRequiresReference(name)
+            ? WORKFLOW_REMOTE_REFERENCE
+            : structuredClone(headerValue)
+        ])
+      )
     } else {
       result[key] = redactWorkflowHeaders(child)
     }
@@ -49,7 +51,9 @@ function hydrateHeaderValue(
 ): string {
   if (value === WORKFLOW_REMOTE_REFERENCE) {
     if (typeof current !== 'string' || !current) {
-      throw new Error(`${path} uses "${WORKFLOW_REMOTE_REFERENCE}", but the remote ${resource} has no value to preserve.`)
+      throw new Error(
+        `${path} uses "${WORKFLOW_REMOTE_REFERENCE}", but the remote ${resource} has no value to preserve.`
+      )
     }
     return current
   }
@@ -80,12 +84,14 @@ export function hydrateWorkflowHeaders(
     if (HEADER_TRAVERSAL_BOUNDARIES.has(key)) continue
     if (key === 'headers' && isRecord(child)) {
       const currentHeaders = isRecord(currentRecord[key]) ? currentRecord[key] : {}
-      desired[key] = Object.fromEntries(Object.entries(child).map(([name, headerValue]) => [
-        name,
-        typeof headerValue === 'string'
-          ? hydrateHeaderValue(headerValue, currentHeaders[name], `${childPath}.${name}`, environment, resource)
-          : headerValue
-      ]))
+      desired[key] = Object.fromEntries(
+        Object.entries(child).map(([name, headerValue]) => [
+          name,
+          typeof headerValue === 'string'
+            ? hydrateHeaderValue(headerValue, currentHeaders[name], `${childPath}.${name}`, environment, resource)
+            : headerValue
+        ])
+      )
     } else {
       hydrateWorkflowHeaders(child, currentRecord[key], environment, resource, childPath)
     }

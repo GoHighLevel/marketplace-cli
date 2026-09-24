@@ -3,10 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import {
-  BillingSubscriptionManifest,
-  BillingUsageManifest
-} from '../../../src/lib/billing/manifest.js'
+import { JSON_SCHEMA_REFERENCES } from '../../../src/lib/app/json-schema.js'
+import { type BillingSubscriptionManifest, type BillingUsageManifest } from '../../../src/lib/billing/manifest.js'
 import {
   BILLING_DIRECTORY_RELATIVE_PATH,
   BILLING_GUIDE_FILENAME,
@@ -24,15 +22,18 @@ const directories: string[] = []
 async function createWorkspace(): Promise<string> {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-billing-workspace-'))
   directories.push(directory)
-  await fs.writeFile(path.join(directory, 'ghl-app.json'), JSON.stringify({
-    schemaVersion: 1,
-    appId: 'app-1',
-    versionId: 'version-1',
-    status: 'draft',
-    appType: 'standard',
-    listing: { userTypes: ['company', 'location'], isWhiteLabelFriendly: false },
-    billing: { billingType: 'paid', externalBilling: false }
-  }))
+  await fs.writeFile(
+    path.join(directory, 'ghl-app.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      appId: 'app-1',
+      versionId: 'version-1',
+      status: 'draft',
+      appType: 'standard',
+      listing: { userTypes: ['company', 'location'], isWhiteLabelFriendly: false },
+      billing: { billingType: 'paid', externalBilling: false }
+    })
+  )
   return directory
 }
 
@@ -40,17 +41,19 @@ function subscriptions(): BillingSubscriptionManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    plans: [{
-      id: 'plan-1',
-      name: 'Pro',
-      features: [],
-      paymentTime: 'month',
-      paymentType: 'recurring',
-      amount: 10,
-      freePlan: false,
-      freeForAgency: false,
-      freeForLocation: false
-    }]
+    plans: [
+      {
+        id: 'plan-1',
+        name: 'Pro',
+        features: [],
+        paymentTime: 'month',
+        paymentType: 'recurring',
+        amount: 10,
+        freePlan: false,
+        freeForAgency: false,
+        freeForLocation: false
+      }
+    ]
   }
 }
 
@@ -58,22 +61,26 @@ function usage(): BillingUsageManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    meters: [{
-      id: 'meter-1',
-      productType: 'custom',
-      productId: 'custom_exports',
-      productName: 'Exports',
-      customPriceType: 'fixed',
-      usageUnit: 'export',
-      tiers: [{
-        id: 'tier-1',
-        name: 'Exports',
-        minVolume: 0,
-        maxVolume: null,
-        pricePerUnit: 0.01,
-        executionLimitPerCycle: 100
-      }]
-    }]
+    meters: [
+      {
+        id: 'meter-1',
+        productType: 'custom',
+        productId: 'custom_exports',
+        productName: 'Exports',
+        customPriceType: 'fixed',
+        usageUnit: 'export',
+        tiers: [
+          {
+            id: 'tier-1',
+            name: 'Exports',
+            minVolume: 0,
+            maxVolume: null,
+            pricePerUnit: 0.01,
+            executionLimitPerCycle: 100
+          }
+        ]
+      }
+    ]
   }
 }
 
@@ -82,6 +89,46 @@ afterEach(async () => {
 })
 
 describe('billing workspaces', () => {
+  it('can omit JSON Schema artifacts and references for a plain pull', async () => {
+    const directory = await createWorkspace()
+    const subscriptionManifest = subscriptions()
+    const usageManifest = usage()
+    const appFile = path.join(directory, 'ghl-app.json')
+    const app = JSON.parse(await fs.readFile(appFile, 'utf8'))
+    await fs.mkdir(path.join(directory, '.ghl'))
+    await fs.writeFile(
+      path.join(directory, '.ghl', 'state.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        appId: 'app-1',
+        versionId: 'version-1',
+        baseline: {
+          app,
+          webhooks: {
+            schemaVersion: 1,
+            appId: 'app-1',
+            versionId: 'version-1',
+            webhookUrl: '',
+            subscribedEvents: []
+          }
+        }
+      })
+    )
+    const result = await writeBillingWorkspace(
+      directory,
+      subscriptionManifest,
+      usageManifest,
+      { subscriptions: subscriptionManifest, usage: usageManifest },
+      { includeJsonSchema: false }
+    )
+    await synchronizeUsageBillingSummary(directory, true, { includeJsonSchema: false })
+
+    await expect(fs.readFile(result.subscriptionFile!, 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.readFile(result.usageFile!, 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.readFile(appFile, 'utf8')).resolves.not.toContain('$schema')
+    await expect(fs.stat(path.join(directory, '.ghl', 'schemas'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('writes both manifests, a guide, and a private conflict baseline', async () => {
     const directory = await createWorkspace()
     const result = await writeBillingWorkspace(directory, subscriptions(), usage())
@@ -91,7 +138,15 @@ describe('billing workspaces', () => {
     expect(result.usageFile).toBe(path.join(directory, BILLING_USAGE_RELATIVE_PATH))
     expect(result.guideFile).toBe(path.join(result.billingDirectory, BILLING_GUIDE_FILENAME))
     expect((await fs.stat(result.stateFile)).mode & 0o777).toBe(0o600)
-    expect(await fs.readFile(result.guideFile as string, 'utf8')).toMatch(/immutable.*amount.*duration|amount.*paymentTime.*immutable/is)
+    expect(await fs.readFile(result.guideFile as string, 'utf8')).toMatch(
+      /immutable.*amount.*duration|amount.*paymentTime.*immutable/is
+    )
+    await expect(fs.readFile(result.subscriptionFile!, 'utf8')).resolves.toContain(
+      `"$schema": "${JSON_SCHEMA_REFERENCES.subscription}"`
+    )
+    await expect(fs.readFile(result.usageFile!, 'utf8')).resolves.toContain(
+      `"$schema": "${JSON_SCHEMA_REFERENCES['usage-based']}"`
+    )
 
     const loaded = await loadBillingWorkspace(path.join(directory, 'src', 'billing'))
     expect(loaded.subscriptions).toEqual(subscriptions())
@@ -136,7 +191,9 @@ describe('billing workspaces', () => {
 
     const invalidUsage = usage()
     invalidUsage.meters[0].productId = ''
-    await expect(writeLocalBillingWorkspace(directory, legacySubscriptions, invalidUsage)).rejects.toThrow(/productId must be a non-empty string/i)
+    await expect(writeLocalBillingWorkspace(directory, legacySubscriptions, invalidUsage)).rejects.toThrow(
+      /productId must be a non-empty string/i
+    )
   })
 
   it('omits empty source files and removes generated files after a later pull', async () => {
@@ -148,8 +205,12 @@ describe('billing workspaces', () => {
       { schemaVersion: 1, appId: 'app-1', meters: [] }
     )
 
-    await expect(fs.stat(path.join(directory, BILLING_DIRECTORY_RELATIVE_PATH))).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(fs.stat(path.join(directory, BILLING_SUBSCRIPTION_RELATIVE_PATH))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(fs.stat(path.join(directory, BILLING_DIRECTORY_RELATIVE_PATH))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+    await expect(fs.stat(path.join(directory, BILLING_SUBSCRIPTION_RELATIVE_PATH))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
     await expect(fs.stat(path.join(directory, BILLING_USAGE_RELATIVE_PATH))).rejects.toMatchObject({ code: 'ENOENT' })
     expect(result.subscriptionFile).toBeUndefined()
     expect(result.usageFile).toBeUndefined()
@@ -217,8 +278,12 @@ describe('billing workspaces', () => {
     const updatedApp = JSON.parse(await fs.readFile(appFile, 'utf8'))
     const updatedState = JSON.parse(await fs.readFile(path.join(directory, '.ghl', 'state.json'), 'utf8'))
     expect(updatedApp.basicInfo.name).toBe('Local pending name')
+    expect(updatedApp.$schema).toBe(JSON_SCHEMA_REFERENCES.app)
     expect(updatedApp.billing.hasUsageBasedPrice).toBe(true)
     expect(updatedState.baseline.app.basicInfo.name).toBe('Portal name')
     expect(updatedState.baseline.app.billing.hasUsageBasedPrice).toBe(true)
+    await expect(fs.stat(path.join(directory, '.ghl', 'schemas', 'ghl-app.schema.json'))).resolves.toMatchObject({
+      isFile: expect.any(Function)
+    })
   })
 })

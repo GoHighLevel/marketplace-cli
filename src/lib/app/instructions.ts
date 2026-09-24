@@ -15,7 +15,7 @@ export const CLAUDE_FILENAME = 'CLAUDE.md'
 export const HIGHLEVEL_APP_FILENAME = 'HIGHLEVEL_APP.md'
 const MAX_INSTRUCTION_FILE_BYTES = 2 * 1024 * 1024
 
-const LEGACY_VALIDATE_INSTRUCTION = '- Run `ghl app validate` to check the selected app\'s remote publish readiness.'
+const LEGACY_VALIDATE_INSTRUCTION = "- Run `ghl app validate` to check the selected app's remote publish readiness."
 const LEGACY_PULL_INSTRUCTION =
   '- Run `ghl app pull <appId> --directory <parent> --folder <name>` to refresh generated JSON from the developer portal.'
 const CURRENT_PULL_INSTRUCTION =

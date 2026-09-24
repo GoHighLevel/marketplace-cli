@@ -1,23 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
-import { WorkflowTriggersManifest } from '../../../../src/lib/workflows/triggers/manifest.js'
+import { type WorkflowTriggersManifest } from '../../../../src/lib/workflows/triggers/manifest.js'
 import { planWorkflowTriggersSync } from '../../../../src/lib/workflows/triggers/sync.js'
 
 function manifest(name = 'Original'): WorkflowTriggersManifest {
   return {
     schemaVersion: 1,
     appId: 'app-1',
-    triggers: [{
-      templateId: 'template-1',
-      key: 'contact_changed',
-      versions: [{
-        version: '1.0',
-        status: 'draft',
-        info: { name },
-        customVarsJson: { contact: { id: 'one' } },
-        subscriptionConfig: { url: 'https://example.com/subscriptions' }
-      }]
-    }]
+    triggers: [
+      {
+        templateId: 'template-1',
+        key: 'contact_changed',
+        versions: [
+          {
+            version: '1.0',
+            status: 'draft',
+            info: { name },
+            customVarsJson: { contact: { id: 'one' } },
+            subscriptionConfig: { url: 'https://example.com/subscriptions' }
+          }
+        ]
+      }
+    ]
   }
 }
 
@@ -54,10 +58,12 @@ describe('workflow trigger three-way synchronization', () => {
     const baseline = manifest()
     const local = structuredClone(baseline)
     const remote = structuredClone(baseline)
-    local.triggers = [{
-      key: 'order_created',
-      versions: [{ version: '1.0', status: 'draft', info: { name: 'Order created' } }]
-    }]
+    local.triggers = [
+      {
+        key: 'order_created',
+        versions: [{ version: '1.0', status: 'draft', info: { name: 'Order created' } }]
+      }
+    ]
 
     expect(planWorkflowTriggersSync(baseline, local, remote).operations).toMatchObject([
       { type: 'create', key: 'order_created' },

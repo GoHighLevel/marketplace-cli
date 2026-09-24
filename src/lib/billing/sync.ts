@@ -1,16 +1,11 @@
 import {
-  BillingSubscriptionManifest,
-  BillingSubscriptionPlan,
-  BillingUsageManifest,
-  BillingUsageMeterDefinition,
-  BillingUsageTierDefinition
+  type BillingSubscriptionManifest,
+  type BillingSubscriptionPlan,
+  type BillingUsageManifest,
+  type BillingUsageMeterDefinition,
+  type BillingUsageTierDefinition
 } from './manifest.js'
-import {
-  applyValueChanges,
-  changedValuePaths,
-  valuePathsOverlap,
-  valuesEqual
-} from '../shared/three-way-diff.js'
+import { applyValueChanges, changedValuePaths, valuePathsOverlap, valuesEqual } from '../shared/three-way-diff.js'
 
 export type BillingSubscriptionOperation =
   | { type: 'create-plan'; desired: BillingSubscriptionPlan }
@@ -74,10 +69,7 @@ function withoutId<T extends { id?: string }>(value: T): Omit<T, 'id'> {
   return rest
 }
 
-function planChanges(
-  base: BillingSubscriptionManifest,
-  value: BillingSubscriptionManifest
-): string[] {
+function planChanges(base: BillingSubscriptionManifest, value: BillingSubscriptionManifest): string[] {
   const baseById = byOptionalId(base.plans)
   const valueById = byOptionalId(value.plans)
   const changes: string[] = []
@@ -87,9 +79,11 @@ function planChanges(
     if (!before || !after) changes.push(`plans.${id}`)
     else changes.push(...changedValuePaths(before, after, `plans.${id}`))
   }
-  value.plans.filter(plan => !plan.id).forEach((plan, index) => {
-    changes.push(`plans.new[${index}]:${plan.name}`)
-  })
+  value.plans
+    .filter(plan => !plan.id)
+    .forEach((plan, index) => {
+      changes.push(`plans.new[${index}]:${plan.name}`)
+    })
   return changes
 }
 
@@ -128,8 +122,8 @@ export function planBillingSubscriptionSync(
       plan.errors.push(`plans.${replaced.id}.id is immutable; omit the plan only when replacing it intentionally.`)
       continue
     }
-    const remoteCollision = remote.plans.find(item =>
-      !baselineById.has(item.id as string) && item.name.toLowerCase() === localPlan.name.toLowerCase()
+    const remoteCollision = remote.plans.find(
+      item => !baselineById.has(item.id as string) && item.name.toLowerCase() === localPlan.name.toLowerCase()
     )
     if (remoteCollision) plan.conflicts.push(`plans.new:${localPlan.name}`)
     else plan.operations.push({ type: 'create-plan', desired: localPlan })
@@ -156,7 +150,9 @@ export function planBillingSubscriptionSync(
     const editableLocal = localPaths.filter(field => !IMMUTABLE_PLAN_FIELDS.has(field))
     if (editableLocal.length === 0) continue
     const remotePaths = changedValuePaths(withoutId(base), withoutId(current))
-    const conflicts = editableLocal.filter(localPath => remotePaths.some(remotePath => valuePathsOverlap(localPath, remotePath)))
+    const conflicts = editableLocal.filter(localPath =>
+      remotePaths.some(remotePath => valuePathsOverlap(localPath, remotePath))
+    )
     if (conflicts.length > 0) {
       plan.conflicts.push(...conflicts.map(field => `${path}.${field}`))
       continue
@@ -221,9 +217,11 @@ function meterChanges(base: BillingUsageManifest, value: BillingUsageManifest): 
       if (!beforeTier || !afterTier) changes.push(`meters.${id}.tiers.${tierId}`)
       else changes.push(...changedValuePaths(beforeTier, afterTier, `meters.${id}.tiers.${tierId}`))
     }
-    after.tiers.filter(tier => !tier.id).forEach((tier, index) => {
-      changes.push(`meters.${id}.tiers.new[${index}]:${tier.name}`)
-    })
+    after.tiers
+      .filter(tier => !tier.id)
+      .forEach((tier, index) => {
+        changes.push(`meters.${id}.tiers.new[${index}]:${tier.name}`)
+      })
   }
   value.meters.filter(meter => !meter.id).forEach(meter => changes.push(`meters.${meterKey(meter)}`))
   return changes
@@ -348,8 +346,11 @@ export function planBillingUsageSync(
   const remoteById = byOptionalId(remote.meters)
 
   for (const meter of local.meters.filter(item => !item.id)) {
-    const collision = remote.meters.find(current =>
-      !baselineById.has(current.id as string) && current.productId === meter.productId && current.direction === meter.direction
+    const collision = remote.meters.find(
+      current =>
+        !baselineById.has(current.id as string) &&
+        current.productId === meter.productId &&
+        current.direction === meter.direction
     )
     if (collision) plan.conflicts.push(`meters.${meterKey(meter)}`)
     else plan.operations.push({ type: 'create-meter', desired: meter })

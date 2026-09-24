@@ -1,9 +1,4 @@
-export const WORKFLOW_TRIGGER_FIELD_TYPES = [
-  'DYNAMIC',
-  'multiselect',
-  'select',
-  'string'
-] as const
+export const WORKFLOW_TRIGGER_FIELD_TYPES = ['DYNAMIC', 'multiselect', 'select', 'string'] as const
 
 export const WORKFLOW_TRIGGER_INTERNAL_REFERENCES = [
   'COUNTRIES',
@@ -45,25 +40,24 @@ export function workflowTriggerPrerequisiteErrors(input: WorkflowTriggerPrerequi
   if (!input.allowedScopes.includes(WORKFLOW_TRIGGER_REQUIRED_SCOPE)) {
     errors.push(
       `ghl-app.json.oauth.allowedScopes must include "${WORKFLOW_TRIGGER_REQUIRED_SCOPE}" ` +
-      'before workflow triggers can be pushed or published.'
+        'before workflow triggers can be pushed or published.'
     )
   }
   if (input.redirectUris.length === 0) {
     errors.push(
       'ghl-app.json.oauth.redirectUris must contain at least one OAuth redirect URI ' +
-      'before workflow triggers can be pushed or published.'
+        'before workflow triggers can be pushed or published.'
     )
   }
   if (input.clientKeyCount === 0) {
     errors.push(
       'ghl-app.json.oauth.clientKeys must contain at least one client key ' +
-      'before workflow triggers can be pushed or published.'
+        'before workflow triggers can be pushed or published.'
     )
   }
   if (!input.userTypes.includes('Location')) {
     errors.push(
-      'ghl-app.json.listing.userTypes must include "Location" ' +
-      'before workflow triggers can be pushed or published.'
+      'ghl-app.json.listing.userTypes must include "Location" ' + 'before workflow triggers can be pushed or published.'
     )
   }
   return errors

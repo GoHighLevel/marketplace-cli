@@ -4,7 +4,12 @@ import path from 'node:path'
 import { deflateSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { buildUploadForm, locateMedia, sanitizeUploadFilename, validateScreenshotCount } from '../../../src/lib/app/media.js'
+import {
+  buildUploadForm,
+  locateMedia,
+  sanitizeUploadFilename,
+  validateScreenshotCount
+} from '../../../src/lib/app/media.js'
 
 let dir: string
 
@@ -144,8 +149,14 @@ describe('buildUploadForm', () => {
   it('accepts passive SVG images and rejects active content', async () => {
     const safe = path.join(dir, 'preview.svg')
     const unsafe = path.join(dir, 'unsafe.svg')
-    await fs.writeFile(safe, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540"><rect width="1" height="1"/></svg>')
-    await fs.writeFile(unsafe, '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="540"><script>alert(1)</script></svg>')
+    await fs.writeFile(
+      safe,
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540"><rect width="1" height="1"/></svg>'
+    )
+    await fs.writeFile(
+      unsafe,
+      '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="540"><script>alert(1)</script></svg>'
+    )
 
     await expect(buildUploadForm([safe], 'preview')).resolves.toBeInstanceOf(FormData)
     await expect(buildUploadForm([unsafe], 'preview')).rejects.toThrow(/valid readable image/i)

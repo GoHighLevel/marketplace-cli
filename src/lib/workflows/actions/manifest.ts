@@ -220,10 +220,15 @@ function toInput(value: unknown): WorkflowActionInput | undefined {
 
 function toInfo(value: unknown, fallbackName = ''): WorkflowActionInfo {
   const source = isRecord(value) ? value : {}
-  return copyKnown(
-    { ...source, name: typeof source.name === 'string' ? source.name : fallbackName },
-    ['name', 'description', 'summary', 'groupName', 'keywords', 'icon', 'screenshots']
-  ) as unknown as WorkflowActionInfo
+  return copyKnown({ ...source, name: typeof source.name === 'string' ? source.name : fallbackName }, [
+    'name',
+    'description',
+    'summary',
+    'groupName',
+    'keywords',
+    'icon',
+    'screenshots'
+  ]) as unknown as WorkflowActionInfo
 }
 
 function toExecutionConfig(value: unknown): WorkflowActionExecutionConfig | undefined {
@@ -249,9 +254,7 @@ function toVersion(remote: Record<string, unknown>, redactSecrets: boolean): Wor
     info: toInfo(remote.info, typeof remote.name === 'string' ? remote.name : '')
   }
   if (Array.isArray(remote.inputs)) {
-    result.inputs = remote.inputs
-      .map(toInput)
-      .filter((input): input is WorkflowActionInput => input !== undefined)
+    result.inputs = remote.inputs.map(toInput).filter((input): input is WorkflowActionInput => input !== undefined)
   }
   if (Array.isArray(remote.customVars)) result.customVars = clone(remote.customVars) as WorkflowActionCustomVariable[]
   if (isRecord(remote.customVarsJson)) result.customVarsJson = clone(remote.customVarsJson)
@@ -313,17 +316,19 @@ export function createEmptyWorkflowActionsManifest(appId: string): WorkflowActio
 export function createWorkflowActionScaffold(name: string, key: string): WorkflowActionDefinition {
   return {
     key,
-    versions: [{
-      version: '1.0',
-      status: 'draft',
-      info: { name },
-      inputs: [],
-      customVars: [],
-      customVarsJson: {},
-      payloadCustomizationType: 'default',
-      customizedPayload: {},
-      branchesConfig: {}
-    }]
+    versions: [
+      {
+        version: '1.0',
+        status: 'draft',
+        info: { name },
+        inputs: [],
+        customVars: [],
+        customVarsJson: {},
+        payloadCustomizationType: 'default',
+        customizedPayload: {},
+        branchesConfig: {}
+      }
+    ]
   }
 }
 
@@ -334,9 +339,7 @@ export function toWorkflowActionUpdateBody(
 ): WorkflowActionUpdateBody {
   const normalizedDesired = toVersion(desired as unknown as Record<string, unknown>, false)
   const { version: _version, ...body } = normalizedDesired
-  const currentBody = current
-    ? toVersion(current as unknown as Record<string, unknown>, false)
-    : undefined
+  const currentBody = current ? toVersion(current as unknown as Record<string, unknown>, false) : undefined
   hydrateWorkflowHeaders(body, currentBody, environment, 'action')
   return body
 }

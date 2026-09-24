@@ -77,13 +77,19 @@ describe('token store', () => {
 
     await fs.writeFile(
       path.join(dir, 'credentials.json'),
-      JSON.stringify({ version: 1, activeProfile: 'default', profiles: { default: { accessToken: 'jwt', expiresAt: 'soon' } } })
+      JSON.stringify({
+        version: 1,
+        activeProfile: 'default',
+        profiles: { default: { accessToken: 'jwt', expiresAt: 'soon' } }
+      })
     )
     await expect(loadCredentials(dir)).rejects.toThrow(/invalid structure/i)
   })
 
   it('rejects invalid profile data before writing it', async () => {
     await expect(saveProfile(dir, 'default', { accessToken: '' })).rejects.toThrow(/profile data/i)
-    await expect(saveProfile(dir, 'default', { accessToken: 'jwt', teamId: 123 } as never)).rejects.toThrow(/profile data/i)
+    await expect(saveProfile(dir, 'default', { accessToken: 'jwt', teamId: 123 } as never)).rejects.toThrow(
+      /profile data/i
+    )
   })
 })
