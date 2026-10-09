@@ -24,7 +24,7 @@ const currency = (description: string): JsonSchema => ({
 
 const unitPrice = (description: string): JsonSchema => ({
   type: 'number',
-  minimum: 0.000001,
+  minimum: 0,
   maximum: 200,
   description: `${description} Use at most six decimal places.`
 })
@@ -135,10 +135,12 @@ const usageTier = object(
       description:
         'Upper volume boundary, or null for the final open-ended tier. The CLI verifies it exceeds minVolume.'
     }),
-    pricePerUnit: unitPrice('Default price per unit; 0.000001–200 with at most six decimal places.'),
+    pricePerUnit: unitPrice('Default price per unit; 0–200 with at most six decimal places.'),
     minPricePerUnit: unitPrice('Dynamic minimum price per unit.'),
     maxPricePerUnit: unitPrice('Dynamic maximum price per unit.'),
-    executionLimitPerCycle: integer(1, undefined, { description: 'Positive execution limit for each billing cycle.' })
+    executionLimitPerCycle: integer(0, undefined, {
+      description: 'Maximum usage units allowed per day; 0 means no daily limit.'
+    })
   },
   ['name', 'minVolume', 'maxVolume', 'pricePerUnit', 'executionLimitPerCycle']
 )

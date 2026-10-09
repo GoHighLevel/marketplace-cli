@@ -78,7 +78,7 @@ export function buildBillingGuide(): string {
     '- `pricingPageUrl`: public HTTPS pricing page; required only for dynamic pricing.',
     '- `tiers`: one or more non-overlapping volume ranges.',
     '',
-    'Each tier supports `id`, `name`, `minVolume`, `maxVolume`, `pricePerUnit`, `executionLimitPerCycle`, and dynamic-pricing bounds `minPricePerUnit`/`maxPricePerUnit`. Use `null` for an unlimited `maxVolume`. Unit prices range from 0.000001 through 200 and allow at most six decimals.',
+    'Each tier supports `id`, `name`, `minVolume`, `maxVolume`, `pricePerUnit`, `executionLimitPerCycle`, and dynamic-pricing bounds `minPricePerUnit`/`maxPricePerUnit`. Use `null` for an unlimited `maxVolume`. Unit prices range from 0 through 200 and allow at most six decimals. `executionLimitPerCycle` is the maximum usage allowed per day; use `0` for no daily limit. Negative limits are rejected.',
     '',
     'Example workflow-action meter:',
     '',

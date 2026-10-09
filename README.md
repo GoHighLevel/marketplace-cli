@@ -317,7 +317,7 @@ The billing model, external-billing URL, and trial settings remain under `billin
 | `ghl app pricing add` | Directly add a portal plan with a name, price or free flag, interval, optional sub-account price, and up to five features. |
 | `ghl app pricing remove [planId]` | Directly remove a portal plan. Automation must provide the plan id and `--force`. |
 
-Plans allow up to five features and six total plans (one life-time plan for template apps). After creation, only plan name and features are editable; amounts, duration/type, and free flags are immutable. Meter prices range from 0.000001 through 200 with six-decimal precision. Dynamic pricing is custom-product-only and requires minimum/default/maximum prices plus a public HTTPS pricing page. See generated `src/billing/HIGHLEVEL_BILLING.md` for every JSON key.
+Plans allow up to five features and six total plans (one life-time plan for template apps). After creation, only plan name and features are editable; amounts, duration/type, and free flags are immutable. Meter prices range from 0 through 200 with six-decimal precision. A meter's daily usage limit (`--execution-limit` / `executionLimitPerCycle`) accepts any whole number from 0, where 0 means no daily limit. Dynamic pricing is custom-product-only and requires minimum/default/maximum prices plus a public HTTPS pricing page. See generated `src/billing/HIGHLEVEL_BILLING.md` for every JSON key.
 
 Workflow action and trigger meters must reference components already registered in the portal. Pull the matching component state first and push new actions/triggers before staging a meter; billing validation checks its local key and last synchronized remote baseline before creating the meter.
 
