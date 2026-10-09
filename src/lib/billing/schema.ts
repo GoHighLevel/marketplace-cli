@@ -197,7 +197,7 @@ export function validateBillingSubscriptionManifest(
 
 function validateUnitPrice(value: unknown, path: string): string[] {
   if (typeof value !== 'number' || !Number.isFinite(value)) return [`${path} must be a finite number.`]
-  if (value < 0.000001 || value > 200) return [`${path} must be between 0.000001 and 200.`]
+  if (value < 0 || value > 200) return [`${path} must be between 0 and 200.`]
   return hasAtMostDecimals(value, 6) ? [] : [`${path} may have at most six decimal places.`]
 }
 
@@ -224,9 +224,9 @@ function validateTier(value: unknown, meterIndex: number, tierIndex: number, dyn
   if (
     typeof value.executionLimitPerCycle !== 'number' ||
     !Number.isInteger(value.executionLimitPerCycle) ||
-    value.executionLimitPerCycle < 1
+    value.executionLimitPerCycle < 0
   ) {
-    errors.push(`${path}.executionLimitPerCycle must be a positive integer.`)
+    errors.push(`${path}.executionLimitPerCycle must be a non-negative integer; use 0 for no daily limit.`)
   }
   if (dynamic) {
     errors.push(...validateUnitPrice(value.minPricePerUnit, `${path}.minPricePerUnit`))

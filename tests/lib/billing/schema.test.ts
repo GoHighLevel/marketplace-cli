@@ -168,6 +168,34 @@ describe('usage billing validation', () => {
     expect(validateBillingUsageManifest(usage(), { appType: 'standard', externalBilling: false })).toEqual([])
   })
 
+  it('accepts a zero daily limit as no limit and zero unit prices', () => {
+    const manifest = usage()
+    const tier = manifest.meters[0].tiers[0]
+    tier.executionLimitPerCycle = 0
+    tier.pricePerUnit = 0
+    tier.minPricePerUnit = 0
+
+    expect(validateBillingUsageManifest(manifest, { appType: 'standard', externalBilling: false })).toEqual([])
+  })
+
+  it('rejects negative daily limits and unit prices', () => {
+    const manifest = usage()
+    const tier = manifest.meters[0].tiers[0]
+    tier.executionLimitPerCycle = -1
+    tier.minPricePerUnit = -0.02
+    tier.pricePerUnit = -0.01
+
+    expect(
+      validateBillingUsageManifest(manifest, { appType: 'standard', externalBilling: false, contextual: false })
+    ).toEqual(
+      expect.arrayContaining([
+        'usage-based.json.meters[0].tiers[0].executionLimitPerCycle must be a non-negative integer; use 0 for no daily limit.',
+        'usage-based.json.meters[0].tiers[0].pricePerUnit must be between 0 and 200.',
+        'usage-based.json.meters[0].tiers[0].minPricePerUnit must be between 0 and 200.'
+      ])
+    )
+  })
+
   it('loads legacy dynamic portal meters structurally but rejects them for mutation', () => {
     const manifest = usage()
     delete manifest.meters[0].pricingPageUrl

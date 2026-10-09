@@ -45,14 +45,16 @@ function validateUnitPriceInput(value: string, label: string): true | string {
     return `${label} must be at most ${UNIT_PRICE_INPUT_MAX_LENGTH} characters.`
   }
   const trimmed = value.trim()
+  if (trimmed.startsWith('-')) return `${label} must be between 0 and 200.`
   if (!hasValidUnitPriceFormat(trimmed)) return `${label} must have at most six decimal places.`
   const parsed = Number(trimmed)
-  return parsed >= 0.000001 && parsed <= 200 ? true : `${label} must be between 0.000001 and 200.`
+  return parsed >= 0 && parsed <= 200 ? true : `${label} must be between 0 and 200.`
 }
 
 function validateExecutionLimitInput(value: string): true | string {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? true : 'Execution limit must be a positive integer.'
+  return containsOnlyDigits(value.trim())
+    ? true
+    : 'Daily usage limit must be a whole number of 0 or more; use 0 for no daily limit.'
 }
 
 function customProductId(name: string): string {
@@ -90,17 +92,20 @@ export default class AppBillingMeterCreate extends GhlCommand {
     direction: Flags.string({ description: 'Conversation direction', options: ['inbound', 'outbound'] }),
     'usage-unit': Flags.string({ description: 'Custom usage unit (provider/workflow units are inferred)' }),
     'price-type': Flags.string({ description: 'Custom product pricing mode', options: ['fixed', 'dynamic'] }),
-    price: Flags.string({ description: 'Unit price in USD (0.000001-200, up to six decimals)' }),
+    price: Flags.string({ description: 'Unit price in USD (0-200, up to six decimals)' }),
     'min-price': Flags.string({ description: 'Minimum unit price for dynamic custom pricing' }),
     'max-price': Flags.string({ description: 'Maximum unit price for dynamic custom pricing' }),
     'pricing-page-url': Flags.string({ description: 'Public HTTPS pricing page for dynamic custom pricing' }),
-    'execution-limit': Flags.integer({ description: 'Maximum executions per billing cycle' })
+    'execution-limit': Flags.integer({ description: 'Maximum usage units per day (0 for no daily limit)', min: 0 })
   }
 
   protected async execute(): Promise<unknown> {
     const { args, flags } = await this.parse(AppBillingMeterCreate)
     const interactive = process.stdin.isTTY === true && !this.jsonEnabled()
-    if ((!args.name || !flags['product-type'] || !flags.price || !flags['execution-limit']) && !interactive) {
+    if (
+      (!args.name || !flags['product-type'] || !flags.price || flags['execution-limit'] === undefined) &&
+      !interactive
+    ) {
       this.error('Pass the tier name, --product-type, --price, and --execution-limit when running non-interactively.')
     }
     const workspace = await loadBillingWorkspace(flags.directory)
@@ -192,7 +197,7 @@ export default class AppBillingMeterCreate extends GhlCommand {
     if (executionLimit === undefined && interactive) {
       executionLimit = Number(
         await input({
-          message: 'Execution limit per billing cycle:',
+          message: 'Maximum usage per day (0 for no limit):',
           validate: validateExecutionLimitInput
         })
       )

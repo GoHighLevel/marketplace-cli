@@ -567,6 +567,24 @@ describe('JSON Schema parity with the CLI validators', () => {
     expect(validateJsonSchema('subscription', subscription, 'subscription.json')).toEqual([])
   })
 
+  it('accepts a zero daily limit and zero prices but rejects negative values', () => {
+    const usage = validUsageMeter()
+    const tier = ((usage.meters as SchemaObject[])[0].tiers as SchemaObject[])[0]
+    tier.executionLimitPerCycle = 0
+    tier.pricePerUnit = 0
+    tier.minPricePerUnit = 0
+    expect(validateJsonSchema('usage-based', usage, 'usage-based.json')).toEqual([])
+
+    tier.executionLimitPerCycle = -1
+    tier.pricePerUnit = -0.01
+    expect(validateJsonSchema('usage-based', usage, 'usage-based.json')).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/tiers\[0\]\.pricePerUnit/),
+        expect.stringMatching(/tiers\[0\]\.executionLimitPerCycle/)
+      ])
+    )
+  })
+
   it('checks only the URL scheme so WHATWG-valid URLs are not rejected by the RFC 3986 format', () => {
     const action = validWorkflowAction()
     const version = (action.versions as SchemaObject[])[0]

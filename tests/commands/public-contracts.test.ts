@@ -10,6 +10,7 @@ import AppActionsCreate from '../../src/commands/app/actions/create.js'
 import AppActionsPull from '../../src/commands/app/actions/pull.js'
 import AppActionsPush from '../../src/commands/app/actions/push.js'
 import AppActionsValidate from '../../src/commands/app/actions/validate.js'
+import AppBillingMeterCreate from '../../src/commands/app/billing/meter/create.js'
 import AppBillingValidate from '../../src/commands/app/billing/validate.js'
 import AppCreate from '../../src/commands/app/create.js'
 import AppDiff from '../../src/commands/app/diff.js'
@@ -452,6 +453,19 @@ describe('public command contracts', () => {
     expect(invalid.exitCode).not.toBe(0)
     expect(invalid.stderr).toMatch(/billing|ghl-app\.json/i)
     expect(invalid.stderr).not.toMatch(/not logged in/i)
+
+    const meter = ['Daily usage', '--product-type', 'custom', '--product-name', 'Usage', '--directory', configDir]
+    const missingLimit = await runCommand(AppBillingMeterCreate, [...meter, '--price', '0.01'])
+    expect(missingLimit.stderr).toMatch(/pass the tier name[\s\S]*--execution-limit[\s\S]*non-interactively/i)
+
+    const noDailyLimit = await runCommand(AppBillingMeterCreate, [...meter, '--price', '0', '--execution-limit', '0'])
+    expect(noDailyLimit.exitCode).not.toBe(0)
+    expect(noDailyLimit.stderr).not.toMatch(/non-interactively/i)
+    expect(noDailyLimit.stderr).toMatch(/billing|ghl-app\.json/i)
+    expect(noDailyLimit.stderr).not.toMatch(/not logged in/i)
+
+    const negativeLimit = await runCommand(AppBillingMeterCreate, [...meter, '--price', '0.01', '--execution-limit=-1'])
+    expect(negativeLimit.stderr).toMatch(/greater than or equal to 0/i)
   })
 
   it('requires explicit non-interactive input before authentication or mutation', async () => {
