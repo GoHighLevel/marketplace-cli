@@ -91,6 +91,7 @@ describe('findAppById', () => {
 
     await expect(findAppById(client, 'a2')).resolves.toMatchObject({ appId: 'a2', versionId: 'v2' })
     expect(calls).toEqual([0, 100])
+    await expect(findAppById(client, 'a3')).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 })
 

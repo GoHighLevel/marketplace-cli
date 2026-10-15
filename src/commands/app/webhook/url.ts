@@ -19,16 +19,20 @@ export default class AppWebhookUrl extends GhlCommand {
     '<%= config.bin %> app webhook url https://acme.com/webhooks --directory ./my-app'
   ]
 
+  static enableJsonFlag = true
+
   static args = {
     url: Args.string({ description: 'Webhook URL (https; prompted interactively when omitted)' })
   }
 
   static flags = webhookWorkspaceFlags()
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { args, flags } = await this.parse(AppWebhookUrl)
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (args.url === undefined && !process.stdin.isTTY) {
+    if (args.url === undefined && !interactive) {
       this.error(
         'Pass the webhook URL when running non-interactively, e.g. `ghl app webhook url https://acme.com/webhooks`.'
       )
@@ -39,8 +43,10 @@ export default class AppWebhookUrl extends GhlCommand {
       if (validation !== true) this.error(validation)
     }
 
-    const context = await withSpinner('Loading webhook workspace...', () =>
-      loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
+    const context = await withSpinner(
+      'Loading webhook workspace...',
+      () => loadWebhookWorkspaceMutationContext(flags.directory, flags.app),
+      { quiet: json }
     )
 
     const url =
@@ -55,12 +61,18 @@ export default class AppWebhookUrl extends GhlCommand {
     const validation = validateHttpsUrl(url, 'Webhook URL', { publicOnly: true })
     if (validation !== true) this.error(validation)
 
-    const result = await withSpinner('Saving local and remote webhook URL...', () =>
-      applyWebhookWorkspaceMutation(context, {
-        webhookUrl: url,
-        subscribedEvents: context.remoteFiles.webhooks.subscribedEvents
-      })
+    const result = await withSpinner(
+      'Saving local and remote webhook URL...',
+      () =>
+        applyWebhookWorkspaceMutation(context, {
+          webhookUrl: url,
+          subscribedEvents: context.remoteFiles.webhooks.subscribedEvents
+        }),
+      { quiet: json }
     )
+    if (json) {
+      return { appId: context.plan.appId, versionId: result.versionId, changed: result.applied, webhookUrl: url }
+    }
     this.log(
       result.applied
         ? `Webhook URL set to ${url}; local workspace synchronized.`

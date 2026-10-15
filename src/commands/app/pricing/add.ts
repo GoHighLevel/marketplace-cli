@@ -11,9 +11,16 @@ import {
   parseAmount,
   requirePricingEditable
 } from '../../../lib/billing/pricing.js'
+import { isRecord } from '../../../lib/api/response.js'
 import { loadAppContext } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 import { validateTextForWhiteLabel } from '../../../lib/shared/validation.js'
+
+function createdPlanId(response: unknown): { id?: string } {
+  if (!isRecord(response)) return {}
+  const id = response._id ?? response.id
+  return typeof id === 'string' && id ? { id } : {}
+}
 
 export default class AppPricingAdd extends GhlCommand {
   static description = 'Add a pricing plan to the selected app'
@@ -23,6 +30,8 @@ export default class AppPricingAdd extends GhlCommand {
     '<%= config.bin %> app pricing add --name "Free Plan" --free',
     '<%= config.bin %> app pricing add --name "Pro" --amount 49 --interval month'
   ]
+
+  static enableJsonFlag = true
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
@@ -37,9 +46,10 @@ export default class AppPricingAdd extends GhlCommand {
     })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppPricingAdd)
-    const interactive = process.stdin.isTTY
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
     if (flags.name === undefined && !interactive) {
       this.error('Pass --name (with --free or --amount) when running non-interactively.')
@@ -48,7 +58,7 @@ export default class AppPricingAdd extends GhlCommand {
       this.error('Pass --amount for paid plans, or --free for a free plan.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     requirePricingEditable(context.version.status)
     const isTemplateApp = context.version.appType === 'template'
     const isWhiteLabelFriendly = context.version.isWhiteLabelFriendly !== false
@@ -63,7 +73,9 @@ export default class AppPricingAdd extends GhlCommand {
     }
 
     /* Portal caps: 6 plans, and a single plan for template apps. */
-    const plans = await withSpinner('Loading plans...', () => context.client.getBillingPlans(context.selected.appId))
+    const plans = await withSpinner('Loading plans...', () => context.client.getBillingPlans(context.selected.appId), {
+      quiet: json
+    })
     const maxPlans = isTemplateApp ? MAX_TEMPLATE_PLANS : MAX_PLANS
     if (plans.length >= maxPlans) {
       this.error(
@@ -187,7 +199,12 @@ export default class AppPricingAdd extends GhlCommand {
       this.error(errorMessage(error, 'Invalid pricing plan'))
     }
 
-    await withSpinner('Adding plan...', () => context.client.addBillingPlan(context.selected.appId, body))
+    const created = await withSpinner(
+      'Adding plan...',
+      () => context.client.addBillingPlan(context.selected.appId, body),
+      { quiet: json }
+    )
+    if (json) return { appId: context.selected.appId, plan: { ...createdPlanId(created), ...body } }
     this.log(`Plan "${body.name}" added.`)
   }
 }

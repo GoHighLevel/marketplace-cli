@@ -18,24 +18,30 @@ export default class AppWebhookUnsubscribe extends GhlCommand {
     '<%= config.bin %> app webhook unsubscribe ContactUpdate --directory ./my-app'
   ]
 
+  static enableJsonFlag = true
+
   static strict = false
 
   static flags = webhookWorkspaceFlags()
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { argv, flags } = await this.parse(AppWebhookUnsubscribe)
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
     let names: string[]
     try {
       names = normalizeVariadicArgs(argv as string[], 'event name')
     } catch (error) {
       this.error(errorMessage(error, 'Invalid event arguments'))
     }
-    if (names.length === 0 && !process.stdin.isTTY) {
+    if (names.length === 0 && !interactive) {
       this.error('Pass at least one event name to unsubscribe, e.g. `ghl app webhook unsubscribe ContactUpdate`.')
     }
 
-    const context = await withSpinner('Loading webhook workspace...', () =>
-      loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
+    const context = await withSpinner(
+      'Loading webhook workspace...',
+      () => loadWebhookWorkspaceMutationContext(flags.directory, flags.app),
+      { quiet: json }
     )
     const current = context.remoteFiles.webhooks.subscribedEvents
 
@@ -49,12 +55,19 @@ export default class AppWebhookUnsubscribe extends GhlCommand {
     }
 
     const next = current.filter(event => !names.includes(event.name))
-    const result = await withSpinner('Saving local and remote event subscriptions...', () =>
-      applyWebhookWorkspaceMutation(context, {
-        webhookUrl: context.remoteFiles.webhooks.webhookUrl,
-        subscribedEvents: next
-      })
+    const result = await withSpinner(
+      'Saving local and remote event subscriptions...',
+      () =>
+        applyWebhookWorkspaceMutation(context, {
+          webhookUrl: context.remoteFiles.webhooks.webhookUrl,
+          subscribedEvents: next
+        }),
+      { quiet: json }
     )
+    if (json) {
+      const { appId } = context.plan
+      return { appId, versionId: result.versionId, changed: result.applied, subscribedEvents: next }
+    }
     if (!result.applied) {
       this.log('None of the given events are currently subscribed; local workspace synchronized.')
       return

@@ -6,7 +6,7 @@ import type { AppVersion } from '../../lib/api/types.js'
 import { CATEGORY_GROUPS, normalizeBusinessNiches, normalizeSubcategories } from '../../lib/app/categories.js'
 import { validateAppName } from '../../lib/app/create.js'
 import { type BasicInfoChanges, buildBasicInfoBody, validateBasicInfoBody } from '../../lib/app/profile-sections.js'
-import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
+import { followVersionChangeNotes, loadAppContext, versionResult } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateHttpsUrl } from '../../lib/shared/validation.js'
 
@@ -17,6 +17,8 @@ export default class AppBasicInfo extends GhlCommand {
     '<%= config.bin %> app basic-info',
     '<%= config.bin %> app basic-info --tagline "Scheduling made simple" --website https://acme.com'
   ]
+
+  static enableJsonFlag = true
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
@@ -29,16 +31,18 @@ export default class AppBasicInfo extends GhlCommand {
     'logo-url': Flags.string({ description: 'HTTPS logo URL (prefer `ghl app media upload --logo`)' })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppBasicInfo)
+    const json = this.jsonEnabled()
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (!hasFlagChanges && !process.stdin.isTTY) {
+    if (!hasFlagChanges && !interactive) {
       this.error('Pass at least one field flag (--name, --tagline, ...) when running non-interactively.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     if (context.version.appType === 'template') {
       const unsupported = Object.keys(changes).filter(key => !['companyName', 'website'].includes(key))
       if (unsupported.length > 0) {
@@ -50,11 +54,15 @@ export default class AppBasicInfo extends GhlCommand {
     const body = buildBasicInfoBody(context.version, finalChanges)
     const validation = validateBasicInfoBody(body, context.version.isWhiteLabelFriendly ?? true)
     if (validation !== true) this.error(validation)
-    const result = await withSpinner('Saving basic info...', () =>
-      context.client.updateProfileSection('basicInfo', context.selected.appId, context.selected.versionId, body)
+    const result = await withSpinner(
+      'Saving basic info...',
+      () => context.client.updateProfileSection('basicInfo', context.selected.appId, context.selected.versionId, body),
+      { quiet: json }
     )
-    this.log('Basic info updated.')
-    await followVersionChange(context, result, message => this.log(message))
+    if (!json) this.log('Basic info updated.')
+    const notes = await followVersionChangeNotes(context, result)
+    if (json) return versionResult(context, body, notes)
+    for (const note of notes) this.log(note)
   }
 
   private changesFromFlags(flags: Record<string, string | undefined>): BasicInfoChanges {

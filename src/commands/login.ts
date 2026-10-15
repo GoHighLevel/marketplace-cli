@@ -1,29 +1,12 @@
-import { Flags } from '@oclif/core'
+import { Flags, ux } from '@oclif/core'
 import open from 'open'
 
 import { GhlCommand } from '../lib/shared/command.js'
 import { errorMessage } from '../lib/shared/errors.js'
-import { exchangeCodeForTokens, storedProfileFromTokenResponse } from '../lib/api/token-exchange.js'
 import { getConfig } from '../lib/config/environment.js'
-import { startLoopbackServer } from '../lib/auth/loopback.js'
-import { generatePkcePair, generateState } from '../lib/auth/pkce.js'
+import { startBrowserLogin } from '../lib/auth/browser-login.js'
 import { withSpinner } from '../lib/shared/spinner.js'
-import { saveProfile } from '../lib/auth/token-store.js'
 import { validateProfileName } from '../lib/shared/validation.js'
-
-interface AuthorizeUrlOptions {
-  challenge: string
-  state: string
-  port: number
-}
-
-export function buildAuthorizeUrl(portalUrl: string, options: AuthorizeUrlOptions): URL {
-  const authorizeUrl = new URL('/cli-auth', portalUrl)
-  authorizeUrl.searchParams.set('challenge', options.challenge)
-  authorizeUrl.searchParams.set('state', options.state)
-  authorizeUrl.searchParams.set('port', String(options.port))
-  return authorizeUrl
-}
 
 export function loginSuccessMessage(developer?: string): string {
   return `Logged in successfully${developer ? ` as ${developer}` : ''}.`
@@ -33,6 +16,8 @@ export default class Login extends GhlCommand {
   static description = 'Log in to your GoHighLevel developer account'
 
   static examples = ['<%= config.bin %> login', '<%= config.bin %> login --no-browser']
+
+  static enableJsonFlag = true
 
   static flags = {
     'no-browser': Flags.boolean({
@@ -45,28 +30,22 @@ export default class Login extends GhlCommand {
     })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(Login)
+    const json = this.jsonEnabled()
+    // stdout carries only the JSON result, so guidance goes to stderr (logToStderr is muted under --json).
+    const progress = (message: string) => (json ? ux.stderr(message) : this.log(message))
     const profileName = flags.profile.trim()
     const profileValidation = validateProfileName(profileName)
     if (profileValidation !== true) this.error(profileValidation)
     const config = getConfig()
+    const login = await startBrowserLogin(config, profileName)
 
-    const { verifier, challenge } = generatePkcePair()
-    const state = generateState()
-
-    const server = await startLoopbackServer(state)
-    const authorizeUrl = buildAuthorizeUrl(config.portalUrl, {
-      challenge,
-      state,
-      port: server.port
-    })
-
-    this.log('Opening your browser to log in to the GHL developer portal...')
-    this.log(`If the browser did not open, visit:\n\n  ${authorizeUrl.href}\n`)
+    progress('Opening your browser to log in to the GHL developer portal...')
+    progress(`If the browser did not open, visit:\n\n  ${login.url}\n`)
 
     if (!flags['no-browser']) {
-      await open(authorizeUrl.href).catch(() => {
+      await open(login.url).catch(() => {
         /* URL is already printed above, so a failed open is not fatal. */
       })
     }
@@ -75,18 +54,16 @@ export default class Login extends GhlCommand {
     try {
       code = await withSpinner(
         'Waiting for approval in the browser (times out in 5 minutes)...',
-        () => server.waitForCode
+        () => login.approval,
+        { quiet: json }
       )
     } catch (error) {
-      server.close()
+      login.close()
       this.error(errorMessage(error, 'Login failed'))
     }
 
-    const tokens = await withSpinner('Signing you in...', () => exchangeCodeForTokens(config.apiUrl, code, verifier))
-
-    await saveProfile(config.configDir, profileName, storedProfileFromTokenResponse(tokens))
-
-    const who = tokens.developer?.email ?? tokens.developer?.name ?? tokens.developer?.id
+    const who = await withSpinner('Signing you in...', () => login.signIn(code), { quiet: json })
+    if (json) return { profile: profileName, developer: who ?? null }
     this.log(`\n${loginSuccessMessage(who)}`)
   }
 }

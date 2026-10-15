@@ -11,26 +11,7 @@ import { workflowTriggerPrerequisiteErrors } from '../../lib/workflows/triggers/
 import { loadWorkflowTriggersWorkspaceIfPresent } from '../../lib/workflows/triggers/workspace.js'
 import { getJsonSchema, JSON_SCHEMA_NAMES } from '../../lib/app/json-schema.js'
 import type { JsonSchemaName } from '../../lib/app/json-schema.js'
-
-/* Maps backend readiness fields to the CLI command that fixes them. */
-const FIX_HINTS: Record<string, string> = {
-  name: 'ghl app basic-info --name',
-  tagline: 'ghl app basic-info --tagline',
-  userTypes: 'ghl app listing --target',
-  logo: 'ghl app media upload <file> --logo',
-  supportDetails: 'ghl app support --email',
-  category: 'ghl app basic-info --category',
-  description: 'ghl app profiles --description',
-  previewImages: 'ghl app media upload <3+ files>',
-  subAccountDescription: 'ghl app profiles --sub-description',
-  subAccountPreviewImages: 'ghl app media upload <3+ files> --profile sub-account',
-  scopes: 'ghl app scopes add <scope...>',
-  redirectUri: 'ghl app redirect add <url>',
-  clientKeys: 'ghl app keys create <name>',
-  mcpUrl: 'not configurable in this CLI yet; use the developer portal',
-  externalAuth: 'not configurable in this CLI yet; use the developer portal',
-  externalAuthConfig: 'not configurable in this CLI yet; use the developer portal'
-}
+import { READINESS_FIX_HINTS } from '../../lib/app/publish-readiness.js'
 
 export default class AppValidate extends GhlCommand {
   static description = 'Validate local app JSON before pushing it to the developer portal'
@@ -134,7 +115,7 @@ export default class AppValidate extends GhlCommand {
 
     const entries = Object.entries(validation.mandatoryFields)
     for (const [field, ok] of entries) {
-      const hint = !ok && FIX_HINTS[field] ? `  -> ${FIX_HINTS[field]}` : ''
+      const hint = !ok && Object.hasOwn(READINESS_FIX_HINTS, field) ? `  -> ${READINESS_FIX_HINTS[field]}` : ''
       this.log(`  ${ok ? '[x]' : '[ ]'} ${field}${hint}`)
     }
     if (missing.length === 0) {

@@ -1,4 +1,4 @@
-import { isExpired, loadActiveSession, refreshSession } from '../auth/session.js'
+import { isExpired, loadActiveSession, refreshSession, SessionExpiredError } from '../auth/session.js'
 import { saveProfile, type StoredProfile } from '../auth/token-store.js'
 import type { CliConfig } from '../config/environment.js'
 import { isDeveloperTeamId } from '../shared/validation.js'
@@ -39,6 +39,16 @@ export class ApiClientCore {
 
   get activeTeamName(): string | undefined {
     return this.profile.teamName
+  }
+
+  get activeEmail(): string | undefined {
+    return this.profile.email
+  }
+
+  /* The environment this client talks to, including the config directory its
+     session and app selection live in. */
+  get cliConfig(): CliConfig {
+    return this.config
   }
 
   async init(): Promise<void> {
@@ -115,7 +125,7 @@ export class ApiClientCore {
       if (this.profile.accessToken === requestToken) await this.refreshProfile()
       res = await doFetch()
     }
-    if (res.status === 401) throw new Error('Session expired. Run `ghl login` again.')
+    if (res.status === 401) throw new SessionExpiredError()
     return (await readApiResponse(res, {
       failureLabel: 'API request failed',
       responseLabel: 'API request'

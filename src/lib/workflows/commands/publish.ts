@@ -1,8 +1,13 @@
 import { Flags } from '@oclif/core'
 
-import { errorMessage } from '../../shared/errors.js'
 import { confirm, input, select } from '../../shared/prompts.js'
 import { withSpinner } from '../../shared/spinner.js'
+import {
+  loadWorkflowReleaseContext,
+  publishWorkflowItem,
+  selectPublishCandidate,
+  workflowPublishCandidates
+} from '../shared/release.js'
 import {
   type WorkflowResourceManifest,
   type WorkflowResourceNaming,
@@ -36,25 +41,17 @@ export abstract class WorkflowPublishCommand<
   S
 > extends WorkflowResourceCommand<M, P, W, F, S> {
   protected async publish(options: WorkflowPublishInput): Promise<unknown> {
-    const { singular, plural, label } = this.resource
+    const { singular } = this.resource
     if ((!options.selector || !options.notes || !options.force) && !this.interactive) {
       this.error(`Pass the ${singular} key, --notes, and --force when publishing non-interactively.`)
     }
     if (options.notes !== undefined && !options.notes.trim()) this.error('--notes must contain a non-empty change log.')
     const context = await withSpinner(
       `Validating workflow ${singular}...`,
-      () => this.loadSyncContext(options.directory, { requirePrerequisites: true }),
+      () => loadWorkflowReleaseContext(this.resource, options.directory, { purpose: 'publish' }),
       this.spinnerOptions
     )
-    const planError = this.planError(context.plan)
-    if (planError) throw planError
-    if (context.plan.localChanges.length > 0) {
-      throw new Error(`Push local workflow ${singular} changes before publishing: \`ghl app ${plural} push\`.`)
-    }
-    const candidates = this.resource.publishCandidates(context.remote, context.summaries, options.version)
-    if (candidates.length === 0) {
-      throw new Error(`No workflow ${singular} has a matching draft or incomplete registry publication.`)
-    }
+    const candidates = workflowPublishCandidates(this.resource, context, options.version)
     const selector =
       options.selector ??
       (await select({
@@ -64,18 +61,8 @@ export abstract class WorkflowPublishCommand<
           value: candidate.item.key
         }))
       }))
-    const candidate = candidates.find(entry => entry.item.key === selector || entry.item.templateId === selector)
-    const templateId = candidate?.item.templateId
-    if (!candidate || !templateId) throw new Error(`Workflow ${singular} "${selector}" has no publishable version.`)
+    const candidate = selectPublishCandidate(this.resource, context, candidates, selector)
     const { item, version, repairRegistry } = candidate
-    if (!repairRegistry) {
-      const errors = this.resource.validateManifest(context.remote, {
-        publishable: true,
-        key: item.key,
-        version: version.version
-      })
-      if (errors.length > 0) throw new Error(`${label} cannot be published:\n- ${errors.join('\n- ')}`)
-    }
     const notes = (
       options.notes ??
       (await input({
@@ -96,35 +83,18 @@ export abstract class WorkflowPublishCommand<
         return
       }
     }
-    await withSpinner(
+    const published = await withSpinner(
       `Publishing workflow ${singular}...`,
-      async () => {
-        if (!repairRegistry) {
-          await this.resource.submitForReview(context.client, context.appId, templateId, version.version, notes)
-        }
-        try {
-          await this.resource.publishSummary(context.client, context.appId, templateId, version.version)
-        } catch (error) {
-          if (repairRegistry) throw error
-          throw new Error(
-            `The workflow version was published, but its registry update failed: ${errorMessage(error, 'registry update failed')} ` +
-              `Re-run this command with the same ${singular} and version to repair the registry.`
-          )
-        }
-      },
+      () => publishWorkflowItem(this.resource, context, candidate, notes),
       this.spinnerOptions
     )
-    const remote = await this.fetchManifest(context.client, context.appId)
-    const files = this.resource.preserveSourceWorkspace
-      ? await this.resource.writeWorkspace(context.directory, remote, remote, context.local)
-      : await this.resource.writeWorkspace(context.directory, remote)
     const result = {
       appId: context.appId,
-      key: item.key,
-      version: version.version,
+      key: published.key,
+      version: published.version,
       status: 'published',
       repairedRegistry: repairRegistry,
-      files
+      files: published.files
     }
     if (this.jsonEnabled()) return result
     this.log(

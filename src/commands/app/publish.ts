@@ -1,31 +1,22 @@
 import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
-import { errorMessage } from '../../lib/shared/errors.js'
 import { confirm, input, select } from '../../lib/shared/prompts.js'
-import { persistSelection } from '../../lib/app/context.js'
-import { formatReadinessError, requireVersionStatus, requiresPublicReviewDetails } from '../../lib/app/rules.js'
-import { validateStoredReviewDetails } from '../../lib/app/profile-sections.js'
-import { refreshAppWorkspaceLifecycle } from '../../lib/app/lifecycle.js'
+import { executePublish, FIRST_VERSION, preparePublish } from '../../lib/app/release.js'
 import { loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
-import {
-  MAX_PENDING_VERSIONS,
-  activeVersionCount,
-  baseVersionFromList,
-  bumpOptions,
-  minimumBumpFromAnalysis,
-  pendingVersions,
-  validateNewVersion
-} from '../../lib/app/versioning.js'
+import { validateNewVersion } from '../../lib/app/versioning.js'
 
 export default class AppPublish extends GhlCommand {
   static description = 'Publish the draft version (private apps go live; public apps enter marketplace review)'
 
   static examples = [
     '<%= config.bin %> app publish',
-    '<%= config.bin %> app publish --version 1.1.0 --agency-notes "Adds calendar sync"'
+    '<%= config.bin %> app publish --version 1.1.0 --agency-notes "Adds calendar sync"',
+    '<%= config.bin %> app publish --version 1.1.0 --agency-notes "Adds calendar sync" --force --json'
   ]
+
+  static enableJsonFlag = true
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
@@ -35,9 +26,10 @@ export default class AppPublish extends GhlCommand {
     force: Flags.boolean({ description: 'Skip the confirmation prompt', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppPublish)
-    const interactive = process.stdin.isTTY
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
     if (!flags.force && !interactive) {
       this.error(
@@ -45,42 +37,9 @@ export default class AppPublish extends GhlCommand {
       )
     }
 
-    const context = await loadAppContext(flags.app)
-    requireVersionStatus(context.version.status, ['draft', 'disapproved'], 'publish')
-
-    /* Fail early with the readiness checklist instead of a raw publish 400. */
-    const validation = await withSpinner('Validating...', () =>
-      context.client.preSubmitValidation(context.selected.appId, context.selected.versionId)
-    )
-    const missing = Object.entries(validation.mandatoryFields ?? {}).filter(([, ok]) => !ok)
-    if (!validation.success || missing.length > 0) {
-      this.error(formatReadinessError(validation))
-    }
-
-    const isPrivate = context.version.private === true
-
-    /* Public review submissions are rejected without the App Review Details
-       the portal collects in its modal — fail early with the fix. */
-    if (requiresPublicReviewDetails(context.version)) {
-      const reviewDetailsValidation = validateStoredReviewDetails(context.version, false)
-      if (reviewDetailsValidation !== true) {
-        this.error(`${reviewDetailsValidation} Complete the fields with \`ghl app review-details\` first.`)
-      }
-    }
-
-    const versions = await withSpinner('Checking versions...', () =>
-      context.client.listVersions(context.selected.appId)
-    )
-
-    /* The portal allows one pending (in-review) version at a time. */
-    const pending = pendingVersions(versions, context.selected.versionId)
-    if (pending.length >= MAX_PENDING_VERSIONS) {
-      this.error(
-        `Version ${pending[0].version ?? pending[0]._id} is already pending — finish or withdraw it before publishing another version.`
-      )
-    }
-
-    const baseVersion = baseVersionFromList(versions)
+    const target = await loadAppContext(flags.app, json)
+    const preparation = await withSpinner('Validating...', () => preparePublish(target), { quiet: json })
+    const { isPrivate, baseVersion, options } = preparation
 
     let newVersion: string
     let agencyNotes = flags['agency-notes']
@@ -89,25 +48,13 @@ export default class AppPublish extends GhlCommand {
     if (baseVersion === undefined) {
       /* First publish: the portal skips the version and notes steps and
          publishes 1.0.0 with empty notes. */
-      if (flags.version !== undefined && flags.version !== '1.0.0') {
+      if (flags.version !== undefined && flags.version !== FIRST_VERSION) {
         this.error('The first published version is always 1.0.0 — drop --version or pass 1.0.0.')
       }
-      newVersion = '1.0.0'
+      newVersion = FIRST_VERSION
       agencyNotes ??= ''
       subAccountNotes ??= ''
     } else {
-      const analysis = await withSpinner('Analyzing changes...', () =>
-        context.client.analyzeVersion(context.selected.appId, context.selected.versionId)
-      )
-      const options = bumpOptions({
-        baseVersion,
-        minimumBump: minimumBumpFromAnalysis(analysis),
-        activeVersionCount: activeVersionCount(versions)
-      })
-      if (options.every(option => option.disabledReason)) {
-        this.error(`No version bump is currently allowed: ${options.map(option => option.disabledReason)[0]}.`)
-      }
-
       if (flags.version !== undefined) {
         const check = validateNewVersion(flags.version, options)
         if (check !== true) this.error(check)
@@ -125,7 +72,7 @@ export default class AppPublish extends GhlCommand {
             value: option.version,
             disabled: Boolean(option.disabledReason)
           })),
-          default: analysis.suggestedVersion
+          default: preparation.suggestedVersion
         })
       }
 
@@ -164,42 +111,17 @@ export default class AppPublish extends GhlCommand {
       if (!ok) return
     }
 
-    await withSpinner(isPrivate ? 'Publishing version...' : 'Submitting for review...', () =>
-      context.client.publishVersion(context.selected.appId, context.selected.versionId, {
-        newVersion,
-        agencyNotes: agencyNotes ?? '',
-        subAccountNotes: subAccountNotes ?? ''
-      })
+    const request = { newVersion, agencyNotes: agencyNotes ?? '', subAccountNotes: subAccountNotes ?? '' }
+    await withSpinner(
+      isPrivate ? 'Publishing version...' : 'Submitting for review...',
+      () => executePublish(target, preparation, request, process.cwd()),
+      { quiet: json }
     )
 
-    try {
-      const refreshed = await withSpinner('Refreshing local status...', () =>
-        refreshAppWorkspaceLifecycle(
-          process.cwd(),
-          context.client,
-          context.selected.appId,
-          context.selected.versionId,
-          newVersion
-        )
-      )
-      if (refreshed && refreshed.version._id !== context.selected.versionId) {
-        await persistSelection(context.client, context.config, {
-          appId: context.selected.appId,
-          versionId: refreshed.version._id,
-          name: refreshed.version.name ?? context.selected.name
-        })
-      }
-    } catch (error) {
-      const outcome = isPrivate
-        ? `Version ${newVersion} was published`
-        : `Version ${newVersion} was submitted for review`
-      const reason = errorMessage(error, 'local synchronization failed')
-      throw new Error(
-        `${outcome}, but the local workspace status could not be synchronized: ${reason} ` +
-          'Run `ghl app pull` before making more local changes.'
-      )
+    if (json) {
+      const { appId, versionId } = target.selected
+      return { appId, versionId, version: newVersion, status: isPrivate ? 'live' : 'review' }
     }
-
     this.log(
       isPrivate
         ? `Version ${newVersion} is live.`

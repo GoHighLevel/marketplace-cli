@@ -6,6 +6,7 @@ import { getConfig } from '../../lib/config/environment.js'
 import { formatIsoDate } from '../../lib/shared/date.js'
 import { input, password as passwordPrompt } from '../../lib/shared/prompts.js'
 import { secretForOutput, tryRecordSecret } from '../../lib/secrets/ledger.js'
+import { sandboxPasswordEntry } from '../../lib/sandbox/accounts.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateSandboxPassword } from '../../lib/shared/validation.js'
 
@@ -57,12 +58,11 @@ export default class SandboxCreate extends GhlCommand {
       { quiet: this.jsonEnabled() }
     )
 
-    const stored = await tryRecordSecret(config.configDir, client.activeProfileName, {
-      kind: 'sandbox-password',
-      label: account.name ?? name.trim(),
-      reference: account.companyId,
-      value: password
-    })
+    const stored = await tryRecordSecret(
+      config.configDir,
+      client.activeProfileName,
+      sandboxPasswordEntry(account, name.trim(), password)
+    )
     const displayedPassword = secretForOutput(password, stored)
 
     if (this.jsonEnabled()) return { ...account, password: displayedPassword, passwordStored: stored }

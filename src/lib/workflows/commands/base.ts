@@ -1,7 +1,7 @@
 import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../shared/command.js'
-import { loadWorkflowSyncContext, workflowPlanError, type WorkflowSyncContextOptions } from '../shared/context.js'
+import { loadWorkflowSyncContext, type WorkflowSyncContextOptions } from '../shared/context.js'
 import {
   type WorkflowResource,
   type WorkflowResourceManifest,
@@ -37,10 +37,6 @@ export abstract class WorkflowResourceCommand<
 
   protected loadSyncContext(directory: string, options?: WorkflowSyncContextOptions) {
     return loadWorkflowSyncContext(this.resource, directory, options)
-  }
-
-  protected planError(plan: P): Error | undefined {
-    return workflowPlanError(this.resource, plan)
   }
 
   protected async fetchManifest(

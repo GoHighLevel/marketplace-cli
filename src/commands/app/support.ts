@@ -10,7 +10,7 @@ import {
   validateSupportBody,
   validateSupportUrl
 } from '../../lib/app/profile-sections.js'
-import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
+import { followVersionChangeNotes, loadAppContext, versionResult } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateEmail, validatePhone } from '../../lib/shared/validation.js'
 
@@ -32,6 +32,8 @@ export default class AppSupport extends GhlCommand {
     '<%= config.bin %> app support --email support@acme.com --docs-url https://docs.acme.com'
   ]
 
+  static enableJsonFlag = true
+
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
     email: Flags.string({ description: 'Support email (email or phone is required to publish)' }),
@@ -47,16 +49,18 @@ export default class AppSupport extends GhlCommand {
     })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppSupport)
+    const json = this.jsonEnabled()
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (!hasFlagChanges && !process.stdin.isTTY) {
+    if (!hasFlagChanges && !interactive) {
       this.error('Pass at least one field flag (--email, --phone, ...) when running non-interactively.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     if (flags.service !== undefined && context.version.appType !== 'template') {
       this.error('--service only applies to template apps.')
     }
@@ -65,11 +69,16 @@ export default class AppSupport extends GhlCommand {
     const body = buildSupportBody(context.version, finalChanges)
     const validation = validateSupportBody(body, context.version.appType === 'template')
     if (validation !== true) this.error(validation)
-    const result = await withSpinner('Saving support details...', () =>
-      context.client.updateProfileSection('supportDetails', context.selected.appId, context.selected.versionId, body)
+    const result = await withSpinner(
+      'Saving support details...',
+      () =>
+        context.client.updateProfileSection('supportDetails', context.selected.appId, context.selected.versionId, body),
+      { quiet: json }
     )
-    this.log('Support details updated.')
-    await followVersionChange(context, result, message => this.log(message))
+    if (!json) this.log('Support details updated.')
+    const notes = await followVersionChangeNotes(context, result)
+    if (json) return versionResult(context, body, notes)
+    for (const note of notes) this.log(note)
   }
 
   private changesFromFlags(flags: SupportFlags): SupportChanges {

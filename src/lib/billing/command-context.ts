@@ -163,15 +163,15 @@ export async function validateLocalBillingIntent(
   ]
 }
 
-export async function loadBillingSyncContext(directory: string): Promise<BillingSyncContext> {
+/* Pass a signed-in client to share one session across several modules. */
+export async function loadBillingSyncContext(directory: string, signedIn?: ApiClient): Promise<BillingSyncContext> {
   const local = await loadBillingWorkspace(directory)
   const localErrors = await validateLocalBillingIntent(local)
   if (localErrors.length > 0) {
     throw new Error(`Billing configuration is invalid:\n- ${localErrors.join('\n- ')}`)
   }
-  const config = getConfig()
-  const client = new ApiClient(config)
-  await client.init()
+  const client = signedIn ?? new ApiClient(getConfig())
+  if (!signedIn) await client.init()
   const [remote, remoteVersion] = await Promise.all([
     fetchBillingSnapshot(client, local.app.appId),
     client.getVersion(local.app.appId, local.app.versionId)

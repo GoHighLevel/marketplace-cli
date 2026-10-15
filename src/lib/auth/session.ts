@@ -1,14 +1,21 @@
 import { type CliConfig } from '../config/environment.js'
 import { isRecord, readApiResponse } from '../api/response.js'
 import { CLI_VERSION_HEADERS } from '../api/version-header.js'
+import { CodedError } from '../shared/errors.js'
 import { loadCredentials, saveProfile, type StoredProfile } from './token-store.js'
 
 const EXPIRY_SKEW_MS = 60_000
 const EPOCH_MILLISECONDS_THRESHOLD = 100_000_000_000
 
-export class NotLoggedInError extends Error {
+export class NotLoggedInError extends CodedError {
   constructor() {
-    super('Not logged in. Run `ghl login` first.')
+    super('AUTH_REQUIRED', 'Not logged in. Run `ghl login` first.')
+  }
+}
+
+export class SessionExpiredError extends CodedError {
+  constructor() {
+    super('AUTH_REQUIRED', 'Session expired. Run `ghl login` again.')
   }
 }
 
@@ -45,11 +52,24 @@ export async function loadActiveSession(config: CliConfig): Promise<{ name: stri
   return { name, profile }
 }
 
+/* Refresh tokens rotate on use, so every refresh of one token in this
+   process shares a single request: parallel API clients, such as concurrent
+   MCP tool calls, all receive the same rotated pair. */
+const refreshesInFlight = new Map<string, Promise<StoredProfile>>()
+
+export function refreshSession(config: CliConfig, name: string, profile: StoredProfile): Promise<StoredProfile> {
+  if (!profile.refreshToken) return Promise.reject(new NotLoggedInError())
+  const key = JSON.stringify([config.configDir, name, profile.refreshToken])
+  const existing = refreshesInFlight.get(key)
+  if (existing) return existing
+  const refresh = exchangeRefreshToken(config, name, profile).finally(() => refreshesInFlight.delete(key))
+  refreshesInFlight.set(key, refresh)
+  return refresh
+}
+
 /* Exchanges the stored refresh token for a fresh session on the oauth
    service and persists the rotated pair before returning it. */
-export async function refreshSession(config: CliConfig, name: string, profile: StoredProfile): Promise<StoredProfile> {
-  if (!profile.refreshToken) throw new NotLoggedInError()
-
+async function exchangeRefreshToken(config: CliConfig, name: string, profile: StoredProfile): Promise<StoredProfile> {
   let res: Response
   try {
     res = await fetch(`${config.oauthUrl}/developers/login/refresh`, {
@@ -68,7 +88,7 @@ export async function refreshSession(config: CliConfig, name: string, profile: S
   }
 
   if (!res.ok) {
-    throw new Error('Session expired. Run `ghl login` again.')
+    throw new SessionExpiredError()
   }
 
   const data = await readApiResponse(res, { failureLabel: 'Session refresh failed', responseLabel: 'Session refresh' })

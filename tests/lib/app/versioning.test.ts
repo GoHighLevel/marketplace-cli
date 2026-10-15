@@ -51,6 +51,7 @@ describe('version list helpers', () => {
     ]
     expect(() => requireDraftable(cloneable, 'latest')).not.toThrow()
     expect(() => requireDraftable(cloneable, 'old')).toThrow(/latest live version/i)
+    expect(() => requireDraftable(cloneable, 'old')).toThrow(expect.objectContaining({ code: 'INVALID_STATE' }))
     expect(() =>
       requireDraftable([...cloneable, { _id: 'draft', version: '1.2.0', status: 'draft' }], 'latest')
     ).toThrow(/pending version/i)
@@ -109,6 +110,7 @@ describe('bumpOptions and validateNewVersion', () => {
     ]
     expect(() => requireDeprecatable(twoLive, 'a')).not.toThrow()
     expect(() => requireDeprecatable(twoLive, 'b')).toThrow(/latest live/i)
+    expect(() => requireDeprecatable(twoLive, 'b')).toThrow(expect.objectContaining({ code: 'INVALID_STATE' }))
 
     /* The active-version cap blocks further deprecations. */
     const many = [

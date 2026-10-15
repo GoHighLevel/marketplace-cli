@@ -1,3 +1,5 @@
+import { CodedError } from '../shared/errors.js'
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -46,7 +48,8 @@ export async function readApiResponse(response: Response, options: ResponseOptio
     if (response.ok) throw new Error(`${options.responseLabel} response could not be read (${response.status}).`)
   }
   if (!response.ok) {
-    throw new Error(
+    throw new CodedError(
+      'API_ERROR',
       `${options.failureLabel} (${response.status}): ${extractApiErrorMessage(text, response.statusText)}`
     )
   }

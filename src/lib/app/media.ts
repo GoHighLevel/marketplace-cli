@@ -220,11 +220,19 @@ export async function buildUploadForm(filePaths: string[], kind: 'logo' | 'previ
   }
   for (const filePath of filePaths) {
     const extension = path.extname(filePath).toLowerCase()
-    const data = await fs.readFile(filePath).catch(() => {
+    const limit = kind === 'logo' ? LOGO_MAX_SIZE_BYTES : PREVIEW_MAX_SIZE_BYTES
+    /* Size is checked before reading, so a device or huge file is never loaded. */
+    const stat = await fs.stat(filePath).catch(() => {
       throw new Error(`Cannot read file "${filePath}"`)
     })
-    const limit = kind === 'logo' ? LOGO_MAX_SIZE_BYTES : PREVIEW_MAX_SIZE_BYTES
-    if (data.byteLength > limit) {
+    if (!stat.isFile()) throw new Error(`"${filePath}" is not a regular file.`)
+    const data =
+      stat.size > limit
+        ? undefined
+        : await fs.readFile(filePath).catch(() => {
+            throw new Error(`Cannot read file "${filePath}"`)
+          })
+    if (data === undefined || data.byteLength > limit) {
       throw new Error(
         kind === 'logo'
           ? `"${filePath}" exceeds the 512 KB logo limit.`

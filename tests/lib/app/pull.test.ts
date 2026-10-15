@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildPullFilesOutput,
+  findWorkspacesBelow,
   loadAppVersionForExport,
   pullArtifactPlan,
   readPullWorkspaceBinding,
@@ -101,6 +102,37 @@ describe('pull workspace binding', () => {
   })
 })
 
+describe('findWorkspacesBelow', () => {
+  async function workspaceAt(...segments: string[]): Promise<string> {
+    const directory = path.join(root, ...segments)
+    await fs.mkdir(directory, { recursive: true })
+    await fs.writeFile(path.join(directory, 'ghl-app.json'), '{}')
+    return directory
+  }
+
+  it('finds workspaces breadth-first, skipping hidden, dependency, and linked folders', async () => {
+    const shallow = await workspaceAt('apps', 'crm')
+    const deep = await workspaceAt('apps', 'billing', 'app')
+    await workspaceAt('node_modules', 'pkg')
+    await workspaceAt('.cache', 'copy')
+    await fs.symlink(shallow, path.join(root, 'linked'))
+
+    expect(await findWorkspacesBelow(root)).toEqual([shallow, deep])
+  })
+
+  it('stops at the depth, directory, and result limits', async () => {
+    await workspaceAt('a')
+    await workspaceAt('b')
+    await workspaceAt('c', 'd', 'e', 'f')
+    const limits = { maxDepth: 3, maxDirectories: 2_000, maxResults: 10 }
+
+    expect(await findWorkspacesBelow(root, limits)).toHaveLength(2)
+    expect(await findWorkspacesBelow(root, { ...limits, maxResults: 1 })).toHaveLength(1)
+    expect(await findWorkspacesBelow(root, { ...limits, maxDirectories: 1 })).toEqual([])
+    expect(await findWorkspacesBelow(path.join(root, 'missing'))).toEqual([])
+  })
+})
+
 describe('resolveVersionId', () => {
   const versions = [
     { _id: 'draft-id', version: '1.2.0', status: 'draft' },
@@ -115,6 +147,9 @@ describe('resolveVersionId', () => {
 
   it('fails with available values when the requested or selected version is unavailable', () => {
     expect(() => resolveVersionId(versions, '9.9.9', 'draft-id')).toThrow(/9\.9\.9.*1\.2\.0.*1\.1\.0/i)
+    expect(() => resolveVersionId(versions, '9.9.9', 'draft-id')).toThrow(
+      expect.objectContaining({ code: 'NOT_FOUND' })
+    )
     expect(() => resolveVersionId(versions, undefined, 'missing-id')).toThrow(/selected version.*no longer available/i)
   })
 })

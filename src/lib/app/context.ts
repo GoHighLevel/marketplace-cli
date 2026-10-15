@@ -3,6 +3,7 @@ import type { AppListItem } from '../api/types.js'
 import { readPullWorkspaceBinding } from './pull.js'
 import { type CliConfig } from '../config/environment.js'
 import { getSelectedApp, saveSelectedApp, type SelectedApp } from '../config/selection-store.js'
+import { CodedError } from '../shared/errors.js'
 
 export function toSelectedApp(item: AppListItem): SelectedApp {
   return { appId: String(item.appId ?? item._id), versionId: String(item._id), name: item.name }
@@ -41,7 +42,10 @@ export async function findAppItemById(client: ApiClient, appId: string, nameHint
   const apps = await listAllApps(client)
   const match = apps.find(app => matchesAppId(app, appId))
   if (match) return match
-  throw new Error(`App "${appId}" not found in your developer account. Run \`ghl app list\` to see available apps.`)
+  throw new CodedError(
+    'NOT_FOUND',
+    `App "${appId}" not found in your developer account. Run \`ghl app list\` to see available apps.`
+  )
 }
 
 export async function findAppById(client: ApiClient, appId: string): Promise<SelectedApp> {

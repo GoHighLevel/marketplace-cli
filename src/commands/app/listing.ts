@@ -10,7 +10,7 @@ import {
   currentTarget,
   type ListingChanges
 } from '../../lib/app/profile-sections.js'
-import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
+import { followVersionChangeNotes, loadAppContext, versionResult } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
 export default class AppListing extends GhlCommand {
@@ -21,6 +21,8 @@ export default class AppListing extends GhlCommand {
     '<%= config.bin %> app listing --listing standard --keywords "crm,automation"',
     '<%= config.bin %> app listing --type public'
   ]
+
+  static enableJsonFlag = true
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
@@ -37,36 +39,46 @@ export default class AppListing extends GhlCommand {
     keywords: Flags.string({ description: 'Comma-separated search keywords (200 characters total)' })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppListing)
+    const json = this.jsonEnabled()
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (!hasFlagChanges && !process.stdin.isTTY) {
+    if (!hasFlagChanges && !interactive) {
       this.error('Pass at least one field flag (--target, --listing, ...) when running non-interactively.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
 
     const body = buildListingBody(context.version, finalChanges)
-    const result = await withSpinner('Saving listing configuration...', () =>
-      context.client.updateProfileSection(
-        'listingConfiguration',
-        context.selected.appId,
-        context.selected.versionId,
-        body
-      )
+    const result = await withSpinner(
+      'Saving listing configuration...',
+      () =>
+        context.client.updateProfileSection(
+          'listingConfiguration',
+          context.selected.appId,
+          context.selected.versionId,
+          body
+        ),
+      { quiet: json }
     )
+    if (!json) this.logSaved(finalChanges, context.version.private ?? false)
+    const notes = await followVersionChangeNotes(context, result)
+    if (json) return versionResult(context, body, notes)
+    for (const note of notes) this.log(note)
+  }
+
+  private logSaved(changes: ListingChanges, wasPrivate: boolean): void {
     this.log('Listing configuration updated.')
-    const wasPrivate = context.version.private ?? false
-    if (finalChanges.type === 'public' && wasPrivate) {
+    if (changes.type === 'public' && wasPrivate) {
       this.log('App converted to public — publishing now submits it for marketplace review.')
       this.log('Review submissions need demo details: `ghl app review-details`.')
-    } else if (finalChanges.type === 'private' && !wasPrivate) {
+    } else if (changes.type === 'private' && !wasPrivate) {
       this.log('App converted to private — publishing takes it live directly.')
     }
-    await followVersionChange(context, result, message => this.log(message))
   }
 
   private changesFromFlags(flags: Record<string, string | undefined>): ListingChanges {

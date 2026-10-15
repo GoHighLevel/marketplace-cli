@@ -10,7 +10,7 @@ import {
   validateReviewDetailsBody,
   validateReviewDetailsChanges
 } from '../../lib/app/profile-sections.js'
-import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
+import { followVersionChangeNotes, loadAppContext, versionResult } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
 export default class AppReviewDetails extends GhlCommand {
@@ -21,6 +21,8 @@ export default class AppReviewDetails extends GhlCommand {
     '<%= config.bin %> app review-details --demo https://youtu.be/x --scopes-demo https://youtu.be/y'
   ]
 
+  static enableJsonFlag = true
+
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
     demo: Flags.string({ description: 'End-to-end demo video URL (https)' }),
@@ -30,16 +32,18 @@ export default class AppReviewDetails extends GhlCommand {
     'private-reason': Flags.string({ description: 'Why the app stays private (private apps only)' })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppReviewDetails)
+    const json = this.jsonEnabled()
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (!hasFlagChanges && !process.stdin.isTTY) {
+    if (!hasFlagChanges && !interactive) {
       this.error('Pass at least one field flag (--demo, --scopes-demo, ...) when running non-interactively.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     if (context.version.appType === 'template') {
       this.error('Template apps do not use app-review details; the developer portal skips this step.')
     }
@@ -60,11 +64,27 @@ export default class AppReviewDetails extends GhlCommand {
     const body = buildReviewDetailsBody(context.version, finalChanges)
     const validation = validateReviewDetailsBody(body, context.version.private === true)
     if (validation !== true) this.error(validation)
-    const result = await withSpinner('Saving review details...', () =>
-      context.client.updateReviewDetails(context.selected.appId, context.selected.versionId, body)
+    const result = await withSpinner(
+      'Saving review details...',
+      () => context.client.updateReviewDetails(context.selected.appId, context.selected.versionId, body),
+      { quiet: json }
     )
-    this.log('Review details updated.')
-    await followVersionChange(context, result, message => this.log(message))
+    if (!json) this.log('Review details updated.')
+    const notes = await followVersionChangeNotes(context, result)
+    if (json) return versionResult(context, this.jsonFields(body), notes)
+    for (const note of notes) this.log(note)
+  }
+
+  // Test credentials are secret: report only whether the saved version has them.
+  /* Test credentials are reported only as provided, never echoed. */
+  private jsonFields(body: ReturnType<typeof buildReviewDetailsBody>) {
+    return {
+      endToEndDemoUrl: body.endToEndDemoUrl,
+      scopesDemoUrl: body.scopesDemoUrl,
+      additionalDetails: body.additionalDetails,
+      privateReason: body.privateReason,
+      testCredentialsProvided: body.testCredentials !== ''
+    }
   }
 
   private changesFromFlags(flags: Record<string, string | undefined>): ReviewDetailsChanges {

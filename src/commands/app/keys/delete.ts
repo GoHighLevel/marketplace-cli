@@ -1,16 +1,20 @@
 import { Args, Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../../lib/shared/command.js'
-import { getConfig } from '../../../lib/config/environment.js'
 import { confirm, select } from '../../../lib/shared/prompts.js'
-import { removeSecrets } from '../../../lib/secrets/ledger.js'
+import { deleteClientKeyAndSecret, liveClientKeys, requireClientKey } from '../../../lib/app/client-keys.js'
 import { loadAppContext } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
 export default class AppKeysDelete extends GhlCommand {
   static description = 'Delete a client key from the selected app'
 
-  static examples = ['<%= config.bin %> app keys delete <clientKeyId> --force']
+  static examples = [
+    '<%= config.bin %> app keys delete <clientKeyId> --force',
+    '<%= config.bin %> app keys delete <clientKeyId> --force --json'
+  ]
+
+  static enableJsonFlag = true
 
   static args = {
     keyId: Args.string({ description: 'Client key id to delete (picked interactively when omitted)' })
@@ -21,15 +25,17 @@ export default class AppKeysDelete extends GhlCommand {
     force: Flags.boolean({ description: 'Skip the confirmation prompt', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { args, flags } = await this.parse(AppKeysDelete)
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (args.keyId === undefined && !process.stdin.isTTY) {
+    if (args.keyId === undefined && !interactive) {
       this.error('Pass the client key id when running non-interactively, e.g. `ghl app keys delete <clientKeyId>`.')
     }
 
-    const context = await loadAppContext(flags.app)
-    const liveKeys = (context.version.clientKeys ?? []).filter(key => key.id && !key.deleted)
+    const context = await loadAppContext(flags.app, json)
+    const liveKeys = liveClientKeys(context.version)
 
     const keyId =
       args.keyId ??
@@ -37,15 +43,13 @@ export default class AppKeysDelete extends GhlCommand {
         if (liveKeys.length === 0) this.error('This app has no client keys to delete.')
         return select({
           message: 'Which client key should be deleted?',
-          choices: liveKeys.map(key => ({ name: `${key.name ?? 'unnamed'} (${key.id})`, value: key.id as string }))
+          choices: liveKeys.map(key => ({ name: `${key.name ?? 'unnamed'} (${key.id})`, value: key.id }))
         })
       })())
 
-    if (!liveKeys.some(key => key.id === keyId)) {
-      this.error(`Client key "${keyId}" was not found on the selected app.`)
-    }
+    requireClientKey(context.version, keyId)
     if (!flags.force) {
-      if (!process.stdin.isTTY) {
+      if (!interactive) {
         this.error('Deleting a client key breaks integrations using it — pass --force when running non-interactively.')
       }
       const ok = await confirm({
@@ -54,17 +58,11 @@ export default class AppKeysDelete extends GhlCommand {
       })
       if (!ok) return
     }
-    await withSpinner('Deleting client key...', () => context.client.deleteClientKey(context.selected.appId, keyId))
-
-    /* The key no longer works — drop its ledgered secret so `ghl secrets`
-       only shows live credentials. Best-effort: deletion already succeeded. */
-    try {
-      const config = getConfig()
-      await removeSecrets(config.configDir, context.client.activeProfileName, {
-        kind: 'client-secret',
-        reference: keyId
-      })
-    } catch {
+    const ledgerUpdated = await withSpinner('Deleting client key...', () => deleteClientKeyAndSecret(context, keyId), {
+      quiet: json
+    })
+    if (json) return { appId: context.selected.appId, clientKeyId: keyId, deleted: true, ledgerUpdated }
+    if (!ledgerUpdated) {
       this.warn('Could not update the local secrets ledger — `ghl secrets` may show a stale entry.')
     }
 

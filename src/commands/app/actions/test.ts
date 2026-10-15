@@ -4,13 +4,7 @@ import path from 'node:path'
 import { GhlCommand } from '../../../lib/shared/command.js'
 import { isRecord } from '../../../lib/api/response.js'
 import { readJsonFile } from '../../../lib/shared/json-file.js'
-import { loadWorkflowRemoteContext } from '../../../lib/workflows/shared/context.js'
-import {
-  assertWorkflowActionTestSucceeded,
-  prepareWorkflowActionTestRequest
-} from '../../../lib/workflows/actions/test-execution.js'
-import { fetchWorkflowActionsSnapshot } from '../../../lib/workflows/actions/service.js'
-import { loadWorkflowActionsWorkspace } from '../../../lib/workflows/actions/workspace.js'
+import { runWorkflowActionTest } from '../../../lib/workflows/actions/test-run.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
 async function testInput(flags: { input?: string; 'input-file'?: string }): Promise<Record<string, unknown>> {
@@ -58,56 +52,22 @@ export default class AppActionsTest extends GhlCommand {
 
   protected async execute(): Promise<unknown> {
     const { args, flags } = await this.parse(AppActionsTest)
-    const workspace = await loadWorkflowActionsWorkspace(flags.directory)
     const inputData = await testInput(flags)
-    const action = workspace.manifest.actions.find(item => item.key === args.action || item.templateId === args.action)
-    if (!action) throw new Error(`Workflow action "${args.action}" was not found in this workspace.`)
-    const version = flags.version
-      ? action.versions.find(item => item.version === flags.version)
-      : (action.versions.find(item => item.status === 'draft') ?? action.versions[0])
-    if (!version) {
-      throw new Error(
-        `Workflow action "${action.key}"${flags.version ? ` version ${flags.version}` : ''} was not found.`
-      )
-    }
-
-    const context = await loadWorkflowRemoteContext({
-      appId: workspace.manifest.appId,
-      directory: workspace.directory,
-      requireWorkspaceMatch: true
-    })
-    const snapshot = await withSpinner(
-      'Preparing workflow action test...',
-      () => fetchWorkflowActionsSnapshot(context.client, context.appId),
-      { quiet: this.jsonEnabled() }
-    )
-    const remoteVersion = snapshot.runtime.actions
-      .find(item => item.key === action.key)
-      ?.versions.find(item => item.version === version.version)
-    const request = prepareWorkflowActionTestRequest({
-      appId: context.appId,
-      inputData,
-      locationId: flags.location,
-      version,
-      remoteVersion
-    })
-    const response = await withSpinner(
+    const result = await withSpinner(
       'Running workflow action test...',
-      () => context.client.testWorkflowAction(context.appId, request),
+      () =>
+        runWorkflowActionTest({
+          directory: flags.directory,
+          action: args.action,
+          version: flags.version,
+          inputData,
+          locationId: flags.location
+        }),
       { quiet: this.jsonEnabled() }
     )
-    assertWorkflowActionTestSucceeded(response, request.executionConfig.type)
-    const result = {
-      appId: context.appId,
-      key: action.key,
-      version: version.version,
-      type: request.executionConfig.type,
-      output: response.output,
-      consoleLogs: response.consoleLogs ?? []
-    }
     if (this.jsonEnabled()) return result
-    this.log(`Workflow action test passed for "${action.key}" version ${version.version}.`)
-    this.log(JSON.stringify(response.output, null, 2))
+    this.log(`Workflow action test passed for "${result.key}" version ${result.version}.`)
+    this.log(JSON.stringify(result.output, null, 2))
     if (result.consoleLogs.length > 0) {
       this.log(`Console output:\n${result.consoleLogs.join('\n')}`)
     }

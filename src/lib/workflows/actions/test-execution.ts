@@ -1,5 +1,6 @@
 import type { WorkflowActionTestRequest, WorkflowActionTestResponse } from '../../api/types.js'
 import { isRecord } from '../../api/response.js'
+import { CodedError } from '../../shared/errors.js'
 import { toWorkflowActionUpdateBody, type WorkflowActionExecutionType, type WorkflowActionVersion } from './manifest.js'
 
 export interface PrepareWorkflowActionTestOptions {
@@ -58,10 +59,10 @@ export function assertWorkflowActionTestSucceeded(
   executionType: WorkflowActionExecutionType
 ): WorkflowActionTestResponse {
   if (response.hasError) {
-    throw new Error(`Workflow action test failed: ${errorDetails(response.errorMessage)}`)
+    throw new CodedError('TEST_FAILED', `Workflow action test failed: ${errorDetails(response.errorMessage)}`)
   }
   if (executionType === 'CODE' && !Array.isArray(response.output) && !isRecord(response.output)) {
-    throw new Error('Workflow action code output must be a JavaScript object or array.')
+    throw new CodedError('TEST_FAILED', 'Workflow action code output must be a JavaScript object or array.')
   }
   return response
 }
