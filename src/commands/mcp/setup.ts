@@ -95,14 +95,14 @@ export default class McpSetup extends GhlCommand {
       this.error(`Pass --client (${MCP_CLIENT_IDS.join(', ')}) when running non-interactively.`)
     }
 
+    /* Nothing starts selected: only the clients the user ticks are configured. */
     const installed = new Set(await detectInstalledClients(MCP_CLIENTS, dependencies))
     return checkbox<McpClientId>({
       message: `Configure ${MCP_SERVER_NAME} for:`,
       required: true,
       choices: MCP_CLIENTS.map(client => ({
         name: installed.has(client.id) ? client.label : `${client.label} (not detected)`,
-        value: client.id,
-        checked: installed.has(client.id)
+        value: client.id
       }))
     })
   }

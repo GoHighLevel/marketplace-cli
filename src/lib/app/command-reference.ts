@@ -469,7 +469,7 @@ const COMMAND_GROUPS: CommandGroup[] = [
       {
         command: 'ghl mcp setup',
         description:
-          'Register the HighLevelMarketplaceDev MCP server with Claude Code, Codex CLI, Cursor, Gemini CLI, VS Code, or Windsurf. Interactive use preselects detected clients; automation passes `--client` once per client. `--standalone` launches through npx with an optional `--cli-version` and `--registry`. Supports `--json`.'
+          'Register the HighLevelMarketplaceDev MCP server with Claude Code, Codex CLI, Cursor, Gemini CLI, VS Code, or Windsurf. Interactive use configures only the clients the user ticks (nothing starts selected); automation passes `--client` once per client. `--standalone` launches through npx with an optional `--cli-version` and `--registry`. Supports `--json`.'
       },
       {
         command: 'ghl mcp start',

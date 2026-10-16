@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import McpSetup from '../../../src/commands/mcp/setup.js'
 
+const prompts = vi.hoisted(() => ({ checkbox: vi.fn() }))
+vi.mock('../../../src/lib/shared/prompts.js', async importOriginal => ({
+  ...(await importOriginal<object>()),
+  checkbox: prompts.checkbox
+}))
+
 const ROOT_DIRECTORY = fileURLToPath(new URL('../../..', import.meta.url))
 let home: string
 
@@ -19,6 +25,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllEnvs()
+  prompts.checkbox.mockReset()
   process.exitCode = undefined
   await fs.rm(home, { recursive: true, force: true })
 })
@@ -36,7 +43,48 @@ async function runSetup(args: string[]): Promise<{ output: Record<string, any>; 
   return { output: JSON.parse(stdout.join('\n')) as Record<string, any>, exitCode: process.exitCode ?? 0 }
 }
 
+async function runInteractiveSetup(): Promise<string> {
+  const stdout: string[] = []
+  const spy = vi.spyOn(ux, 'stdout').mockImplementation((message = '') => {
+    stdout.push(String(message))
+  })
+  const tty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
+  Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true })
+  try {
+    await new McpSetup([], await Config.load({ root: ROOT_DIRECTORY }))._run()
+  } finally {
+    spy.mockRestore()
+    if (tty) Object.defineProperty(process.stdin, 'isTTY', tty)
+    else delete (process.stdin as { isTTY?: boolean }).isTTY
+  }
+  return stdout.join('\n')
+}
+
 describe('ghl mcp setup', () => {
+  it('starts the client choice with nothing selected and configures only the chosen client', async () => {
+    await fs.mkdir(path.join(home, '.cursor'))
+    await fs.mkdir(path.join(home, '.codeium', 'windsurf'), { recursive: true })
+    /* The user ticks Cursor only and confirms. */
+    prompts.checkbox.mockResolvedValue(['cursor'])
+
+    const output = await runInteractiveSetup()
+
+    const [question] = prompts.checkbox.mock.calls[0] as [{ choices: Array<{ name: string; checked?: boolean }> }]
+    expect(question.choices.filter(choice => choice.checked)).toEqual([])
+    expect(question.choices.map(choice => choice.name)).toEqual([
+      'Claude Code (not detected)',
+      'Codex CLI (not detected)',
+      'Cursor',
+      'Gemini CLI (not detected)',
+      'VS Code (not detected)',
+      'Windsurf'
+    ])
+    expect(output).toContain('Cursor')
+    expect(output).not.toContain('Windsurf')
+    await expect(fs.access(path.join(home, '.cursor', 'mcp.json'))).resolves.toBeUndefined()
+    await expect(fs.access(path.join(home, '.codeium', 'windsurf', 'mcp_config.json'))).rejects.toThrow()
+  })
+
   it('configures detected clients by absolute launch path and fails the run when any client fails', async () => {
     await fs.mkdir(path.join(home, '.cursor'))
 

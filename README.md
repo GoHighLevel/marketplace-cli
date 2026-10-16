@@ -355,7 +355,7 @@ The `ghl app pricing` commands remain available for compatibility and mutate the
 
 | Command | Description |
 |---|---|
-| `ghl mcp setup` | Register the `HighLevelMarketplaceDev` MCP server with AI coding clients. Interactive use preselects detected clients; scripts pass `--client claude\|codex\|cursor\|gemini\|vscode\|windsurf` (repeatable). `--standalone` launches through npx, pinned to this version or `--cli-version <version\|latest>` and to `--registry <https-url>` (default: the public npm registry). Supports `--json`. |
+| `ghl mcp setup` | Register the `HighLevelMarketplaceDev` MCP server with AI coding clients. Interactive use lists every client, marks the ones not detected, and configures only the ones you tick; scripts pass `--client claude\|codex\|cursor\|gemini\|vscode\|windsurf` (repeatable). `--standalone` launches through npx, pinned to this version or `--cli-version <version\|latest>` and to `--registry <https-url>` (default: the public npm registry). Supports `--json`. |
 | `ghl mcp start` | Run the MCP server over stdio. Clients start it automatically after `ghl mcp setup`; it never writes anything but protocol messages to stdout. |
 
 ### Discovery
