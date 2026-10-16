@@ -429,7 +429,7 @@ Restart open clients after setup. The server covers the whole app journey except
 
 App settings such as listing, profiles, support, review notes, scopes, redirect URIs, webhooks, pricing, and billing plans are edited in the workspace files and applied with `check-workspace` and `push-workspace`. Secrets stay CLI-only: `ghl secrets`, `ghl secrets reveal`, `ghl app sso-key`, and review test credentials (`ghl app review-details`).
 
-The documentation index is cached under `~/.config/ghl/cache/docs`, revalidated with ETags, and served from cache when the docs site is unreachable. Tools are designed for the fewest calls and tokens; contributors follow [src/lib/mcp/GUIDELINES.md](src/lib/mcp/GUIDELINES.md) and measure changes with `node scripts/mcp-benchmark.mjs "<prompt>"`.
+The documentation index is cached under `~/.config/ghl/cache/docs`, revalidated with ETags, and served from cache when the docs site is unreachable. Tools are designed for the fewest calls and tokens; contributors follow [src/lib/mcp/GUIDELINES.md](src/lib/mcp/GUIDELINES.md).
 
 ## License
 

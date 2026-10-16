@@ -65,4 +65,3 @@ Clients send definitions with every request. Cursor and VS Code always do; Claud
 2. Put the logic in `src/lib/<domain>`, where the CLI can reuse it, and move logic out of a command rather than copy it. The tool stays a thin `defineTool` adapter in `src/lib/mcp/tools/<domain>.ts`, using `portalClient(config)` for the portal and the shared validators in `inputs.ts`. Keep lib modules free of runtime import cycles; the project-structure test loads every built command in a fresh process to catch them.
 3. Format the output to sections 2 and 3, and measure its size on real data.
 4. Test the lib logic, plus the tool through the in-memory client in `tests/helpers/mcp-client.ts`. The budget test must pass.
-5. Benchmark a representative prompt before and after with `node scripts/mcp-benchmark.mjs "<prompt>"`, and record the tool calls and tokens in the PR.
