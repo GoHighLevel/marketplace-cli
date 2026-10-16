@@ -24,6 +24,31 @@ import {
 } from './search.js'
 import { API_INDEX_URL, type DocLocation, formatDocUrl, GUIDES_URL, resolveDocUrl } from './source.js'
 
+/* Request bounds, enforced here as well as in the tool schemas, so no caller
+   can make one request do unbounded work. */
+export const MAX_QUERY_LENGTH = 300
+export const MAX_SEARCH_RESULTS = 10
+export const MAX_PAGES_PER_FETCH = 5
+export const MAX_PAGE_REFERENCE_LENGTH = 2048
+
+function assertSearchQuery(request: DocSearchQuery): void {
+  if (request.query.length > MAX_QUERY_LENGTH) {
+    throw new CodedError('INVALID_INPUT', `query must be at most ${MAX_QUERY_LENGTH} characters.`)
+  }
+  if (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > MAX_SEARCH_RESULTS) {
+    throw new CodedError('INVALID_INPUT', `limit must be a whole number from 1 to ${MAX_SEARCH_RESULTS}.`)
+  }
+}
+
+function assertPagesRequest(request: DocPagesRequest): void {
+  if (request.pages.length === 0 || request.pages.length > MAX_PAGES_PER_FETCH) {
+    throw new CodedError('INVALID_INPUT', `pages must list 1 to ${MAX_PAGES_PER_FETCH} pages.`)
+  }
+  if (request.pages.some(page => page.length > MAX_PAGE_REFERENCE_LENGTH)) {
+    throw new CodedError('INVALID_INPUT', `Each page must be at most ${MAX_PAGE_REFERENCE_LENGTH} characters.`)
+  }
+}
+
 export interface DocsServiceOptions {
   cacheDir: string
   userAgent: string
@@ -133,6 +158,7 @@ export class DocsService {
   constructor(private readonly options: DocsServiceOptions) {}
 
   async search(request: DocSearchQuery, signal?: AbortSignal): Promise<DocSearchResponse> {
+    assertSearchQuery(request)
     const loaded = await this.loadIndex()
     signal?.throwIfAborted()
     const outcome = searchIndex(loaded.index, request.query, { limit: request.limit, kind: request.kind })
@@ -149,6 +175,7 @@ export class DocsService {
      page that fails is reported in place so the rest of the batch still
      answers; only a batch where every page fails is an error. */
   async fetchPages(request: DocPagesRequest, signal?: AbortSignal): Promise<DocPage[]> {
+    assertPagesRequest(request)
     const targets = await this.resolveTargets(request.pages)
     if (request.startIndex > 0 && targets.length > 1) {
       throw new CodedError('INVALID_INPUT', 'startIndex continues one truncated page; pass only that page.')

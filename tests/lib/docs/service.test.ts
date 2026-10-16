@@ -215,6 +215,22 @@ describe('DocsService.fetchPages', () => {
     expect(response.results[0]).toMatchObject({ kind: 'cli', url: 'ghl-cli:workflow-actions#dynamic-input' })
   })
 
+  it('refuses oversized requests before any work, whoever the caller is', async () => {
+    const fetch = routeFetch(docsRoutes())
+    const docs = service(fetch)
+    const page = `${DOCS}/oauth/Scopes.md`
+
+    for (const request of [
+      () => docs.search({ query: 'x'.repeat(301), limit: 5 }),
+      () => docs.search({ query: 'contacts', limit: 11 }),
+      () => docs.fetchPages({ pages: Array.from({ length: 6 }, () => page), startIndex: 0, maxLength: 30_000 }),
+      () => docs.fetchPages({ pages: [`${page}#${'a'.repeat(2048)}`], startIndex: 0, maxLength: 30_000 })
+    ]) {
+      await expect(request()).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+    }
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('rejects URLs outside the docs before any request', async () => {
     const fetch = routeFetch(docsRoutes())
     await expect(read(service(fetch), ['https://evil.example.com/docs/a.md'])).rejects.toMatchObject({

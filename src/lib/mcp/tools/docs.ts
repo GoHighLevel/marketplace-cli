@@ -2,11 +2,18 @@ import { z } from 'zod'
 
 import { DOC_KINDS } from '../../docs/catalog.js'
 import type { DocPage } from '../../docs/pages.js'
-import type { DocSearchResponse, DocSearchResult, DocsService } from '../../docs/service.js'
+import {
+  type DocSearchResponse,
+  type DocSearchResult,
+  type DocsService,
+  MAX_PAGE_REFERENCE_LENGTH,
+  MAX_PAGES_PER_FETCH,
+  MAX_QUERY_LENGTH,
+  MAX_SEARCH_RESULTS
+} from '../../docs/service.js'
 import { defineTool, textResult, type Toolset } from '../tool.js'
 
 const READ_ONLY_WEB = { readOnlyHint: true, idempotentHint: true, openWorldHint: true } as const
-const MAX_PAGES_PER_FETCH = 5
 const PAGE_SEPARATOR = '\n\n---\n\n'
 
 const searchInput = {
@@ -14,9 +21,9 @@ const searchInput = {
     .string()
     .trim()
     .min(2)
-    .max(300)
+    .max(MAX_QUERY_LENGTH)
     .describe('Focused keywords with exact names (headers, scopes, events), or an endpoint such as "POST /contacts/".'),
-  limit: z.number().int().min(1).max(10).default(5).describe('Maximum results.'),
+  limit: z.number().int().min(1).max(MAX_SEARCH_RESULTS).default(5).describe('Maximum results.'),
   kind: z
     .enum(['all', ...DOC_KINDS])
     .default('all')
@@ -25,7 +32,7 @@ const searchInput = {
 
 const fetchInput = {
   pages: z
-    .array(z.string().trim().min(1).max(2048))
+    .array(z.string().trim().min(1).max(MAX_PAGE_REFERENCE_LENGTH))
     .min(1)
     .max(MAX_PAGES_PER_FETCH)
     .describe('Docs URLs from search-docs (keep #anchors) or endpoints such as "GET /contacts/{contactId}".'),
