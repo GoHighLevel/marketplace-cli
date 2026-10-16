@@ -276,4 +276,16 @@ describe('local app validation', () => {
 
     expect(validation.errors).toEqual([expect.stringMatching(/tagline.*20/i)])
   })
+
+  it('refuses edits to a version in review, which the portal rejects', () => {
+    const baseline = completeAppFiles()
+    const local = cloneAppFiles(baseline)
+    local.app.basicInfo.tagline = 'A sharper tagline for every customer'
+    const plan = createAppSyncPlan(local, stateFor(baseline), cloneAppFiles(baseline))
+
+    expect(validateSyncPlan(plan, completeAppVersion({ status: 'in review', version: '2.0.0' })).errors).toEqual([
+      'Version 2.0.0 is in review and cannot be edited; withdraw it from review first.'
+    ])
+    expect(validateSyncPlan(plan, completeAppVersion({ status: 'draft' })).errors).toEqual([])
+  })
 })

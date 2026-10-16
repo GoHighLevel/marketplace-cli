@@ -1,3 +1,4 @@
+import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
 import type { AppVersion, VersionListItem } from '../api/types.js'
@@ -7,6 +8,7 @@ import { requireRegularFile } from './local-workspace.js'
 import { APP_MANIFEST_FILENAME, type AppWorkspaceResult } from './workspace.js'
 import { isAppResourceIdentifier } from './schema.js'
 import { readJsonFile } from '../shared/json-file.js'
+import { CodedError } from '../shared/errors.js'
 import type { WorkflowActionsWorkspaceResult } from '../workflows/actions/workspace.js'
 import type { WorkflowTriggersWorkspaceResult } from '../workflows/triggers/workspace.js'
 
@@ -78,6 +80,44 @@ export async function readPullWorkspaceBinding(inputDirectory: string): Promise<
   }
 }
 
+const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'build', 'coverage', 'vendor'])
+
+export interface WorkspaceSearchLimits {
+  maxDepth: number
+  maxDirectories: number
+  maxResults: number
+}
+
+const DEFAULT_SEARCH_LIMITS: WorkspaceSearchLimits = { maxDepth: 3, maxDirectories: 2_000, maxResults: 10 }
+
+/* App workspaces below a folder, breadth-first and bounded so a search from
+   a home or monorepo root stays fast. Symbolic links, hidden folders, and
+   dependency or build output are never entered. */
+export async function findWorkspacesBelow(
+  root: string,
+  limits: WorkspaceSearchLimits = DEFAULT_SEARCH_LIMITS
+): Promise<string[]> {
+  const found: string[] = []
+  let level = [path.resolve(root)]
+  let visited = 0
+  for (let depth = 0; depth <= limits.maxDepth && level.length > 0; depth += 1) {
+    const next: string[] = []
+    for (const directory of level) {
+      if (found.length >= limits.maxResults || visited >= limits.maxDirectories) return found
+      visited += 1
+      const entries = await fs.readdir(directory, { withFileTypes: true }).catch(() => [])
+      if (entries.some(entry => entry.isFile() && entry.name === APP_MANIFEST_FILENAME)) found.push(directory)
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith('.') && !SKIPPED_DIRECTORIES.has(entry.name)) {
+          next.push(path.join(directory, entry.name))
+        }
+      }
+    }
+    level = next
+  }
+  return found
+}
+
 export function resolvePullWorkspaceBinding(
   binding: PullWorkspaceBinding | undefined,
   requestedAppId?: string
@@ -108,7 +148,10 @@ export function resolveVersionId(
   const match = versions.find(version => version._id === selector || version.version === selector)
   if (match) return match._id
   const available = versions.map(version => `${version.version ?? 'unversioned'} (${version._id})`).join(', ')
-  throw new Error(`Version "${selector}" was not found for this app. Available versions: ${available || 'none'}.`)
+  throw new CodedError(
+    'NOT_FOUND',
+    `Version "${selector}" was not found for this app. Available versions: ${available || 'none'}.`
+  )
 }
 
 export async function loadAppVersionForExport(

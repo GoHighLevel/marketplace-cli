@@ -4,53 +4,55 @@ import { GhlCommand } from '../../lib/shared/command.js'
 import { ApiClient } from '../../lib/api/client.js'
 import { findAppItemById, resolveAppDetails } from '../../lib/app/context.js'
 import { confirm } from '../../lib/shared/prompts.js'
-import { formatReadinessError, requireSecurityReviewEligible } from '../../lib/app/rules.js'
 import { getConfig } from '../../lib/config/environment.js'
-import { validateStoredReviewDetails } from '../../lib/app/profile-sections.js'
+import { prepareSecurityReview } from '../../lib/app/release.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 
 export default class AppSecurityReview extends GhlCommand {
   static description = 'Request a security review for the selected app'
 
-  static examples = ['<%= config.bin %> app security-review', '<%= config.bin %> app security-review --force']
+  static examples = [
+    '<%= config.bin %> app security-review',
+    '<%= config.bin %> app security-review --force',
+    '<%= config.bin %> app security-review --force --json'
+  ]
+
+  static enableJsonFlag = true
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
     force: Flags.boolean({ description: 'Skip the confirmation prompt', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppSecurityReview)
-    if (!flags.force && !process.stdin.isTTY) {
+    const json = this.jsonEnabled()
+    if (!flags.force && !(process.stdin.isTTY === true && !json)) {
       this.error('Requesting security review is a submission action — pass --force when running non-interactively.')
     }
     const config = getConfig()
     const client = new ApiClient(config)
-    const resolution = await withSpinner('Loading app...', async () => {
-      await client.init()
-      return resolveAppDetails(client, config, flags.app)
-    })
+    const resolution = await withSpinner(
+      'Loading app...',
+      async () => {
+        await client.init()
+        return resolveAppDetails(client, config, flags.app)
+      },
+      { quiet: json }
+    )
     const { selected } = resolution
     const app =
       resolution.summary ??
-      (await withSpinner('Checking security review eligibility...', () =>
-        findAppItemById(client, selected.appId, selected.name)
+      (await withSpinner(
+        'Checking security review eligibility...',
+        () => findAppItemById(client, selected.appId, selected.name),
+        { quiet: json }
       ))
-    const liveVersion = await withSpinner('Loading live version...', () =>
-      client.getLatestVersion(selected.appId, true)
+    const liveVersion = await withSpinner(
+      'Checking security review eligibility...',
+      () => prepareSecurityReview(client, selected.appId, app.agencyInstallCount ?? 0),
+      { quiet: json }
     )
-    requireSecurityReviewEligible(liveVersion, app.agencyInstallCount ?? 0)
-
-    const validation = await withSpinner('Validating...', () =>
-      client.preSubmitValidation(selected.appId, liveVersion._id)
-    )
-    const hasMissingFields = Object.values(validation.mandatoryFields ?? {}).some(valid => !valid)
-    if (!validation.success || hasMissingFields) this.error(formatReadinessError(validation))
-
-    const reviewDetailsValidation = validateStoredReviewDetails(liveVersion, true)
-    if (reviewDetailsValidation !== true) {
-      this.error(`${reviewDetailsValidation} Complete the fields with \`ghl app review-details\` first.`)
-    }
     if (!flags.force) {
       const ok = await confirm({
         message: `Submit "${liveVersion.name ?? selected.appId}" for security review?`,
@@ -58,7 +60,10 @@ export default class AppSecurityReview extends GhlCommand {
       })
       if (!ok) return
     }
-    await withSpinner('Requesting security review...', () => client.requestSecurityReview(selected.appId))
+    await withSpinner('Requesting security review...', () => client.requestSecurityReview(selected.appId), {
+      quiet: json
+    })
+    if (json) return { appId: selected.appId, requested: true }
     this.log('Security review requested.')
   }
 }

@@ -495,7 +495,10 @@ describe('ApiClient', () => {
 
     const client = new ApiClient(config)
     await client.init()
-    await expect(client.listApps({})).rejects.toThrow(/Run `ghl login` again/)
+    await expect(client.listApps({})).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+      message: 'Session expired. Run `ghl login` again.'
+    })
   })
 
   it('extracts API validation messages and accepts empty successful responses', async () => {

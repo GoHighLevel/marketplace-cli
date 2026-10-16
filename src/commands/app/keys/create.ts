@@ -8,6 +8,7 @@ import {
   prepareGeneratedSecretOutput,
   storeSecretForOneTimeReveal
 } from '../../../lib/secrets/ledger.js'
+import { clientSecretEntry } from '../../../lib/app/client-keys.js'
 import { loadAppContext } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
@@ -56,13 +57,7 @@ export default class AppKeysCreate extends GhlCommand {
     const stored = await storeSecretForOneTimeReveal(
       config.configDir,
       context.client.activeProfileName,
-      {
-        kind: 'client-secret',
-        label: name,
-        reference: created.id,
-        appId: context.selected.appId,
-        value: created.secret
-      },
+      clientSecretEntry(context.selected.appId, name, created),
       flags.reveal
     )
     const output = prepareGeneratedSecretOutput(

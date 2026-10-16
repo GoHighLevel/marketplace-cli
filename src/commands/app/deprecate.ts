@@ -2,19 +2,21 @@ import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
 import { confirm, input } from '../../lib/shared/prompts.js'
-import { requireVersionStatus } from '../../lib/app/rules.js'
+import { executeDeprecation, localTimezone, prepareDeprecation, validateTimezone } from '../../lib/app/release.js'
 import { loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateDeprecationDate } from '../../lib/shared/validation.js'
-import { requireDeprecatable } from '../../lib/app/versioning.js'
 
 export default class AppDeprecate extends GhlCommand {
   static description = 'Schedule deprecation of the selected version'
 
   static examples = [
     '<%= config.bin %> app deprecate',
-    '<%= config.bin %> app deprecate --date 2026-12-31 --reason "Superseded by v2"'
+    '<%= config.bin %> app deprecate --date 2026-12-31 --reason "Superseded by v2"',
+    '<%= config.bin %> app deprecate --date 2026-12-31 --reason "Superseded by v2" --force --json'
   ]
+
+  static enableJsonFlag = true
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
@@ -24,9 +26,10 @@ export default class AppDeprecate extends GhlCommand {
     force: Flags.boolean({ description: 'Skip the confirmation prompt', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppDeprecate)
-    const interactive = process.stdin.isTTY
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
     if ((flags.date === undefined || flags.reason === undefined) && !interactive) {
       this.error(
@@ -34,23 +37,12 @@ export default class AppDeprecate extends GhlCommand {
       )
     }
 
-    /* The portal never asks for a timezone — it sends the local one. */
-    const timezone = flags.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
-    try {
-      new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format()
-    } catch {
-      this.error(`"${timezone}" is not a valid IANA timezone.`)
-    }
+    const timezone = flags.timezone ?? localTimezone()
+    const timezoneValidation = validateTimezone(timezone)
+    if (timezoneValidation !== true) this.error(timezoneValidation)
 
-    const context = await loadAppContext(flags.app)
-    requireVersionStatus(context.version.status, ['live'], 'schedule deprecation for')
-
-    /* Same gating as the portal's Deprecate action: keep the newest live
-       version, keep at least one live version, respect the active cap. */
-    const versions = await withSpinner('Checking versions...', () =>
-      context.client.listVersions(context.selected.appId)
-    )
-    requireDeprecatable(versions, context.selected.versionId)
+    const context = await loadAppContext(flags.app, json)
+    await withSpinner('Checking versions...', () => prepareDeprecation(context), { quiet: json })
 
     const date =
       flags.date ??
@@ -76,13 +68,15 @@ export default class AppDeprecate extends GhlCommand {
       const ok = await confirm({ message: `Schedule deprecation for ${date} (${timezone})?`, default: false })
       if (!ok) return
     }
-    await withSpinner('Scheduling deprecation...', () =>
-      context.client.scheduleDeprecation(context.selected.appId, context.selected.versionId, {
-        deprecateDate: date,
-        timezone,
-        deprecationNotes: reason
-      })
+    await withSpinner(
+      'Scheduling deprecation...',
+      () => executeDeprecation(context, { date, timezone, notes: reason }),
+      { quiet: json }
     )
+    if (json) {
+      const { appId, versionId } = context.selected
+      return { appId, versionId, deprecateDate: date, timezone }
+    }
     this.log(`Deprecation scheduled for ${date}.`)
   }
 }

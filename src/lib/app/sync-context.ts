@@ -32,12 +32,12 @@ export async function loadValidatedLocalWorkspace(directory: string): Promise<Va
   return { ...local, validation }
 }
 
-export async function loadRemoteAppSyncContext(directory: string): Promise<RemoteAppSyncContext> {
+/* Pass a signed-in client to share one session across several modules. */
+export async function loadRemoteAppSyncContext(directory: string, signedIn?: ApiClient): Promise<RemoteAppSyncContext> {
   const local = await loadValidatedLocalWorkspace(directory)
-  const config = getConfig()
-  const client = new ApiClient(config)
-  await client.init()
+  const client = signedIn ?? new ApiClient(getConfig())
+  if (!signedIn) await client.init()
   const remoteVersion = await loadAppVersionForExport(client, local.files.app.appId, local.files.app.versionId)
   const plan = createAppSyncPlan(local.files, local.state, buildAppFiles(remoteVersion))
-  return { client, config, local, remoteVersion, plan }
+  return { client, config: client.cliConfig, local, remoteVersion, plan }
 }

@@ -43,6 +43,10 @@ describe('security review rules', () => {
     const eligible = { private: true, status: 'live', securityReview: {} }
     expect(() => requireSecurityReviewEligible(eligible, 4)).not.toThrow()
     expect(() => requireSecurityReviewEligible(eligible, 3)).toThrow(/four qualifying agency installs/i)
+    expect(() => requireSecurityReviewEligible(eligible, 3)).toThrow(expect.objectContaining({ code: 'INVALID_STATE' }))
+    expect(() => requireVersionStatus('live', ['draft'], 'publish')).toThrow(
+      expect.objectContaining({ code: 'INVALID_STATE' })
+    )
     expect(() => requireSecurityReviewEligible({ ...eligible, private: false }, 4)).toThrow(/private apps/i)
     expect(() => requireSecurityReviewEligible({ ...eligible, securityReview: { status: 'inReview' } }, 4)).toThrow(
       /already in progress/i

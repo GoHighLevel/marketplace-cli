@@ -47,3 +47,21 @@ export async function followVersionChange(
   context.selected = updated
   log(`Changes were saved to a new draft version (${next.versionId}) — selection updated to follow it.`)
 }
+
+/* followVersionChange for a command that logs the notes or reports them in its JSON result. */
+export async function followVersionChangeNotes(context: AppContext, result: ProfileUpdateResult): Promise<string[]> {
+  const notes: string[] = []
+  await followVersionChange(context, result, note => notes.push(note))
+  return notes
+}
+
+/* The JSON result of a command that changed an app version: the version it
+   ended on (a new draft when the edit moved there), what changed, and notes. */
+export function versionResult(context: AppContext, fields: object, notes: string[] = []): Record<string, unknown> {
+  return {
+    appId: context.selected.appId,
+    versionId: context.selected.versionId,
+    ...fields,
+    ...(notes.length > 0 ? { notes } : {})
+  }
+}

@@ -23,6 +23,8 @@ export default class AppPricingSetup extends GhlCommand {
     '<%= config.bin %> app pricing setup --model paid --trial-days 14'
   ]
 
+  static enableJsonFlag = true
+
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
     model: Flags.string({
@@ -34,14 +36,16 @@ export default class AppPricingSetup extends GhlCommand {
     force: Flags.boolean({ description: 'Skip confirmation when free plans must be deleted', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppPricingSetup)
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (flags.model === undefined && !process.stdin.isTTY) {
+    if (flags.model === undefined && !interactive) {
       this.error('Pass --model (free, paid, or freemium) when running non-interactively.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     requirePricingEditable(context.version.status)
     const isTemplateApp = context.version.appType === 'template'
 
@@ -110,12 +114,14 @@ export default class AppPricingSetup extends GhlCommand {
 
     /* The portal blocks paid apps that still have free plans: it asks for
        confirmation, deletes them all, then saves the new model. */
-    const plans = await withSpinner('Loading plans...', () => context.client.getBillingPlans(context.selected.appId))
+    const plans = await withSpinner('Loading plans...', () => context.client.getBillingPlans(context.selected.appId), {
+      quiet: json
+    })
     const freePlans = plans.filter(plan => isFreePlanEntry(plan))
     let deletedFreePlans = false
     if (model === 'paid' && freePlans.length > 0) {
       if (!flags.force) {
-        if (!process.stdin.isTTY) {
+        if (!interactive) {
           this.error(
             `Switching to paid deletes ${freePlans.length} free plan(s) — pass --force when running non-interactively.`
           )
@@ -126,7 +132,9 @@ export default class AppPricingSetup extends GhlCommand {
         })
         if (!ok) return
       }
-      await withSpinner('Deleting free plans...', () => context.client.deleteAllFreePlans(context.selected.appId))
+      await withSpinner('Deleting free plans...', () => context.client.deleteAllFreePlans(context.selected.appId), {
+        quiet: json
+      })
       deletedFreePlans = true
     }
 
@@ -134,16 +142,20 @@ export default class AppPricingSetup extends GhlCommand {
        freemium so the model is immediately valid. */
     let createdDefaultPlan = false
     if (model === 'freemium' && freePlans.length === 0) {
-      await withSpinner('Creating the default free plan...', () =>
-        context.client.addBillingPlan(context.selected.appId, defaultFreePlan(isTemplateApp))
+      await withSpinner(
+        'Creating the default free plan...',
+        () => context.client.addBillingPlan(context.selected.appId, defaultFreePlan(isTemplateApp)),
+        { quiet: json }
       )
       createdDefaultPlan = true
-      this.log('A default "Free Plan" was created — edit or extend it with `ghl app pricing add`.')
+      if (!json) this.log('A default "Free Plan" was created — edit or extend it with `ghl app pricing add`.')
     }
 
     try {
-      await withSpinner('Saving pricing configuration...', () =>
-        context.client.updateBillingSettings(context.selected.appId, body)
+      await withSpinner(
+        'Saving pricing configuration...',
+        () => context.client.updateBillingSettings(context.selected.appId, body),
+        { quiet: json }
       )
     } catch (error) {
       const message = errorMessage(error, 'Pricing configuration could not be saved.')
@@ -159,6 +171,7 @@ export default class AppPricingSetup extends GhlCommand {
       }
       throw error
     }
+    if (json) return { appId: context.selected.appId, ...body, deletedFreePlans, createdDefaultPlan }
     this.log(`Pricing model set to ${model}.`)
 
     if (model !== 'free' && !body.externalBilling) {

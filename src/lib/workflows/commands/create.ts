@@ -7,9 +7,8 @@ import {
   type WorkflowResourcePlan,
   type WorkflowResourceWorkspace
 } from '../shared/resource.js'
+import { scaffoldWorkflowItem, WORKFLOW_KEY_PATTERN, WORKFLOW_KEY_RULE } from '../shared/scaffold.js'
 import { capitalize, workflowDirectoryFlag, WorkflowResourceCommand } from './base.js'
-
-const KEY_PATTERN = /^[a-z][_a-z0-9]*$/
 
 export function workflowCreateArgs(resource: WorkflowResourceNaming) {
   return {
@@ -49,40 +48,33 @@ export abstract class WorkflowCreateCommand<
   S
 > extends WorkflowResourceCommand<M, P, W, F, S> {
   protected async create(options: WorkflowCreateInput): Promise<unknown> {
-    const { singular, plural, label } = this.resource
+    const { singular, plural } = this.resource
     const noun = capitalize(singular)
     if ((!options.name || !options.key) && !this.interactive) {
       this.error(`Pass the ${singular} name and --key when running non-interactively.`)
     }
     const workspace = await this.resource.loadWorkspace(options.directory)
-    const name = (
+    const name =
       options.name ??
       (await input({
         message: `${noun} name:`,
         validate: value => (value.trim() ? true : `${noun} name is required.`)
       }))
-    ).trim()
-    const key = (
+    const key =
       options.key ??
       (await input({
         message: `${noun} key:`,
-        validate: value =>
-          KEY_PATTERN.test(value) ? true : 'Use lowercase letters, numbers, and underscores, starting with a letter.'
+        validate: value => (WORKFLOW_KEY_PATTERN.test(value) ? true : WORKFLOW_KEY_RULE)
       }))
-    ).trim()
-    const createOptions = options.typescript ? { typescript: true } : undefined
-    const manifest = createOptions
-      ? this.resource.withScaffold(workspace.manifest, name, key, createOptions)
-      : this.resource.withScaffold(workspace.manifest, name, key)
-    const errors = this.resource.validateManifest(manifest)
-    if (errors.length > 0) throw new Error(`${label} is invalid:\n- ${errors.join('\n- ')}`)
-    const staged = createOptions
-      ? await this.resource.writeStagedSources(workspace, manifest, createOptions)
-      : await this.resource.writeStagedSources(workspace, manifest)
-    const file = staged.files.find(candidate => candidate.endsWith(this.resource.filenameFromKey(key)))
-    if (!file) throw new Error(`The workflow ${singular} file for "${key}" was not written.`)
-    const result = { appId: manifest.appId, key, name, [`${singular}File`]: file, staged: true }
+    const created = await scaffoldWorkflowItem(this.resource, workspace, { name, key, typescript: options.typescript })
+    const result = {
+      appId: created.appId,
+      key: created.key,
+      name: created.name,
+      [`${singular}File`]: created.file,
+      staged: true
+    }
     if (this.jsonEnabled()) return result
-    this.log(`Added "${name}" to ${file}. Run \`ghl app ${plural} push\` to create it in the portal.`)
+    this.log(`Added "${created.name}" to ${created.file}. Run \`ghl app ${plural} push\` to create it in the portal.`)
   }
 }

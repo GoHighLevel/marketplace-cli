@@ -1,10 +1,9 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-import { applyEdits, modify, parse, printParseErrorCode, type FormattingOptions, type ParseError } from 'jsonc-parser'
-
 import { writeTextFileAtomic } from '../shared/atomic-file.js'
 import { generatedFileHeader, hasGeneratedFileMarker } from '../shared/generated-file.js'
+import { parseJsoncObject, setJsoncValue } from '../shared/jsonc.js'
 
 const CONFIG_FILENAMES = ['tsconfig.json', 'jsconfig.json'] as const
 
@@ -15,10 +14,6 @@ export interface TypeScriptConfigResult {
 
 export interface TypeScriptConfigOptions {
   exclude?: readonly string[]
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function lstatIfPresent(target: string): Promise<Awaited<ReturnType<typeof fs.lstat>> | undefined> {
@@ -38,27 +33,6 @@ function normalizedConfigPath(value: string): string {
   return path.posix.normalize(value.replace(/^\.\//, ''))
 }
 
-function formattingOptions(contents: string): FormattingOptions {
-  const indentation = contents.match(/^[\t ]+(?="[^"]+"\s*:)/m)?.[0]
-  const insertSpaces = !indentation?.includes('\t')
-  return {
-    eol: contents.includes('\r\n') ? '\r\n' : '\n',
-    insertSpaces,
-    tabSize: insertSpaces ? (indentation?.length ?? 2) : 1
-  }
-}
-
-function parseConfig(contents: string, file: string): Record<string, unknown> {
-  const errors: ParseError[] = []
-  const value = parse(contents, errors, { allowTrailingComma: true }) as unknown
-  if (errors.length > 0) {
-    const first = errors[0]
-    throw new Error(`${path.basename(file)} is invalid: ${printParseErrorCode(first.error)} at offset ${first.offset}.`)
-  }
-  if (!isRecord(value)) throw new Error(`${path.basename(file)} must contain a JSON object.`)
-  return value
-}
-
 function stringList(value: unknown, property: 'exclude' | 'files' | 'include', file: string): string[] {
   if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) {
     throw new Error(`${path.basename(file)}.${property} must be an array of strings.`)
@@ -73,16 +47,13 @@ function appendConfigPaths(
   paths: readonly string[]
 ): string {
   if (paths.length === 0) return contents
-  const config = parseConfig(contents, file)
+  const config = parseJsoncObject(contents, file)
   const existing = Object.hasOwn(config, property) ? stringList(config[property], property, file) : []
   const normalized = new Set(existing.map(normalizedConfigPath))
   const missing = paths.filter(value => !normalized.has(normalizedConfigPath(value)))
   if (missing.length === 0) return contents
 
-  const edits = modify(contents, [property], [...existing, ...missing], {
-    formattingOptions: formattingOptions(contents)
-  })
-  return applyEdits(contents, edits)
+  return setJsoncValue(contents, [property], [...existing, ...missing])
 }
 
 function updateConfigContents(
@@ -91,7 +62,7 @@ function updateConfigContents(
   declarationPath: string,
   options: TypeScriptConfigOptions
 ): string {
-  const config = parseConfig(contents, file)
+  const config = parseJsoncObject(contents, file)
   const sourceProperty = Object.hasOwn(config, 'files')
     ? 'files'
     : Object.hasOwn(config, 'include')
@@ -106,7 +77,7 @@ function updateConfigContents(
 
 function isCliManagedConfig(contents: string, file: string, declarationPath: string): boolean {
   if (hasGeneratedFileMarker(contents)) return true
-  const config = parseConfig(contents, file)
+  const config = parseJsoncObject(contents, file)
   if (Object.keys(config).some(property => property !== 'exclude' && property !== 'include')) return false
   if (!Object.hasOwn(config, 'include')) return false
 

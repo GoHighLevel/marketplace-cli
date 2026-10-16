@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 
 import { describe, expect, it } from 'vitest'
 
@@ -14,7 +16,19 @@ interface PackageMetadata {
 const ROOT_DIRECTORY = fileURLToPath(new URL('..', import.meta.url))
 const LIBRARY_DIRECTORY = path.join(ROOT_DIRECTORY, 'src/lib')
 const LIBRARY_TEST_DIRECTORY = path.join(ROOT_DIRECTORY, 'tests/lib')
-const EXPECTED_DOMAINS = ['api', 'app', 'auth', 'billing', 'config', 'secrets', 'shared', 'webhooks', 'workflows']
+const EXPECTED_DOMAINS = [
+  'api',
+  'app',
+  'auth',
+  'billing',
+  'config',
+  'docs',
+  'mcp',
+  'secrets',
+  'shared',
+  'webhooks',
+  'workflows'
+]
 
 const DOMAIN_FILENAME_RULES = [
   { directory: 'api', redundantPrefixes: ['api'] },
@@ -22,6 +36,9 @@ const DOMAIN_FILENAME_RULES = [
   { directory: 'auth', redundantPrefixes: ['auth'] },
   { directory: 'billing', redundantPrefixes: ['billing'] },
   { directory: 'config', redundantPrefixes: ['config'] },
+  { directory: 'docs', redundantPrefixes: ['doc', 'docs'] },
+  { directory: 'mcp', redundantPrefixes: ['mcp'] },
+  { directory: path.join('mcp', 'tools'), redundantPrefixes: ['tool', 'tools'] },
   { directory: 'secrets', redundantPrefixes: ['secret', 'secrets'] },
   { directory: 'webhooks', redundantPrefixes: ['webhook', 'webhooks'] },
   {
@@ -87,7 +104,36 @@ async function redundantDomainFilenames(rootDirectory: string): Promise<string[]
   return violations.sort()
 }
 
+const COMMAND_LOAD_CONCURRENCY = 8
+
+/* oclif imports one command module at a time, so a circular import that
+   reads a binding before it is initialized only fails in a fresh process. */
+async function commandsThatFailToLoad(): Promise<string[]> {
+  const commands = await allTypeScriptFiles(path.join(ROOT_DIRECTORY, 'src/commands'))
+  const compiled = commands.map(file =>
+    path.join(ROOT_DIRECTORY, 'dist', path.relative(path.join(ROOT_DIRECTORY, 'src'), file).replace(/\.ts$/u, '.js'))
+  )
+  const failures: string[] = []
+  const queue = [...compiled]
+  const load = promisify(execFile)
+  await Promise.all(
+    Array.from({ length: COMMAND_LOAD_CONCURRENCY }, async () => {
+      for (let file = queue.shift(); file; file = queue.shift()) {
+        const script = `await import(${JSON.stringify(pathToFileURL(file).href)})`
+        await load(process.execPath, ['--input-type=module', '-e', script]).catch(() =>
+          failures.push(path.relative(ROOT_DIRECTORY, file as string))
+        )
+      }
+    })
+  )
+  return failures.sort()
+}
+
 describe('project structure', () => {
+  it('loads every built command module on its own, as oclif does', async () => {
+    expect(await commandsThatFailToLoad()).toEqual([])
+  }, 60_000)
+
   it('groups library modules and their tests by domain', async () => {
     expect(await directTypeScriptFiles(LIBRARY_DIRECTORY)).toEqual([])
     expect(await directTypeScriptFiles(LIBRARY_TEST_DIRECTORY)).toEqual([])

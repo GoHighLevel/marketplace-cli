@@ -10,7 +10,7 @@ import {
   requireAuthPrereqs,
   scopeCatalogEntries
 } from '../../../lib/auth/settings.js'
-import { followVersionChange, loadAppContext } from '../../../lib/app/section-context.js'
+import { followVersionChangeNotes, loadAppContext, versionResult } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 import { validateHttpUrl } from '../../../lib/shared/validation.js'
 
@@ -25,6 +25,8 @@ export default class AppScopesAdd extends GhlCommand {
     '<%= config.bin %> app scopes add contacts.readonly --redirect https://acme.com/oauth/callback'
   ]
 
+  static enableJsonFlag = true
+
   static strict = false
 
   static flags = {
@@ -35,9 +37,10 @@ export default class AppScopesAdd extends GhlCommand {
     force: Flags.boolean({ description: 'Skip confirmation for sensitive scopes', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { argv, flags } = await this.parse(AppScopesAdd)
-    const interactive = process.stdin.isTTY
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
     let scopes: string[]
     try {
       scopes = normalizeVariadicArgs(argv as string[], 'scope')
@@ -48,7 +51,7 @@ export default class AppScopesAdd extends GhlCommand {
       this.error('Pass at least one scope, e.g. `ghl app scopes add contacts.readonly`.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     const catalog = scopeCatalogEntries(await context.client.getScopesCatalog(), context.version.userTypes ?? [])
     const availableScopes = new Set(catalog.map(entry => entry.scope))
     const current = context.version.allowedScopes ?? []
@@ -101,16 +104,27 @@ export default class AppScopesAdd extends GhlCommand {
       changes.redirectUris = [...new Set([...(context.version.redirectUris ?? []), redirect])]
     }
     if (next.length === current.length && !redirect) {
+      if (json) {
+        return versionResult(context, { changed: false, scopes: current })
+      }
       this.log('All given scopes are already selected.')
       return
     }
 
     requireAuthPrereqs(context.version, changes)
     const body = buildAuthSettingsBody(context.version, changes)
-    const result = await withSpinner('Saving scopes...', () =>
-      context.client.updateAuthSettings(context.selected.appId, context.selected.versionId, body)
+    const result = await withSpinner(
+      'Saving scopes...',
+      () => context.client.updateAuthSettings(context.selected.appId, context.selected.versionId, body),
+      { quiet: json }
     )
-    this.log(`Scopes updated (${next.length} total).`)
-    await followVersionChange(context, result, message => this.log(message))
+    if (!json) this.log(`Scopes updated (${next.length} total).`)
+    const notes = await followVersionChangeNotes(context, result)
+    if (!json) {
+      for (const note of notes) this.log(note)
+      return
+    }
+    const redirectUris = changes.redirectUris ? { redirectUris: changes.redirectUris } : {}
+    return versionResult(context, { changed: true, scopes: next, ...redirectUris }, notes)
   }
 }

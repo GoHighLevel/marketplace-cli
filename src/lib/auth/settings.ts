@@ -161,3 +161,35 @@ export function scopeCatalogEntries(catalog: unknown, userTypes: string[] = []):
 export function scopeNamesFromCatalog(catalog: unknown, userTypes: string[] = []): string[] {
   return scopeCatalogEntries(catalog, userTypes).map(entry => entry.scope)
 }
+
+export interface ScopeReference extends ScopeCatalogEntry {
+  /* Webhook events the scope unlocks. */
+  events: string[]
+}
+
+export interface ScopeReferenceOptions {
+  userTypes?: string[]
+  /* Words matched against scope names, labels, descriptions, and events; a
+     scope matches when any word does, so one query can cover several needs. */
+  query?: string
+}
+
+function matchesAnyWord(reference: ScopeReference, words: readonly string[]): boolean {
+  const fields = [reference.scope, reference.label ?? '', reference.description ?? '', ...reference.events]
+  return words.some(word => fields.some(field => field.toLowerCase().includes(word)))
+}
+
+/* The scope catalog joined with the webhook events each scope unlocks. */
+export function scopeReferences(
+  catalog: unknown,
+  webhooks: WebhooksCatalog,
+  options: ScopeReferenceOptions = {}
+): ScopeReference[] {
+  const words = (options.query ?? '')
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .filter(Boolean)
+  return scopeCatalogEntries(catalog, options.userTypes ?? [])
+    .map(entry => ({ ...entry, events: [...(webhooks.mapping?.[entry.scope] ?? [])].sort() }))
+    .filter(reference => words.length === 0 || matchesAnyWord(reference, words))
+}

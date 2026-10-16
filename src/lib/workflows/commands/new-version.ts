@@ -1,8 +1,7 @@
 import { select } from '../../shared/prompts.js'
 import { withSpinner } from '../../shared/spinner.js'
+import { createWorkflowItemVersion, loadWorkflowReleaseContext, newVersionCandidates } from '../shared/release.js'
 import {
-  findWorkflowItem,
-  hasDraftVersion,
   type WorkflowResourceManifest,
   type WorkflowResourcePlan,
   type WorkflowResourceWorkspace,
@@ -33,16 +32,10 @@ export abstract class WorkflowNewVersionCommand<
     }
     const context = await withSpinner(
       `Checking workflow ${singular} versions...`,
-      () => this.loadSyncContext(options.directory),
+      () => loadWorkflowReleaseContext(this.resource, options.directory, { purpose: 'new-version' }),
       this.spinnerOptions
     )
-    const planError = this.planError(context.plan)
-    if (planError) throw planError
-    if (context.plan.localChanges.length > 0) {
-      throw new Error(`Push or discard local workflow ${singular} changes before creating a new version.`)
-    }
-    const items = this.resource.items(context.remote)
-    const eligible = items.filter(item => !hasDraftVersion(item) && item.versions[0]?.status === 'published')
+    const eligible = newVersionCandidates(this.resource.items(context.remote))
     if (!options.selector && eligible.length === 0) {
       throw new Error(`No published workflow ${singular} is eligible for a new version.`)
     }
@@ -52,26 +45,15 @@ export abstract class WorkflowNewVersionCommand<
         message: `Published workflow ${singular}:`,
         choices: eligible.map(item => ({ name: `${workflowItemName(item)} (${item.key})`, value: item.key }))
       }))
-    const item = findWorkflowItem(items, selector)
-    const templateId = item?.templateId
-    if (!item || !templateId) throw new Error(`Workflow ${singular} "${selector}" was not found.`)
-    if (hasDraftVersion(item)) throw new Error(`Workflow ${singular} "${item.key}" already has a draft version.`)
-    if (item.versions[0]?.status !== 'published') {
-      throw new Error(
-        `Workflow ${singular} "${item.key}" must have a latest published version before creating a new draft.`
-      )
-    }
     const created = await withSpinner(
       `Creating workflow ${singular} version...`,
-      () => this.resource.createVersion(context.client, context.appId, templateId),
+      () => createWorkflowItemVersion(this.resource, context, selector),
       this.spinnerOptions
     )
-    const remote = await this.fetchManifest(context.client, context.appId)
-    const files = this.resource.preserveSourceWorkspace
-      ? await this.resource.writeWorkspace(context.directory, remote, remote, context.local)
-      : await this.resource.writeWorkspace(context.directory, remote)
-    const result = { appId: context.appId, key: item.key, version: created.version, files }
+    const result = { appId: context.appId, key: created.key, version: created.version, files: created.files }
     if (this.jsonEnabled()) return result
-    this.log(`Created draft ${created.version} for "${item.key}" and refreshed ${this.resource.filesDirectory(files)}.`)
+    this.log(
+      `Created draft ${created.version} for "${created.key}" and refreshed ${this.resource.filesDirectory(created.files)}.`
+    )
   }
 }

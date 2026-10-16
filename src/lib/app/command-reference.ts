@@ -464,6 +464,21 @@ const COMMAND_GROUPS: CommandGroup[] = [
     ]
   },
   {
+    title: 'AI coding clients (MCP)',
+    commands: [
+      {
+        command: 'ghl mcp setup',
+        description:
+          'Register the HighLevelMarketplaceDev MCP server with Claude Code, Codex CLI, Cursor, Gemini CLI, VS Code, or Windsurf. Interactive use configures only the clients the user ticks (nothing starts selected); automation passes `--client` once per client. `--standalone` launches through npx with an optional `--cli-version` and `--registry`. Supports `--json`.'
+      },
+      {
+        command: 'ghl mcp start',
+        description:
+          'Run the MCP server over stdio. AI clients start it after `ghl mcp setup`; its tools cover the whole app journey except secrets: docs, account and sandboxes, app create and pull, workspace checks and pushes, action tests, media, client keys, and releases.'
+      }
+    ]
+  },
+  {
     title: 'One-time secrets and command discovery',
     commands: [
       {
@@ -499,7 +514,7 @@ export function buildManagedCommandReference(): string {
   return `${COMMAND_REFERENCE_START}
 ## Complete command reference
 
-Every command supports \`--help\`; use it before guessing arguments or flags. Commands that support \`--json\` return structured output for automation. Destructive commands prompt on a terminal and require \`--force\` in non-interactive use.
+Every command supports \`--help\`; use it before guessing arguments or flags. Every command except \`secrets reveal\` and \`mcp start\` supports \`--json\`: stdout carries one result object and the command never prompts. Destructive commands prompt on a terminal and require \`--force\` in non-interactive use.
 
 ${renderCommandGroups()}
 ${COMMAND_REFERENCE_END}`

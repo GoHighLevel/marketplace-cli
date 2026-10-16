@@ -1,10 +1,8 @@
 import { Flags } from '@oclif/core'
 
 import { GhlCommand } from '../../lib/shared/command.js'
-import { errorMessage } from '../../lib/shared/errors.js'
 import { confirm } from '../../lib/shared/prompts.js'
-import { persistSelection } from '../../lib/app/context.js'
-import { refreshAppWorkspaceLifecycle } from '../../lib/app/lifecycle.js'
+import { REVIEW_STATUSES, withdrawFromReview } from '../../lib/app/release.js'
 import { requireVersionStatus } from '../../lib/app/rules.js'
 import { loadAppContext } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
@@ -12,20 +10,27 @@ import { withSpinner } from '../../lib/shared/spinner.js'
 export default class AppWithdraw extends GhlCommand {
   static description = 'Withdraw the selected version from marketplace review'
 
-  static examples = ['<%= config.bin %> app withdraw', '<%= config.bin %> app withdraw --force']
+  static examples = [
+    '<%= config.bin %> app withdraw',
+    '<%= config.bin %> app withdraw --force',
+    '<%= config.bin %> app withdraw --force --json'
+  ]
+
+  static enableJsonFlag = true
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
     force: Flags.boolean({ description: 'Skip the confirmation prompt', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppWithdraw)
-    if (!flags.force && !process.stdin.isTTY) {
+    const json = this.jsonEnabled()
+    if (!flags.force && !(process.stdin.isTTY === true && !json)) {
       this.error('Withdrawing returns the review version to draft — pass --force when running non-interactively.')
     }
-    const context = await loadAppContext(flags.app)
-    requireVersionStatus(context.version.status, ['review'], 'withdraw')
+    const context = await loadAppContext(flags.app, json)
+    requireVersionStatus(context.version.status, REVIEW_STATUSES, 'withdraw')
     if (!flags.force) {
       const ok = await confirm({
         message: `Withdraw "${context.version.name ?? context.selected.appId}" from marketplace review?`,
@@ -33,33 +38,10 @@ export default class AppWithdraw extends GhlCommand {
       })
       if (!ok) return
     }
-    await withSpinner('Withdrawing from review...', () =>
-      context.client.withdrawReview(context.selected.appId, context.selected.versionId)
-    )
-    try {
-      const refreshed = await withSpinner('Refreshing local status...', () =>
-        refreshAppWorkspaceLifecycle(
-          process.cwd(),
-          context.client,
-          context.selected.appId,
-          context.selected.versionId,
-          'draft'
-        )
-      )
-      if (refreshed && refreshed.version._id !== context.selected.versionId) {
-        await persistSelection(context.client, context.config, {
-          appId: context.selected.appId,
-          versionId: refreshed.version._id,
-          name: refreshed.version.name ?? context.selected.name
-        })
-      }
-    } catch (error) {
-      const reason = errorMessage(error, 'local synchronization failed')
-      throw new Error(
-        `The version was withdrawn, but the local workspace status could not be synchronized: ${reason} ` +
-          'Run `ghl app pull` before making more local changes.'
-      )
-    }
+    await withSpinner('Withdrawing from review...', () => withdrawFromReview(context, process.cwd()), {
+      quiet: json
+    })
+    if (json) return { appId: context.selected.appId, versionId: context.selected.versionId, status: 'draft' }
     this.log('Version withdrawn from review — it is a draft again.')
   }
 }

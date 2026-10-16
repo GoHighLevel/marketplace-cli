@@ -29,10 +29,14 @@ export interface WorkflowRemoteContextOptions {
   appId?: string
   directory?: string
   requireWorkspaceMatch?: boolean
+  /* A signed-in client to reuse instead of signing in again. */
+  client?: ApiClient
 }
 
 export interface WorkflowSyncContextOptions {
   requirePrerequisites?: boolean
+  /* A signed-in client to share one session across several modules. */
+  client?: ApiClient
 }
 
 /* Resolves the app an app-scoped workflow command operates on: an explicit
@@ -43,9 +47,9 @@ export async function loadWorkflowRemoteContext(options: WorkflowRemoteContextOp
   if (options.requireWorkspaceMatch && binding && options.appId && binding.appId !== options.appId) {
     throw new Error(`The workspace belongs to app "${binding.appId}", not "${options.appId}".`)
   }
-  const config = getConfig()
-  const client = new ApiClient(config)
-  await client.init()
+  const client = options.client ?? new ApiClient(getConfig())
+  if (!options.client) await client.init()
+  const config = client.cliConfig
   const appId = options.appId
     ? options.requireWorkspaceMatch && binding?.appId === options.appId
       ? binding.appId
@@ -78,9 +82,8 @@ export async function loadWorkflowSyncContext<
       throw new Error(`${resource.label} prerequisites are not satisfied:\n- ${errors.join('\n- ')}`)
     }
   }
-  const config = getConfig()
-  const client = new ApiClient(config)
-  await client.init()
+  const client = options.client ?? new ApiClient(getConfig())
+  if (!options.client) await client.init()
   const snapshot = await resource.fetchSnapshot(client, local.manifest.appId)
   const plan = resource.preserveSourceWorkspace
     ? resource.planSync(local.state.baseline, local.manifest, snapshot.manifest, local)

@@ -8,7 +8,9 @@ export default class Logout extends GhlCommand {
 
   static examples = ['<%= config.bin %> logout']
 
-  protected async execute(): Promise<void> {
+  static enableJsonFlag = true
+
+  protected async execute(): Promise<unknown> {
     const config = getConfig()
 
     let who: string | undefined
@@ -20,6 +22,7 @@ export default class Logout extends GhlCommand {
     }
 
     const removed = await clearStoredSession(config.configDir)
+    if (this.jsonEnabled()) return { removed }
     if (removed.length === 0) {
       this.log('Already logged out — no stored credentials found.')
       return

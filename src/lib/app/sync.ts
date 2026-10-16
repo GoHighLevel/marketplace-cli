@@ -3,7 +3,7 @@ import { isRecord } from '../api/response.js'
 import { type AppFiles } from './manifest.js'
 import { isAppResourceIdentifier, validateAppWorkspaceSchema } from './schema.js'
 import { type WorkspaceState } from './workspace.js'
-import { requireVersionStatus } from './rules.js'
+import { isInReview, requireVersionStatus } from './rules.js'
 import { requireAuthPrereqs } from '../auth/settings.js'
 import { buildBillingSettings, requirePricingEditable } from '../billing/pricing.js'
 import {
@@ -596,6 +596,14 @@ export function validateLocalAppWorkspace(files: AppFiles, state: WorkspaceState
   return { errors: [...new Set(errors)], sections }
 }
 
+/* The portal refuses every edit to a version in review (with a 404 about edit access). */
+function validateEditableStatus(plan: AppSyncPlan, remoteVersion: AppVersion): string[] {
+  if (plan.sections.length === 0 || !isInReview(remoteVersion.status)) return []
+  return [
+    `Version ${remoteVersion.version ?? remoteVersion._id} is in review and cannot be edited; withdraw it from review first.`
+  ]
+}
+
 export function validateSyncPlan(plan: AppSyncPlan, remoteVersion: AppVersion): AppWorkspaceValidation {
   const errors = plan.conflicts.map(
     conflict =>
@@ -603,6 +611,7 @@ export function validateSyncPlan(plan: AppSyncPlan, remoteVersion: AppVersion): 
   )
   errors.push(...validateDesiredSections(plan.desired, plan.sections, remoteVersion))
   errors.push(...validatePlanLifecycle(plan))
+  errors.push(...validateEditableStatus(plan, remoteVersion))
   return { errors: [...new Set(errors)], sections: plan.sections }
 }
 

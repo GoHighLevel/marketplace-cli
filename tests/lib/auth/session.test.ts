@@ -69,8 +69,12 @@ describe('decodeJwtExp / isExpired', () => {
 })
 
 describe('loadActiveSession', () => {
-  it('throws NotLoggedInError when no credentials exist', async () => {
+  it('throws NotLoggedInError, coded for agents, when no credentials exist', async () => {
     await expect(loadActiveSession(config)).rejects.toThrow(NotLoggedInError)
+    await expect(loadActiveSession(config)).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+      message: 'Not logged in. Run `ghl login` first.'
+    })
   })
 
   it('returns the active profile', async () => {
@@ -81,6 +85,26 @@ describe('loadActiveSession', () => {
 })
 
 describe('refreshSession', () => {
+  it('shares one request between parallel refreshes of the same token', async () => {
+    let respond: (value: unknown) => void = () => undefined
+    const fetchMock = vi.fn(() => new Promise(resolve => (respond = resolve)))
+    vi.stubGlobal('fetch', fetchMock)
+    const profile = { accessToken: 'old', refreshToken: 'single-use' }
+
+    const first = refreshSession(config, 'default', profile)
+    const second = refreshSession(config, 'default', profile)
+    respond({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ jwt: makeJwt({ exp: 9999999999 }), mrt: 'next' })
+    })
+
+    const [a, b] = await Promise.all([first, second])
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(a).toEqual(b)
+    expect(a.refreshToken).toBe('next')
+  })
+
   it('persists the rotated token pair', async () => {
     const refreshedExpiry = Math.floor(Date.now() / 1000) + 3600
     const fetchMock = vi.fn().mockResolvedValue({
@@ -127,9 +151,10 @@ describe('refreshSession', () => {
   it('asks the user to log in again when refresh is rejected', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }))
 
-    await expect(refreshSession(config, 'default', { accessToken: 'old', refreshToken: 'bad' })).rejects.toThrow(
-      /Run `ghl login`/
-    )
+    await expect(refreshSession(config, 'default', { accessToken: 'old', refreshToken: 'bad' })).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+      message: 'Session expired. Run `ghl login` again.'
+    })
   })
 
   it('rejects malformed refresh responses instead of persisting empty tokens', async () => {

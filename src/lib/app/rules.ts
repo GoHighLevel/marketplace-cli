@@ -1,13 +1,20 @@
+import { CodedError } from '../shared/errors.js'
+
 export function normalizeStatus(status: string | undefined): string {
   return status?.toLowerCase().replace(/[\s_-]/g, '') ?? ''
 }
 
+/* The portal reports a submitted version as `review` or `in review`. */
+export function isInReview(status: string | undefined): boolean {
+  return ['review', 'inreview'].includes(normalizeStatus(status))
+}
+
 export function requireVersionStatus(status: string | undefined, allowed: string[], action: string): void {
-  if (!status) throw new Error(`Cannot ${action}: the selected version status is unavailable.`)
+  if (!status) throw new CodedError('INVALID_STATE', `Cannot ${action}: the selected version status is unavailable.`)
   const normalized = normalizeStatus(status)
   if (allowed.map(value => normalizeStatus(value)).includes(normalized)) return
   const expected = allowed.length === 1 ? allowed[0] : `${allowed.slice(0, -1).join(', ')} or ${allowed.at(-1)}`
-  throw new Error(`Cannot ${action} this version: it must be ${expected} (currently ${status}).`)
+  throw new CodedError('INVALID_STATE', `Cannot ${action} this version: it must be ${expected} (currently ${status}).`)
 }
 
 export function requiresPublicReviewDetails(version: { private?: boolean; appType?: string }): boolean {
@@ -19,11 +26,14 @@ export function requireSecurityReviewEligible(
   agencyInstallCount: number
 ): void {
   requireVersionStatus(version.status, ['live'], 'request a security review for')
-  if (version.private !== true) throw new Error('Security review is only available for private apps.')
+  if (version.private !== true)
+    throw new CodedError('INVALID_STATE', 'Security review is only available for private apps.')
   const reviewStatus = normalizeStatus(version.securityReview?.status)
-  if (reviewStatus === 'inreview') throw new Error('A security review is already in progress for this app.')
+  if (reviewStatus === 'inreview')
+    throw new CodedError('INVALID_STATE', 'A security review is already in progress for this app.')
   if (!Number.isInteger(agencyInstallCount) || agencyInstallCount < 4) {
-    throw new Error(
+    throw new CodedError(
+      'INVALID_STATE',
       `Security review becomes available after four qualifying agency installs (currently ${agencyInstallCount}).`
     )
   }

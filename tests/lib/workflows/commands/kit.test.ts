@@ -2,7 +2,7 @@ import { Command, Config } from '@oclif/core'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { workflowResourceCommands } from '../../../../src/lib/workflows/commands/kit.js'
-import { withVerificationMismatches } from '../../../../src/lib/workflows/commands/push.js'
+import { withVerificationMismatches } from '../../../../src/lib/workflows/shared/push.js'
 import { loadWorkflowRemoteContext, loadWorkflowSyncContext } from '../../../../src/lib/workflows/shared/context.js'
 import type * as ContextModule from '../../../../src/lib/workflows/shared/context.js'
 import {

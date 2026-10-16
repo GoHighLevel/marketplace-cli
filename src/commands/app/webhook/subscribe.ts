@@ -22,6 +22,8 @@ export default class AppWebhookSubscribe extends GhlCommand {
     '<%= config.bin %> app webhook subscribe ContactCreate --directory ./my-app'
   ]
 
+  static enableJsonFlag = true
+
   static strict = false
 
   static flags = {
@@ -29,7 +31,7 @@ export default class AppWebhookSubscribe extends GhlCommand {
     url: Flags.string({ description: 'Per-event override URL (default: the app webhook URL)' })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { argv, flags } = await this.parse(AppWebhookSubscribe)
     let names: string[]
     try {
@@ -37,7 +39,8 @@ export default class AppWebhookSubscribe extends GhlCommand {
     } catch (error) {
       this.error(errorMessage(error, 'Invalid event arguments'))
     }
-    const interactive = process.stdin.isTTY
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
     if (names.length === 0 && !interactive) {
       this.error('Pass at least one event name — see `ghl app webhook events`.')
     }
@@ -47,8 +50,10 @@ export default class AppWebhookSubscribe extends GhlCommand {
       if (validation !== true) this.error(validation)
     }
 
-    const context = await withSpinner('Loading webhook workspace...', () =>
-      loadWebhookWorkspaceMutationContext(flags.directory, flags.app)
+    const context = await withSpinner(
+      'Loading webhook workspace...',
+      () => loadWebhookWorkspaceMutationContext(flags.directory, flags.app),
+      { quiet: json }
     )
 
     const catalog = await context.client.getWebhooksCatalog()
@@ -98,12 +103,19 @@ export default class AppWebhookSubscribe extends GhlCommand {
     }
 
     const merged = mergeEventSubscriptions(current, names, overrideUrl)
-    const result = await withSpinner('Saving local and remote event subscriptions...', () =>
-      applyWebhookWorkspaceMutation(context, {
-        webhookUrl: webhookUrl ?? context.remoteFiles.webhooks.webhookUrl,
-        subscribedEvents: merged.events
-      })
+    const result = await withSpinner(
+      'Saving local and remote event subscriptions...',
+      () =>
+        applyWebhookWorkspaceMutation(context, {
+          webhookUrl: webhookUrl ?? context.remoteFiles.webhooks.webhookUrl,
+          subscribedEvents: merged.events
+        }),
+      { quiet: json }
     )
+    if (json) {
+      const { appId } = context.plan
+      return { appId, versionId: result.versionId, changed: result.applied, subscribedEvents: merged.events }
+    }
     if (!result.applied) {
       this.log('All given events are already subscribed; local workspace synchronized.')
       return

@@ -97,3 +97,50 @@ export function hydrateWorkflowHeaders(
     }
   }
 }
+
+export interface WorkflowSecretUse {
+  /* Dotted path of the header inside the item version. */
+  header: string
+  /* `env NAME` for a local environment variable, or `stored secret`. */
+  source: string
+  /* Where the request carrying the header goes; undefined when unknown. */
+  url?: string
+}
+
+function secretSource(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  if (value === WORKFLOW_REMOTE_REFERENCE) return 'stored secret'
+  const variable = workflowEnvironmentVariable(value)
+  return variable ? `env ${variable}` : undefined
+}
+
+/* Header secrets that a push or test would send somewhere the portal does
+   not send them today: any secret reference whose request URL differs from
+   the current portal configuration (including a request that is new). */
+export function workflowSecretsToNewTargets(desired: unknown, current: unknown, path = ''): WorkflowSecretUse[] {
+  if (Array.isArray(desired)) {
+    return desired.flatMap((item, index) =>
+      workflowSecretsToNewTargets(item, matchingArrayItem(item, current, index), `${path}[${index}]`)
+    )
+  }
+  if (!isRecord(desired)) return []
+  const currentRecord = isRecord(current) ? current : {}
+  return Object.entries(desired).flatMap(([key, child]) => {
+    const childPath = path ? `${path}.${key}` : key
+    if (HEADER_TRAVERSAL_BOUNDARIES.has(key)) return []
+    if (key !== 'headers' || !isRecord(child)) {
+      return workflowSecretsToNewTargets(child, currentRecord[key], childPath)
+    }
+    const url = typeof desired.url === 'string' ? desired.url : undefined
+    const currentUrl = typeof currentRecord.url === 'string' ? currentRecord.url : undefined
+    if (isRecord(currentRecord[key]) && url === currentUrl) return []
+    return Object.entries(child).flatMap(([name, value]) => {
+      const source = secretSource(value)
+      return source ? [{ header: `${childPath}.${name}`, source, ...(url ? { url } : {}) }] : []
+    })
+  })
+}
+
+export function describeSecretUse(owner: string, use: WorkflowSecretUse): string {
+  return `${owner} header ${use.header} (${use.source}) -> ${use.url ?? 'a request without a URL'}`
+}

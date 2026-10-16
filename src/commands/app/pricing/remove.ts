@@ -11,6 +11,8 @@ export default class AppPricingRemove extends GhlCommand {
 
   static examples = ['<%= config.bin %> app pricing remove', '<%= config.bin %> app pricing remove <planId> --force']
 
+  static enableJsonFlag = true
+
   static args = {
     planId: Args.string({ description: 'Plan id to remove (picked interactively when omitted)' })
   }
@@ -20,18 +22,22 @@ export default class AppPricingRemove extends GhlCommand {
     force: Flags.boolean({ description: 'Skip the confirmation prompt', default: false })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { args, flags } = await this.parse(AppPricingRemove)
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (args.planId === undefined && !process.stdin.isTTY) {
+    if (args.planId === undefined && !interactive) {
       this.error(
         'Pass the plan id when running non-interactively, e.g. `ghl app pricing remove <planId>` (see `ghl app pricing`).'
       )
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     requirePricingEditable(context.version.status)
-    const plans = await withSpinner('Loading plans...', () => context.client.getBillingPlans(context.selected.appId))
+    const plans = await withSpinner('Loading plans...', () => context.client.getBillingPlans(context.selected.appId), {
+      quiet: json
+    })
 
     const planId =
       args.planId ??
@@ -54,13 +60,16 @@ export default class AppPricingRemove extends GhlCommand {
       this.error(`Pricing plan "${planId}" was not found on the selected app.`)
     }
     if (!flags.force) {
-      if (!process.stdin.isTTY) {
+      if (!interactive) {
         this.error('Removing a plan affects future installs — pass --force when running non-interactively.')
       }
       const ok = await confirm({ message: `Remove plan ${planId}?`, default: false })
       if (!ok) return
     }
-    await withSpinner('Removing plan...', () => context.client.deleteBillingPlan(context.selected.appId, planId))
+    await withSpinner('Removing plan...', () => context.client.deleteBillingPlan(context.selected.appId, planId), {
+      quiet: json
+    })
+    if (json) return { appId: context.selected.appId, planId, removed: true }
     this.log(`Plan ${planId} removed.`)
   }
 }

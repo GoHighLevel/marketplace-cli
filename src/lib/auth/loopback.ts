@@ -33,7 +33,13 @@ export function handleLoopbackCallback(
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
   if (error) {
-    return { status: 200, html: ERROR_HTML, error: new Error(`Login was denied in the browser (${error})`) }
+    /* The value comes from whoever called the local callback, so it is reduced to a short safe token. */
+    const reason =
+      error
+        .replace(/[^\w.-]+/g, ' ')
+        .trim()
+        .slice(0, 60) || 'unknown'
+    return { status: 200, html: ERROR_HTML, error: new Error(`Login was denied in the browser (${reason})`) }
   }
   if (!code || state !== expectedState) {
     return {
@@ -47,7 +53,11 @@ export function handleLoopbackCallback(
 
 /* Binds to 127.0.0.1 only (never 0.0.0.0) so nothing off-machine can
    reach the callback. State mismatches are rejected to block code injection. */
-export function startLoopbackServer(expectedState: string, timeoutMs = 300_000): Promise<LoopbackServer> {
+export function startLoopbackServer(
+  expectedState: string,
+  timeoutMs = 300_000,
+  keepProcessAlive = true
+): Promise<LoopbackServer> {
   return new Promise((resolveServer, rejectServer) => {
     let resolveCode: (code: string) => void
     let rejectCode: (err: Error) => void
@@ -68,6 +78,10 @@ export function startLoopbackServer(expectedState: string, timeoutMs = 300_000):
       rejectCode(new Error('Timed out waiting for browser login (5 minutes)'))
       server.close()
     }, timeoutMs)
+    if (!keepProcessAlive) {
+      timer.unref()
+      server.unref()
+    }
 
     server.once('error', error => {
       clearTimeout(timer)

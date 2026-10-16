@@ -3,7 +3,7 @@ import { Args, Flags } from '@oclif/core'
 import { GhlCommand } from '../../../lib/shared/command.js'
 import { select } from '../../../lib/shared/prompts.js'
 import { requireVersionStatus } from '../../../lib/app/rules.js'
-import { loadAppContext } from '../../../lib/app/section-context.js'
+import { loadAppContext, versionResult } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 
 export default class AppRedirectDefault extends GhlCommand {
@@ -14,6 +14,8 @@ export default class AppRedirectDefault extends GhlCommand {
     '<%= config.bin %> app redirect default https://acme.com/oauth/callback'
   ]
 
+  static enableJsonFlag = true
+
   static args = {
     url: Args.string({ description: 'Redirect URI to make default (picked interactively when omitted)' })
   }
@@ -22,14 +24,16 @@ export default class AppRedirectDefault extends GhlCommand {
     app: Flags.string({ description: 'App id (defaults to the selected app)' })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { args, flags } = await this.parse(AppRedirectDefault)
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (args.url === undefined && !process.stdin.isTTY) {
+    if (args.url === undefined && !interactive) {
       this.error('Pass the redirect URI when running non-interactively, e.g. `ghl app redirect default <url>`.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     requireVersionStatus(context.version.status, ['live', 'deprecating', 'deprecated'], 'set a default redirect URI on')
     const uris = context.version.redirectUris ?? []
     const currentDefault = context.version.defaults?.redirectUrl
@@ -50,13 +54,18 @@ export default class AppRedirectDefault extends GhlCommand {
     if (!uris.includes(url)) {
       this.error(`"${url}" is not one of this app's redirect URIs — add it first with \`ghl app redirect add\`.`)
     }
+    const { appId, versionId } = context.selected
     if (currentDefault === url) {
+      if (json) return versionResult(context, { changed: false, defaultRedirectUrl: url })
       this.log(`${url} is already the default redirect URI.`)
       return
     }
-    await withSpinner('Setting default redirect URI...', () =>
-      context.client.makeRedirectUrlDefault(context.selected.appId, context.selected.versionId, url)
+    await withSpinner(
+      'Setting default redirect URI...',
+      () => context.client.makeRedirectUrlDefault(appId, versionId, url),
+      { quiet: json }
     )
+    if (json) return versionResult(context, { changed: true, defaultRedirectUrl: url })
     this.log(`Default redirect URI set to ${url}.`)
   }
 }

@@ -7,7 +7,8 @@ import {
   pruneEventsForScopes,
   requireAuthPrereqs,
   scopeCatalogEntries,
-  scopeNamesFromCatalog
+  scopeNamesFromCatalog,
+  scopeReferences
 } from '../../../src/lib/auth/settings.js'
 
 const version = {
@@ -129,5 +130,44 @@ describe('scopeCatalogEntries', () => {
     expect(() => scopeCatalogEntries([{ scope: 'contacts.readonly' }, { scope: 'contacts.readonly' }])).toThrow(
       /duplicate scope/i
     )
+  })
+})
+
+describe('scopeReferences', () => {
+  const catalog = [
+    { scope: 'contacts.readonly', label: 'Contacts', description: 'View contacts.', tokenType: ['Location'] },
+    { scope: 'companies.readonly', label: 'Companies', description: 'View agency details.', tokenType: ['Company'] },
+    { scope: 'calendars.readonly', label: 'Calendars', description: 'View calendars.', tokenType: ['Location'] }
+  ]
+  const webhooks = {
+    events: ['ContactUpdate', 'ContactCreate', 'AppointmentCreate'],
+    mapping: { 'contacts.readonly': ['ContactUpdate', 'ContactCreate'] }
+  }
+
+  it('adds the sorted events each scope unlocks and honours the app target', () => {
+    expect(scopeReferences(catalog, webhooks, { userTypes: ['Location'] })).toEqual([
+      {
+        scope: 'contacts.readonly',
+        label: 'Contacts',
+        description: 'View contacts.',
+        tokenType: ['Location'],
+        events: ['ContactCreate', 'ContactUpdate']
+      },
+      {
+        scope: 'calendars.readonly',
+        label: 'Calendars',
+        description: 'View calendars.',
+        tokenType: ['Location'],
+        events: []
+      }
+    ])
+  })
+
+  it('keeps scopes matching any query word in a name, label, description, or event', () => {
+    const scopes = (query: string) => scopeReferences(catalog, webhooks, { query }).map(reference => reference.scope)
+    expect(scopes('contactcreate')).toEqual(['contacts.readonly'])
+    expect(scopes('agency, CALENDARS')).toEqual(['companies.readonly', 'calendars.readonly'])
+    expect(scopes('  ')).toHaveLength(3)
+    expect(scopes('nothing')).toEqual([])
   })
 })

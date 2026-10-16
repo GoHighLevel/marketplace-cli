@@ -5,7 +5,7 @@ import { errorMessage } from '../../../lib/shared/errors.js'
 import { input } from '../../../lib/shared/prompts.js'
 import { normalizeVariadicArgs } from '../../../lib/shared/arguments.js'
 import { buildAuthSettingsBody, requireAuthPrereqs } from '../../../lib/auth/settings.js'
-import { followVersionChange, loadAppContext } from '../../../lib/app/section-context.js'
+import { followVersionChangeNotes, loadAppContext, versionResult } from '../../../lib/app/section-context.js'
 import { withSpinner } from '../../../lib/shared/spinner.js'
 import { validateHttpUrl, validateTextForWhiteLabel } from '../../../lib/shared/validation.js'
 
@@ -17,25 +17,29 @@ export default class AppRedirectAdd extends GhlCommand {
     '<%= config.bin %> app redirect add https://acme.com/oauth/callback'
   ]
 
+  static enableJsonFlag = true
+
   static strict = false
 
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { argv, flags } = await this.parse(AppRedirectAdd)
+    const json = this.jsonEnabled()
+    const interactive = process.stdin.isTTY === true && !json
     let urls: string[]
     try {
       urls = normalizeVariadicArgs(argv as string[], 'redirect URI')
     } catch (error) {
       this.error(errorMessage(error, 'Invalid redirect URI arguments'))
     }
-    if (urls.length === 0 && !process.stdin.isTTY) {
+    if (urls.length === 0 && !interactive) {
       this.error('Pass at least one redirect URL, e.g. `ghl app redirect add https://acme.com/oauth/callback`.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
 
     /* White-label friendly apps must not expose the GHL brand in OAuth
        URLs — same live check the portal runs while typing. */
@@ -76,6 +80,9 @@ export default class AppRedirectAdd extends GhlCommand {
     const current = context.version.redirectUris ?? []
     const next = [...new Set([...current, ...urls])]
     if (next.length === current.length) {
+      if (json) {
+        return versionResult(context, { changed: false, redirectUris: current })
+      }
       this.log('All given redirect URIs already exist.')
       return
     }
@@ -83,10 +90,17 @@ export default class AppRedirectAdd extends GhlCommand {
     const changes = { redirectUris: next }
     requireAuthPrereqs(context.version, changes)
     const body = buildAuthSettingsBody(context.version, changes)
-    const result = await withSpinner('Saving redirect URIs...', () =>
-      context.client.updateAuthSettings(context.selected.appId, context.selected.versionId, body)
+    const result = await withSpinner(
+      'Saving redirect URIs...',
+      () => context.client.updateAuthSettings(context.selected.appId, context.selected.versionId, body),
+      { quiet: json }
     )
-    this.log(`Redirect URIs updated (${next.length} total).`)
-    await followVersionChange(context, result, message => this.log(message))
+    if (!json) this.log(`Redirect URIs updated (${next.length} total).`)
+    const notes = await followVersionChangeNotes(context, result)
+    if (!json) {
+      for (const note of notes) this.log(note)
+      return
+    }
+    return versionResult(context, { changed: true, redirectUris: next }, notes)
   }
 }

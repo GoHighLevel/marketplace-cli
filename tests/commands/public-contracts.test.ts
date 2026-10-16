@@ -18,6 +18,7 @@ import AppKeysCreate from '../../src/commands/app/keys/create.js'
 import AppPublish from '../../src/commands/app/publish.js'
 import AppPull from '../../src/commands/app/pull.js'
 import AppPush from '../../src/commands/app/push.js'
+import AppScopesAdd from '../../src/commands/app/scopes/add.js'
 import AppSecurityReview from '../../src/commands/app/security-review.js'
 import AppSsoKey from '../../src/commands/app/sso-key.js'
 import AppTriggersValidate from '../../src/commands/app/triggers/validate.js'
@@ -27,9 +28,14 @@ import AppWebhookSubscribe from '../../src/commands/app/webhook/subscribe.js'
 import AppWebhookUnsubscribe from '../../src/commands/app/webhook/unsubscribe.js'
 import AppWebhookUrl from '../../src/commands/app/webhook/url.js'
 import AppWithdraw from '../../src/commands/app/withdraw.js'
+import McpSetup from '../../src/commands/mcp/setup.js'
 import SandboxDelete from '../../src/commands/sandbox/delete.js'
 import SecretsReveal from '../../src/commands/secrets/reveal.js'
 import Update from '../../src/commands/update.js'
+import { clearSelectedApp, getSelectedApp, saveSelectedApp } from '../../src/lib/config/selection-store.js'
+import { MCP_CLIENT_IDS } from '../../src/lib/mcp/clients.js'
+import { completeAppVersion } from '../helpers/app-files.js'
+import { API, OAUTH, portalConfig, routePortal, signIn, WORKFLOWS } from '../helpers/portal.js'
 
 type CommandConstructor = new (argv: string[], config: Config) => Command
 
@@ -58,6 +64,15 @@ async function listCommandIds(directory = COMMAND_DIRECTORY, segments: string[] 
     })
   )
   return ids.flat()
+}
+
+async function loadCommand(id: string): Promise<{ enableJsonFlag?: boolean }> {
+  const base = path.join(COMMAND_DIRECTORY, ...id.split(':'))
+  const file = await fs.stat(`${base}.ts`).then(
+    () => `${base}.ts`,
+    () => path.join(base, 'index.ts')
+  )
+  return ((await import(file)) as { default: { enableJsonFlag?: boolean } }).default
 }
 
 async function runCommand(CommandType: CommandConstructor, args: string[]): Promise<CommandResult> {
@@ -92,6 +107,9 @@ beforeAll(async () => {
   configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ghl-cli-contracts-'))
   vi.stubEnv('GHL_CONFIG_DIR', configDir)
   vi.stubEnv('NO_COLOR', '1')
+  vi.stubEnv('GHL_API_URL', API)
+  vi.stubEnv('GHL_OAUTH_URL', OAUTH)
+  vi.stubEnv('GHL_WORKFLOWS_URL', WORKFLOWS)
   commandConfig = await Config.load({ root: ROOT_DIRECTORY })
   commandIds = new Set(await listCommandIds())
 })
@@ -102,6 +120,14 @@ afterAll(async () => {
 })
 
 describe('public command contracts', () => {
+  it('offers --json on every command except secret reveal and the MCP stdio server', async () => {
+    const exempt = new Set(['secrets:reveal', 'mcp:start'])
+    const ids = [...commandIds].filter(id => !exempt.has(id))
+    const commands = await Promise.all(ids.map(loadCommand))
+
+    expect(ids.filter((_, index) => commands[index].enableJsonFlag !== true)).toEqual([])
+  })
+
   it('exposes a safe self-update command with a machine-readable dry run', async () => {
     expect(Update.flags).toEqual(
       expect.objectContaining({
@@ -490,6 +516,50 @@ describe('public command contracts', () => {
     expect(deletion.stderr).toMatch(/pass[\s\S]*--force[\s\S]*non-interactively/i)
   })
 
+  it('never prompts in JSON mode and fails closed with a JSON error instead', async () => {
+    for (const CommandType of [AppPublish, AppWithdraw, AppSecurityReview]) {
+      const result = await runCommand(CommandType, ['--json'])
+      expect(result.exitCode).not.toBe(0)
+      const failure = JSON.parse(result.stdout) as { error: { message: string } }
+      expect(failure.error.message).toMatch(/--force[\s\S]*non-interactively/i)
+      expect(failure.error.message).not.toMatch(/not logged in/i)
+    }
+
+    const deletion = await runCommand(SandboxDelete, ['company-id', '--json'])
+    expect((JSON.parse(deletion.stdout) as { error: { message: string } }).error.message).toMatch(/--force/)
+  })
+
+  it('prints only the result object in JSON mode and follows a move to a new draft', async () => {
+    const config = { ...(await portalConfig()), configDir }
+    await signIn(config)
+    await saveSelectedApp(configDir, 'default', { appId: 'app-1', versionId: 'version-1' })
+    const fetch = routePortal({
+      [`GET ${API}/app/app-1/versions/version-1`]: completeAppVersion({ status: 'live', allowedScopes: [] }),
+      [`GET ${OAUTH}/static/scopes?isMarketplace=true`]: [
+        { scope: 'contacts.readonly', label: 'Contacts', description: 'View contacts.', tokenType: ['Location'] }
+      ],
+      [`PUT ${API}/app/auth/app-1/versions/version-1/settings`]: { pendingOAuthClient: { _id: 'version-2' } }
+    })
+    vi.stubGlobal('fetch', fetch)
+
+    try {
+      const result = await runCommand(AppScopesAdd, ['contacts.readonly', '--json'])
+
+      expect(result.stderr).toBe('')
+      expect(JSON.parse(result.stdout)).toEqual({
+        appId: 'app-1',
+        versionId: 'version-2',
+        changed: true,
+        scopes: ['contacts.readonly'],
+        notes: ['Changes were saved to a new draft version (version-2) — selection updated to follow it.']
+      })
+      await expect(getSelectedApp(configDir, 'default')).resolves.toMatchObject({ versionId: 'version-2' })
+    } finally {
+      vi.unstubAllGlobals()
+      await clearSelectedApp(configDir, 'default')
+    }
+  })
+
   it('exposes account discovery and requires an explicit non-interactive account switch', async () => {
     expect([...commandIds]).toEqual(expect.arrayContaining(['account', 'account:switch']))
 
@@ -502,6 +572,38 @@ describe('public command contracts', () => {
     expect(invalid.exitCode).not.toBe(0)
     expect(invalid.stderr).toMatch(/account id must contain/i)
     expect(invalid.stderr).not.toMatch(/not logged in/i)
+  })
+
+  it('exposes MCP setup for every supported client and fails closed before touching client config', async () => {
+    expect(McpSetup.flags.client).toEqual(expect.objectContaining({ options: [...MCP_CLIENT_IDS], multiple: true }))
+    expect(McpSetup.flags.standalone).toEqual(expect.objectContaining({ allowNo: true }))
+    expect(commandIds).toContain('mcp:setup')
+    expect(commandIds).toContain('mcp:start')
+
+    const noClient = await runCommand(McpSetup, ['--json'])
+    expect(noClient.exitCode).not.toBe(0)
+    expect((JSON.parse(noClient.stdout) as { error: { message: string } }).error.message).toMatch(
+      /Pass --client \(claude, codex, cursor, gemini, vscode, windsurf\) when running non-interactively/
+    )
+
+    const versionWithoutStandalone = await runCommand(McpSetup, ['--client', 'cursor', '--cli-version', '1.0.0'])
+    expect(versionWithoutStandalone.exitCode).not.toBe(0)
+    expect(versionWithoutStandalone.stderr).toMatch(/--cli-version requires --standalone/)
+
+    const registryWithoutStandalone = await runCommand(McpSetup, [
+      '--client',
+      'cursor',
+      '--registry',
+      'https://x.test/'
+    ])
+    expect(registryWithoutStandalone.stderr).toMatch(/--registry requires --standalone/)
+
+    const unsafeVersion = await runCommand(McpSetup, ['--client', 'cursor', '--standalone', '--cli-version', '1 && x'])
+    expect(unsafeVersion.exitCode).not.toBe(0)
+    expect(unsafeVersion.stderr).toMatch(/--cli-version must be "latest" or an exact version/)
+
+    const unknownClient = await runCommand(McpSetup, ['--client', 'emacs'])
+    expect(unknownClient.exitCode).not.toBe(0)
   })
 
   it('keeps secret reveal gated and exposes discoverable public commands', async () => {

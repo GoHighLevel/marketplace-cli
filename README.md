@@ -5,7 +5,7 @@
 The CLI is designed to be driven by humans **and** by LLM agents:
 
 - Every interactive prompt has a flag equivalent, so any flow can run non-interactively.
-- Read commands support `--json` for machine-readable output.
+- Every command except `secrets reveal` and `mcp start` supports `--json`: stdout carries one result object, and the command never prompts.
 - Destructive commands ask for confirmation on a terminal and require `--force` in scripts.
 - Supported workflows apply the same validation rules as the portal, so bad input fails fast with a fix hint **before** a mutating API call.
 - One-time secrets are retained in a local ledger until their first reveal, which permanently consumes the local copy.
@@ -351,6 +351,13 @@ The `ghl app pricing` commands remain available for compatibility and mutate the
 | `ghl secrets` | List one-time secrets captured for the selected app (values masked). Add `--include-account` to include sandbox passwords. |
 | `ghl secrets reveal` | Print each actual value once, atomically removing its local copy before output. Interactive terminals only — pass `--force` to allow it in scripts; add `--include-account` for sandbox passwords. |
 
+### AI coding clients (MCP)
+
+| Command | Description |
+|---|---|
+| `ghl mcp setup` | Register the `HighLevelMarketplaceDev` MCP server with AI coding clients. Interactive use lists every client, marks the ones not detected, and configures only the ones you tick; scripts pass `--client claude\|codex\|cursor\|gemini\|vscode\|windsurf` (repeatable). `--standalone` launches through npx, pinned to this version or `--cli-version <version\|latest>` and to `--registry <https-url>` (default: the public npm registry). Supports `--json`. |
+| `ghl mcp start` | Run the MCP server over stdio. Clients start it automatically after `ghl mcp setup`; it never writes anything but protocol messages to stdout. |
+
 ### Discovery
 
 | Command | Description |
@@ -372,10 +379,57 @@ Client secrets, SSO keys, and sandbox passwords **cannot be retrieved from the A
 The CLI is built to be agent-operable end to end:
 
 1. **Always pass flags** — agents run without a TTY, and every prompt has a flag equivalent. Missing input produces a deterministic error naming the exact flags to pass.
-2. **Use `--json`** on read commands (`app list`, `app info`, `app versions`, `app diff`, `sandbox`, `app analyze`, `commands`) and parse stdout; progress spinners go to stderr.
+2. **Use `--json`** and parse stdout: reads return the object, and changes return what changed (`appId`, the `versionId` they ended on, and `notes` such as a move to a new draft). JSON mode never prompts, and progress goes to stderr.
 3. **Pass `--force`** on destructive or irreversible actions (delete, publish, deprecate, withdraw…) — without it, non-TTY runs refuse rather than guess.
 4. **Trust the errors** — validation runs before the API call and error messages contain the rule and the fix (e.g. which scopes are unknown, which checklist fields are missing, which versions are allowed).
 5. **Secrets are reveal-once** — one-time values are masked and retained for a single `ghl secrets reveal`; agents should never consume them unless the user explicitly requests it.
+
+## AI coding clients (MCP)
+
+`ghl mcp setup` connects AI coding clients to `HighLevelMarketplaceDev`, an MCP server that runs inside this CLI:
+
+```bash
+ghl mcp setup                               # pick from detected clients
+ghl mcp setup --client claude --client cursor
+```
+
+| Client | Where the server is registered |
+|---|---|
+| Claude Code | `claude mcp add --scope user` |
+| Codex CLI | `codex mcp add` (`~/.codex/config.toml`) |
+| Cursor | `~/.cursor/mcp.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| VS Code | the user-level `mcp.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+
+Config files are edited in place, so comments, formatting, and other servers are preserved; re-running setup updates the existing entry. The registration launches this installation by absolute path, so editors opened from a dock or launcher work even when `node` comes from nvm, volta, or asdf. Re-run `ghl mcp setup` after reinstalling Node.js or the CLI in a different location. Use `--standalone` on machines without a global install; the client then starts the server through `npx`, pinned to a version and to an npm registry so a project's own `.npmrc` cannot redirect it. Pass `--registry` for a private mirror.
+
+Restart open clients after setup. The server covers the whole app journey except secrets, in 18 tools. Each tool that writes says so, and clients ask before running it:
+
+| Tool | Purpose |
+|---|---|
+| `search-docs` | Rank HighLevel developer guides (OAuth, scopes, webhooks, billing, external auth, modules, publishing), API endpoints, and this CLI's workspace guides and JSON Schemas (`kind: "cli"`). Returns a compact list whose top excerpt often answers the question on its own. |
+| `fetch-doc` | Read up to five pages in one call: docs URLs, API endpoints such as `POST /contacts/` (no search needed), or CLI references such as `ghl-cli:workflow-actions#dynamic-input` and `ghl-cli:schema/app`. Endpoints are served from the compact API reference, typically 80–93% smaller than the full page; an unknown endpoint returns the closest documented ones. A page that fails is reported in place without failing the batch. |
+| `get-account` | Who is logged in, the active developer account and the others available, and the apps in the active account. |
+| `switch-account` | Switch the active developer account for the CLI and the tools, then list its apps. |
+| `login` | Open the portal so the user can approve a CLI login. Waits up to 45 seconds; a later approval still completes in the background. Does nothing while the stored session works. |
+| `manage-sandbox` | List, create, or delete sandbox agencies for testing installs. A new sandbox's password is generated and kept in the local secrets ledger, never in the conversation. |
+| `get-app` | One app version as the portal has it: status, versions, scopes, redirect URIs, client keys, media, webhooks, billing, support, workflow modules, and for drafts the publish-readiness gaps with fixes and the next version number. |
+| `create-app` | Create an app in the portal and its local workspace. |
+| `pull-app` | Write an app version (the latest, by default) into a new workspace or refresh one; refuses to overwrite unpushed local changes unless `force` is set. `withTypes` adds TypeScript declarations. |
+| `list-scopes` | The exact scope names the portal accepts, their token types, and the webhook events each unlocks. |
+| `check-workspace` | Validate every module of a workspace (app, webhooks, workflow actions and triggers, billing) and compare it with the portal: local changes, portal changes, conflicts, the API operations a push would run, and a plan id. Works offline with `remote: false`. |
+| `test-workflow-action` | Run a workflow action's local configuration through the portal test runner with sample input and return its output and console logs. |
+| `push-workspace` | Apply the plan the user reviewed: pushes every module in the order the portal requires, verifies it, and updates the local baseline. Refuses if the files or the portal changed after `check-workspace`. |
+| `scaffold-workflow-module` | Add up to ten draft workflow actions or triggers to a workspace in one call, with what the app still needs before they can be pushed. |
+| `release-app` | Publish a version (private apps go live, public apps enter review), withdraw a review, create a draft from the live version, schedule deprecation, or request a security review. |
+| `release-workflow-module` | Publish a workflow action or trigger version, or start a new draft version of a published one. |
+| `update-media` | Set the logo, add screenshots to either profile, and delete attached media, in one call. |
+| `manage-client-keys` | Create a client key (its secret goes to the local secrets ledger), delete one, or make one the default. |
+
+App settings such as listing, profiles, support, review notes, scopes, redirect URIs, webhooks, pricing, and billing plans are edited in the workspace files and applied with `check-workspace` and `push-workspace`. Secrets stay CLI-only: `ghl secrets`, `ghl secrets reveal`, `ghl app sso-key`, and review test credentials (`ghl app review-details`).
+
+The documentation index is cached under `~/.config/ghl/cache/docs`, revalidated with ETags, and served from cache when the docs site is unreachable. Tools are designed for the fewest calls and tokens; contributors follow [src/lib/mcp/GUIDELINES.md](src/lib/mcp/GUIDELINES.md).
 
 ## License
 

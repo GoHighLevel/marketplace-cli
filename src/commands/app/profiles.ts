@@ -9,7 +9,7 @@ import {
   validateDescription,
   validateProfilesBody
 } from '../../lib/app/profile-sections.js'
-import { followVersionChange, loadAppContext } from '../../lib/app/section-context.js'
+import { followVersionChangeNotes, loadAppContext, versionResult } from '../../lib/app/section-context.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { validateYouTubeUrl } from '../../lib/shared/validation.js'
 
@@ -21,6 +21,8 @@ export default class AppProfiles extends GhlCommand {
     '<%= config.bin %> app profiles --description "Full description..." --video-url https://youtu.be/x'
   ]
 
+  static enableJsonFlag = true
+
   static flags = {
     app: Flags.string({ description: 'App id (defaults to the selected app)' }),
     description: Flags.string({ description: 'Agency profile description' }),
@@ -30,16 +32,18 @@ export default class AppProfiles extends GhlCommand {
     'sub-video-url': Flags.string({ description: 'Sub-account preview video URL (HTTPS YouTube)' })
   }
 
-  protected async execute(): Promise<void> {
+  protected async execute(): Promise<unknown> {
     const { flags } = await this.parse(AppProfiles)
+    const json = this.jsonEnabled()
     const changes = this.changesFromFlags(flags)
     const hasFlagChanges = Object.keys(changes).length > 0
+    const interactive = process.stdin.isTTY === true && !json
 
-    if (!hasFlagChanges && !process.stdin.isTTY) {
+    if (!hasFlagChanges && !interactive) {
       this.error('Pass at least one field flag (--description, --sub-account, ...) when running non-interactively.')
     }
 
-    const context = await loadAppContext(flags.app)
+    const context = await loadAppContext(flags.app, json)
     const finalChanges = hasFlagChanges ? changes : await this.promptChanges(context.version)
 
     /* Enabling the sub-account profile requires 3+ screenshots already attached. */
@@ -54,11 +58,16 @@ export default class AppProfiles extends GhlCommand {
     const body = buildProfilesBody(context.version, finalChanges)
     const validation = validateProfilesBody(body)
     if (validation !== true) this.error(validation)
-    const result = await withSpinner('Saving app profiles...', () =>
-      context.client.updateProfileSection('appProfiles', context.selected.appId, context.selected.versionId, body)
+    const result = await withSpinner(
+      'Saving app profiles...',
+      () =>
+        context.client.updateProfileSection('appProfiles', context.selected.appId, context.selected.versionId, body),
+      { quiet: json }
     )
-    this.log('App profiles updated. (Screenshots are managed with `ghl app media upload`.)')
-    await followVersionChange(context, result, message => this.log(message))
+    if (!json) this.log('App profiles updated. (Screenshots are managed with `ghl app media upload`.)')
+    const notes = await followVersionChangeNotes(context, result)
+    if (json) return versionResult(context, body, notes)
+    for (const note of notes) this.log(note)
   }
 
   private changesFromFlags(flags: {

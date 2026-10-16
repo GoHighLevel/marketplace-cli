@@ -1,5 +1,6 @@
 import type { VersionListItem } from '../api/types.js'
 import { normalizeStatus } from './rules.js'
+import { CodedError } from '../shared/errors.js'
 
 export type BumpType = 'patch' | 'minor' | 'major'
 
@@ -84,11 +85,15 @@ export function pendingVersions(versions: VersionListItem[], excludeId?: string)
 
 export function requireDraftable(versions: VersionListItem[], selectedId: string): void {
   if (versions.length >= MAX_TOTAL_VERSIONS) {
-    throw new Error(`Apps can keep at most ${MAX_TOTAL_VERSIONS} versions — remove an unused version first.`)
+    throw new CodedError(
+      'INVALID_STATE',
+      `Apps can keep at most ${MAX_TOTAL_VERSIONS} versions — remove an unused version first.`
+    )
   }
   const pending = pendingVersions(versions)
   if (pending.length >= MAX_PENDING_VERSIONS) {
-    throw new Error(
+    throw new CodedError(
+      'INVALID_STATE',
       `A pending version (${pending[0].version ?? pending[0]._id}) already exists — finish or withdraw it before creating another draft.`
     )
   }
@@ -99,9 +104,9 @@ export function requireDraftable(versions: VersionListItem[], selectedId: string
       semverParts(item.version) !== undefined
   )
   const latest = [...liveVersions].sort((left, right) => compareVersions(right.version ?? '', left.version ?? ''))[0]
-  if (!latest) throw new Error('Cannot create a draft: no valid live version is available.')
+  if (!latest) throw new CodedError('INVALID_STATE', 'Cannot create a draft: no valid live version is available.')
   if (latest._id !== selectedId) {
-    throw new Error(`Drafts can only be cloned from the latest live version (${latest.version}).`)
+    throw new CodedError('INVALID_STATE', `Drafts can only be cloned from the latest live version (${latest.version}).`)
   }
 }
 
@@ -143,13 +148,14 @@ export function requireDeprecatable(versions: VersionListItem[], selectedId: str
       ['review', 'inreview', 'deprecating', 'deprecated', 'live'].includes(normalizeStatus(item.status))
   )
   if (actives.length + 1 > MAX_ACTIVE_VERSIONS) {
-    throw new Error(
+    throw new CodedError(
+      'INVALID_STATE',
       `Apps can keep at most ${MAX_ACTIVE_VERSIONS} active versions — this deprecation would exceed the limit.`
     )
   }
   const liveVersions = versions.filter(item => normalizeStatus(item.status) === 'live')
   if (liveVersions.length < 2) {
-    throw new Error('The only live version cannot be deprecated — publish a newer version first.')
+    throw new CodedError('INVALID_STATE', 'The only live version cannot be deprecated — publish a newer version first.')
   }
   const latestLive = liveVersions
     .filter(item => typeof item.version === 'string' && semverParts(item.version) !== undefined)
@@ -158,7 +164,10 @@ export function requireDeprecatable(versions: VersionListItem[], selectedId: str
     .at(-1)
   const selected = versions.find(item => item._id === selectedId)
   if (latestLive !== undefined && selected?.version === latestLive) {
-    throw new Error('The latest live version cannot be deprecated — only older live versions can be retired.')
+    throw new CodedError(
+      'INVALID_STATE',
+      'The latest live version cannot be deprecated — only older live versions can be retired.'
+    )
   }
 }
 

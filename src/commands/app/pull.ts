@@ -5,41 +5,18 @@ import { Args, Flags } from '@oclif/core'
 import { GhlCommand } from '../../lib/shared/command.js'
 import { errorMessage } from '../../lib/shared/errors.js'
 import { ApiClient } from '../../lib/api/client.js'
-import { findAppItemById, persistSelection, toSelectedApp } from '../../lib/app/context.js'
+import { persistSelection } from '../../lib/app/context.js'
+import { readPullWorkspaceBinding, resolvePullWorkspaceBinding } from '../../lib/app/pull.js'
 import {
-  loadAppVersionForExport,
-  buildPullFilesOutput,
-  pullArtifactPlan,
-  readPullWorkspaceBinding,
-  resolvePullWorkspaceBinding,
-  resolveVersionId
-} from '../../lib/app/pull.js'
-import { writeAppWorkspace } from '../../lib/app/workspace.js'
+  loadPullSnapshot,
+  preparePullDestination,
+  pulledSelection,
+  writePulledWorkspace
+} from '../../lib/app/workspace-pull.js'
 import { getConfig } from '../../lib/config/environment.js'
-import { getSelectedApp } from '../../lib/config/selection-store.js'
-import { fetchBillingSnapshot } from '../../lib/billing/service.js'
-import {
-  assertBillingWorkspaceWritable,
-  synchronizeUsageBillingSummary,
-  writeBillingWorkspace
-} from '../../lib/billing/workspace.js'
 import { withSpinner } from '../../lib/shared/spinner.js'
 import { collectWorkspaceDirectory } from '../../lib/shared/workspace-input.js'
-import { writeTypesWorkspace, type TypeScriptConfigResult } from '../../lib/app/types.js'
-import { fetchWorkflowActionsManifest } from '../../lib/workflows/actions/service.js'
-import { validateWorkflowActionsManifest } from '../../lib/workflows/actions/schema.js'
-import {
-  assertWorkflowActionsWorkspaceWritable,
-  loadWorkflowActionsPullBaseline,
-  writeWorkflowActionsWorkspace
-} from '../../lib/workflows/actions/workspace.js'
-import { planWorkflowActionsSync } from '../../lib/workflows/actions/sync.js'
-import { fetchWorkflowTriggersManifest } from '../../lib/workflows/triggers/service.js'
-import { validateWorkflowTriggersManifest } from '../../lib/workflows/triggers/schema.js'
-import {
-  assertWorkflowTriggersWorkspaceWritable,
-  writeWorkflowTriggersWorkspace
-} from '../../lib/workflows/triggers/workspace.js'
+import type { TypeScriptConfigResult } from '../../lib/app/types.js'
 
 export default class AppPull extends GhlCommand {
   static description = 'Pull an app version into the current workspace or a new local folder'
@@ -89,27 +66,11 @@ export default class AppPull extends GhlCommand {
       'Loading app...',
       async () => {
         await client.init()
-        const selected = workspaceBinding
-          ? {
-              appId: workspaceBinding.appId,
-              versionId: workspaceBinding.versionId,
-              name: workspaceBinding.name
-            }
-          : args.appId
-            ? toSelectedApp(await findAppItemById(client, args.appId))
-            : await getSelectedApp(config.configDir, client.activeProfileName)
-        if (!selected) {
-          throw new Error('No app selected. Pass an app id (`ghl app pull <appId>`) or run `ghl app use` first.')
-        }
-        const versions = await client.listVersions(selected.appId)
-        const versionId = resolveVersionId(versions, flags.version, selected.versionId)
-        const [version, workflowActions, workflowTriggers, billing] = await Promise.all([
-          loadAppVersionForExport(client, selected.appId, versionId),
-          fetchWorkflowActionsManifest(client, selected.appId),
-          fetchWorkflowTriggersManifest(client, selected.appId),
-          fetchBillingSnapshot(client, selected.appId)
-        ])
-        return { selected, version, workflowActions, workflowTriggers, billing }
+        return loadPullSnapshot(client, config, {
+          workspace: workspaceBinding,
+          appId: args.appId,
+          version: flags.version
+        })
       },
       { quiet: this.jsonEnabled() }
     )
@@ -122,98 +83,14 @@ export default class AppPull extends GhlCommand {
         flags,
         interactive
       }))
-    const actionErrors = validateWorkflowActionsManifest(pulled.workflowActions, {
-      whiteLabel: pulled.version.isWhiteLabelFriendly !== false
-    })
-    if (actionErrors.length > 0) {
-      throw new Error(`Workflow action configuration is invalid:\n- ${actionErrors.join('\n- ')}`)
-    }
-    const triggerErrors = validateWorkflowTriggersManifest(pulled.workflowTriggers, {
-      whiteLabel: pulled.version.isWhiteLabelFriendly !== false
-    })
-    if (triggerErrors.length > 0) {
-      throw new Error(`Workflow trigger configuration is invalid:\n- ${triggerErrors.join('\n- ')}`)
-    }
-    const existingActions =
-      workspaceBinding && !flags.force ? await loadWorkflowActionsPullBaseline(directory) : undefined
-    if (existingActions && !flags.force) {
-      const actionPlan = planWorkflowActionsSync(
-        existingActions.state.baseline,
-        existingActions.manifest,
-        pulled.workflowActions,
-        { codeSources: existingActions.codeSources }
-      )
-      const conflicts = [...new Set([...actionPlan.localChanges, ...actionPlan.conflicts])].sort()
-      if (conflicts.length > 0) {
-        throw new Error(
-          `App pull would overwrite local or conflicting workflow-action changes:\n- ${conflicts.join('\n- ')}\n` +
-            'Resolve them first, or pass --force to replace local sources with the portal state.'
-        )
-      }
-    }
-    if (workspaceBinding) {
-      await Promise.all([
-        assertWorkflowActionsWorkspaceWritable(directory, pulled.workflowActions),
-        assertWorkflowTriggersWorkspaceWritable(directory, pulled.workflowTriggers),
-        assertBillingWorkspaceWritable(directory, pulled.billing.subscriptions, pulled.billing.usage)
-      ])
-    }
-    const artifactPlan = pullArtifactPlan(flags['with-types'])
+    const options = { refresh: workspaceBinding !== undefined, force: flags.force, withTypes: flags['with-types'] }
+    const existingActions = await preparePullDestination(directory, pulled, options)
     const workspace = await withSpinner(
       'Writing app files...',
-      async () => {
-        const { includeJsonSchema } = artifactPlan
-        const appFiles = await writeAppWorkspace({
-          directory,
-          version: pulled.version,
-          includeJsonSchema
-        })
-        const actionFiles = await writeWorkflowActionsWorkspace(
-          directory,
-          pulled.workflowActions,
-          pulled.workflowActions,
-          {
-            includeJsonSchema,
-            preserveCodeSources: flags.force ? undefined : existingActions?.codeSources
-          }
-        )
-        const triggerFiles = await writeWorkflowTriggersWorkspace(
-          directory,
-          pulled.workflowTriggers,
-          pulled.workflowTriggers,
-          { includeJsonSchema }
-        )
-        const billingFiles = await writeBillingWorkspace(
-          directory,
-          pulled.billing.subscriptions,
-          pulled.billing.usage,
-          { subscriptions: pulled.billing.subscriptions, usage: pulled.billing.usage },
-          { includeJsonSchema }
-        )
-        await synchronizeUsageBillingSummary(directory, pulled.billing.usage.meters.length > 0, {
-          includeJsonSchema
-        })
-        const files = buildPullFilesOutput({
-          app: appFiles,
-          ...(pulled.workflowActions.actions.length > 0 ? { actions: actionFiles } : {}),
-          ...(pulled.workflowTriggers.triggers.length > 0 ? { triggers: triggerFiles } : {}),
-          ...(pulled.billing.subscriptions.plans.length > 0 || pulled.billing.usage.meters.length > 0
-            ? { billing: billingFiles }
-            : {})
-        })
-        if (!artifactPlan.includeTypeDeclarations) return files
-        return {
-          ...files,
-          ...(await writeTypesWorkspace(directory))
-        }
-      },
+      () => writePulledWorkspace(directory, pulled, existingActions, options),
       { quiet: this.jsonEnabled() }
     )
-    const selected = {
-      ...pulled.selected,
-      versionId: pulled.version._id,
-      name: pulled.version.name ?? pulled.selected.name ?? pulled.selected.appId
-    }
+    const selected = pulledSelection(pulled)
     try {
       await persistSelection(client, config, selected)
     } catch (error) {
@@ -242,7 +119,7 @@ export default class AppPull extends GhlCommand {
     if (pulled.billing.subscriptions.plans.length > 0) this.log(`  Plans:    ${workspace.subscriptionFile}`)
     if (pulled.billing.usage.meters.length > 0) this.log(`  Meters:   ${workspace.usageFile}`)
     this.log(`  Schemas:  ${path.join(workspace.directory as string, '.ghl', 'schemas')}`)
-    if (artifactPlan.includeTypeDeclarations) {
+    if (flags['with-types']) {
       const typescriptConfig = workspace.typescriptConfig as TypeScriptConfigResult
       this.log(`  Types:    ${workspace.declarationFile}`)
       this.log(`  TSConfig: ${typescriptConfig.file}`)
